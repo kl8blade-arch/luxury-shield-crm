@@ -695,7 +695,7 @@ footer a{color:rgba(240,236,227,.25);text-decoration:none}
     if(spots>1){spots--;sessionStorage.setItem('ls_s',spots)}
     document.getElementById('mainPage').style.display='none';
     document.getElementById('stickyBar').style.display='none';
-    document.getElementById('successScreen').classList.add('on');
+    document.getElementById('successScreen').classList.add('on'); setTimeout(function(){ var msg = encodeURIComponent('Hola! Acabo de solicitar información sobre el examen 
   }
 
   function scrollToForm(){document.getElementById('formCard').scrollIntoView({behavior:'smooth',block:'center'})}
