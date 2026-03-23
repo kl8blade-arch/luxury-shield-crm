@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
 <title>Tu Sonrisa, Protegida — Luxury Shield Insurance</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,7 +19,7 @@ html{scroll-behavior:smooth}
 body{background:var(--ink);color:var(--cream);font-family:'Outfit',sans-serif;font-size:16px;line-height:1.6;overflow-x:hidden;-webkit-font-smoothing:antialiased}
 
 /* HERO */
-.hero-shell{position:relative;overflow:hidden;min-height:100svh}
+.hero-shell{position:relative;overflow:hidden;min-height:100vh;min-height:100svh}
 
 .hero-bg{
   position:absolute;inset:0;z-index:0;
@@ -74,11 +74,11 @@ h1 em{font-style:italic;color:var(--gold-b)}
 .pr-now sub{font-family:'Outfit',sans-serif;font-size:11px;color:var(--cream3);vertical-align:baseline;margin-left:2px}
 
 /* HERO CTA */
-.hero-cta{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:36px}
-.btn-primary{background:linear-gradient(155deg,var(--gold-b) 0%,var(--gold) 55%,var(--gold-d) 100%);border:none;border-radius:12px;color:var(--ink);font-family:'Outfit',sans-serif;font-size:15px;font-weight:600;padding:14px 24px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;white-space:nowrap}
+.hero-cta{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:36px;width:100%}
+.btn-primary{background:linear-gradient(155deg,var(--gold-b) 0%,var(--gold) 55%,var(--gold-d) 100%);border:none;border-radius:12px;color:var(--ink);font-family:'Outfit',sans-serif;font-size:15px;font-weight:600;padding:14px 24px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .btn-primary::after{content:'';position:absolute;inset:0;background:linear-gradient(155deg,rgba(255,255,255,.18) 0%,transparent 55%);pointer-events:none}
 .btn-primary:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(201,168,76,.3)}
-.btn-secondary{background:transparent;border:1px solid rgba(255,255,255,.12);border-radius:12px;color:var(--cream2);font-family:'Outfit',sans-serif;font-size:14px;padding:14px 20px;cursor:pointer;transition:all .2s}
+.btn-secondary{background:transparent;border:1px solid rgba(255,255,255,.12);border-radius:12px;color:var(--cream2);font-family:'Outfit',sans-serif;font-size:14px;padding:14px 20px;cursor:pointer;transition:all .2s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .btn-secondary:hover{border-color:rgba(255,255,255,.25);color:var(--cream)}
 
 /* AGENT CARD */
@@ -88,7 +88,7 @@ h1 em{font-style:italic;color:var(--gold-b)}
   border:1px solid rgba(201,168,76,.15);
   border-radius:16px;padding:14px 16px;
   display:flex;align-items:center;gap:14px;
-  backdrop-filter:blur(16px);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
   animation:slide-up .6s ease .4s both;
 }
 @keyframes slide-up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
@@ -182,8 +182,9 @@ img.dental-hero{
 
 input[type=text],input[type=tel],input[type=email],input[type=number],select,textarea{
   background:var(--ink4);border:1px solid rgba(255,255,255,.08);border-radius:11px;color:var(--cream);
-  font-family:'Outfit',sans-serif;font-size:15px;font-weight:400;padding:12px 14px;width:100%;
+  font-family:'Outfit',sans-serif;font-size:16px;font-weight:400;padding:12px 14px;width:100%;
   transition:border-color .2s,box-shadow .2s;-webkit-appearance:none;appearance:none;outline:none;
+  -webkit-text-fill-color:var(--cream);
 }
 input:focus,select:focus,textarea:focus{border-color:rgba(201,168,76,.42);box-shadow:0 0 0 3px rgba(201,168,76,.06)}
 input::placeholder{color:rgba(240,236,227,.18)}
@@ -191,13 +192,13 @@ select option{background:var(--ink3);color:var(--cream)}
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 
 .radio-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.ropt{background:var(--ink4);border:1.5px solid rgba(255,255,255,.07);border-radius:11px;padding:11px 13px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:14px;color:var(--cream2);transition:all .18s;user-select:none}
+.ropt{background:var(--ink4);border:1.5px solid rgba(255,255,255,.07);border-radius:11px;padding:11px 13px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:14px;color:var(--cream2);transition:all .18s;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;touch-action:manipulation}
 .ropt.on{border-color:rgba(201,168,76,.48);background:rgba(201,168,76,.07);color:var(--gold-b)}
 .rdot{width:13px;height:13px;border:1.5px solid rgba(255,255,255,.18);border-radius:50%;flex-shrink:0;transition:all .18s}
 .ropt.on .rdot{border-color:var(--gold);background:var(--gold);box-shadow:0 0 0 3px rgba(201,168,76,.14)}
 
 .color-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:9px}
-.cbtn{display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--ink4);border:1.5px solid rgba(255,255,255,.07);border-radius:11px;padding:10px 4px;cursor:pointer;font-family:'Outfit',sans-serif;font-size:11px;color:var(--cream3);transition:all .18s}
+.cbtn{display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--ink4);border:1.5px solid rgba(255,255,255,.07);border-radius:11px;padding:10px 4px;cursor:pointer;font-family:'Outfit',sans-serif;font-size:11px;color:var(--cream3);transition:all .18s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .cbtn:hover{border-color:rgba(255,255,255,.16);color:var(--cream2)}
 .cbtn.on{border-color:var(--gold);background:rgba(201,168,76,.07);color:var(--gold-b);font-weight:600}
 .cdot{width:20px;height:20px;border-radius:50%;display:block;flex-shrink:0}
@@ -207,11 +208,11 @@ textarea{resize:none;min-height:72px;font-size:14px;line-height:1.5}
 .divider{border:none;border-top:1px solid rgba(255,255,255,.05);margin:3px 0}
 
 .step-nav{padding:4px 24px 24px;display:flex;gap:10px}
-.btn-next{flex:1;background:linear-gradient(155deg,var(--gold-b) 0%,var(--gold) 55%,var(--gold-d) 100%);border:none;border-radius:12px;color:var(--ink);font-family:'Outfit',sans-serif;font-size:15px;font-weight:600;padding:15px 20px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.btn-next{flex:1;background:linear-gradient(155deg,var(--gold-b) 0%,var(--gold) 55%,var(--gold-d) 100%);border:none;border-radius:12px;color:var(--ink);font-family:'Outfit',sans-serif;font-size:15px;font-weight:600;padding:15px 20px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .btn-next::after{content:'';position:absolute;inset:0;background:linear-gradient(155deg,rgba(255,255,255,.16) 0%,transparent 55%);pointer-events:none}
 .btn-next:not(:disabled):hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(201,168,76,.28)}
 .btn-next:disabled{background:var(--ink5);color:var(--cream3);cursor:not-allowed}
-.btn-back{background:transparent;border:1px solid rgba(255,255,255,.1);border-radius:12px;color:var(--cream3);font-family:'Outfit',sans-serif;font-size:14px;padding:15px 16px;cursor:pointer;transition:all .2s}
+.btn-back{background:transparent;border:1px solid rgba(255,255,255,.1);border-radius:12px;color:var(--cream3);font-family:'Outfit',sans-serif;font-size:14px;padding:15px 16px;cursor:pointer;transition:all .2s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .btn-back:hover{border-color:rgba(255,255,255,.2);color:var(--cream)}
 .cta-note{font-size:11px;color:var(--cream3);text-align:center;line-height:1.5;padding:0 24px 16px}
 
@@ -232,8 +233,8 @@ footer a{color:rgba(240,236,227,.25);text-decoration:none}
 .legal{margin-top:10px;font-size:10px;line-height:1.65;color:rgba(240,236,227,.1);max-width:420px;margin-left:auto;margin-right:auto}
 
 /* SUCCESS */
-.success{display:none;min-height:100svh;flex-direction:column;align-items:center;justify-content:center;padding:48px 28px;text-align:center;position:relative;z-index:1;background:var(--ink)}
-.success.on{display:flex}
+.success{display:none;min-height:100vh;min-height:100svh;flex-direction:column;align-items:center;justify-content:center;padding:48px 28px;text-align:center;position:relative;z-index:1;background:var(--ink)}
+.success.on{display:-webkit-box;display:-webkit-flex;display:flex}
 .success-img{width:180px;height:auto;border-radius:16px;margin:0 auto 28px;opacity:.9;animation:pop .6s ease both}
 @keyframes pop{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:.9}}
 .success h2{font-family:'Cormorant Garamond',serif;font-size:2.3rem;font-weight:600;margin-bottom:10px}
@@ -244,7 +245,7 @@ footer a{color:rgba(240,236,227,.25);text-decoration:none}
 .ssn{width:21px;height:21px;border:1px solid rgba(201,168,76,.3);border-radius:50%;background:rgba(201,168,76,.06);display:grid;place-items:center;font-size:10px;font-weight:700;color:var(--gold);flex-shrink:0;margin-top:1px}
 .sst{font-size:13px;font-weight:300;color:var(--cream2);line-height:1.5}
 
-.sticky{display:none;position:fixed;bottom:0;left:0;right:0;padding:12px 20px;background:rgba(7,8,10,.94);backdrop-filter:blur(16px);border-top:1px solid rgba(201,168,76,.12);z-index:99}
+.sticky{display:none;position:fixed;bottom:0;left:0;right:0;padding:12px 20px;background:rgba(7,8,10,.94);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid rgba(201,168,76,.12);z-index:99}
 .sticky.on{display:block}
 @media(min-width:600px){.sticky{display:none!important}}
 
@@ -261,10 +262,11 @@ footer a{color:rgba(240,236,227,.25);text-decoration:none}
 /* ── PROFESSIONAL AGENT CARDS ── */
 .agents-wrap{
   position:relative;z-index:2;
-  margin:0 22px;max-width:456px;
+  margin:0 16px;max-width:456px;
   display:grid;grid-template-columns:1fr 1fr;
   gap:10px;
   animation:slide-up .6s ease .4s both;
+  width:calc(100% - 32px);
 }
 
 .agent-card-pro{
@@ -272,7 +274,7 @@ footer a{color:rgba(240,236,227,.25);text-decoration:none}
   border:1px solid rgba(201,168,76,.16);
   border-radius:16px;
   overflow:hidden;
-  backdrop-filter:blur(16px);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
   transition:border-color .2s, transform .2s;
 }
 .agent-card-pro:hover{
@@ -363,6 +365,40 @@ footer a{color:rgba(240,236,227,.25);text-decoration:none}
   font-size:9px;font-weight:600;
   color:rgba(240,236,227,.3);
   letter-spacing:.05em;
+}
+
+/* ── RESPONSIVE MOBILE FIXES ── */
+@media(max-width:380px){
+  h1{font-size:2.1rem}
+  .hero-cta{flex-direction:column}
+  .hero-cta .btn-primary,.hero-cta .btn-secondary{width:100%;text-align:center}
+  .frow{grid-template-columns:1fr}
+  .color-grid{grid-template-columns:repeat(4,1fr)}
+  .cbtn{font-size:10px;padding:8px 3px}
+  .agents-wrap{grid-template-columns:1fr}
+  .counter-bar{gap:10px}
+  .counter-num{font-size:1.2rem}
+  nav{padding:14px 16px}
+  .hero-content{padding:0 16px}
+  .main{padding:0 16px}
+}
+@media(max-width:320px){
+  .color-grid{grid-template-columns:repeat(4,1fr)}
+  .cbtn{font-size:9px;padding:7px 2px}
+  .cdot{width:16px;height:16px}
+  .agents-wrap{grid-template-columns:1fr}
+}
+@media(min-width:600px){
+  .hero-shell{min-height:600px}
+  .hero-content{max-width:480px;padding:0 32px}
+  .main{padding:0 32px;max-width:560px}
+  nav{padding:22px 32px;max-width:560px}
+  .agents-wrap{max-width:520px}
+  .agent-card-pro{max-width:240px}
+}
+@media(min-width:900px){
+  body{font-size:17px}
+  .hero-shell{min-height:680px}
 }
 </style>
 </head>
@@ -561,8 +597,8 @@ footer a{color:rgba(240,236,227,.25);text-decoration:none}
           <div class="field">
             <label class="flabel">¿Tienes seguro actualmente? *</label>
             <div class="radio-pair">
-              <div class="ropt" id="rNo" onclick="pickRadio('no')"><div class="rdot"></div>No tengo</div>
-              <div class="ropt" id="rSi" onclick="pickRadio('si')"><div class="rdot"></div>Sí tengo</div>
+              <div class="ropt" id="rNo" onclick="pickRadio('no')" role="button" tabindex="0"><div class="rdot"></div>No tengo</div>
+              <div class="ropt" id="rSi" onclick="pickRadio('si')" role="button" tabindex="0"><div class="rdot"></div>Sí tengo</div>
             </div>
             <input type="hidden" id="seguro">
           </div>
@@ -656,14 +692,14 @@ footer a{color:rgba(240,236,227,.25);text-decoration:none}
   document.querySelectorAll('.svc-card').forEach(c=>observer.observe(c));
 
   let currentStep=1;
-  function pickRadio(v){document.getElementById('rNo').classList.toggle('on',v==='no');document.getElementById('rSi').classList.toggle('on',v==='si');document.getElementById('seguro').value=v==='si'?'Sí':'No'}
-  function pickColor(c,btn){document.querySelectorAll('.cbtn').forEach(b=>b.classList.remove('on'));btn.classList.add('on');document.getElementById('colorFavorito').value=c}
+  function pickRadio(v){var no=document.getElementById('rNo');var si=document.getElementById('rSi');no.classList.remove('on');si.classList.remove('on');if(v==='no'){no.classList.add('on');}else{si.classList.add('on');}document.getElementById('seguro').value=v==='si'?'Sí':'No';}
+  function pickColor(c,btn){document.querySelectorAll('.cbtn').forEach(function(b){b.classList.remove('on');});btn.classList.add('on');document.getElementById('colorFavorito').value=c;}
   document.getElementById('telefono').addEventListener('input',function(e){let v=e.target.value.replace(/\D/g,'').slice(0,10);if(v.length>=6)v=`(${v.slice(0,3)}) ${v.slice(3,6)}-${v.slice(6)}`;else if(v.length>=3)v=`(${v.slice(0,3)}) ${v.slice(3)}`;e.target.value=v});
 
   function goNext(){
     if(currentStep===1){
       const n=document.getElementById('nombre').value.trim(),t=document.getElementById('telefono').value.trim(),e=document.getElementById('estado').value,s=document.getElementById('seguro').value,a=document.getElementById('edad').value;
-      if(!n||!t||!e||!s||!a){alert('Por favor completa todos los campos marcados con *');return}
+      if(!n||!t||!e||!s||!a){var missing=[];if(!n)missing.push('Nombre');if(!t)missing.push('Teléfono');if(!e)missing.push('Estado');if(!a)missing.push('Edad');if(!s)missing.push('¿Tienes seguro?');alert('Campos requeridos:\n'+missing.join(', '));return}
       goStep(2);
     }else{submitLead()}
   }
@@ -695,10 +731,14 @@ footer a{color:rgba(240,236,227,.25);text-decoration:none}
     if(spots>1){spots--;sessionStorage.setItem('ls_s',spots)}
     document.getElementById('mainPage').style.display='none';
     document.getElementById('stickyBar').style.display='none';
-    document.getElementById('successScreen').classList.add('on'); setTimeout(function(){ var msg = encodeURIComponent('Hola! Acabo de solicitar información sobre el examen 
+    document.getElementById('successScreen').classList.add('on');
+    setTimeout(function(){
+      var msg=encodeURIComponent('Hola! Acabo de solicitar información sobre mi cobertura dental gratuita con Luxury Shield Insurance. ¿Me pueden dar más detalles?');
+      window.open('https://wa.me/14155238886?text='+msg,'_blank');
+    },2000);
   }
 
-  function scrollToForm(){document.getElementById('formCard').scrollIntoView({behavior:'smooth',block:'center'})}
+  function scrollToForm(){var el=document.getElementById('formCard');if(el){el.scrollIntoView({behavior:'smooth',block:'start'});}}
   window.addEventListener('scroll',()=>{const b=document.getElementById('formCard').getBoundingClientRect().bottom;document.getElementById('stickyBar').classList.toggle('on',b<0)},{passive:true});
 </script>
 </body>
