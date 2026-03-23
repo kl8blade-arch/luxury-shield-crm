@@ -690,7 +690,7 @@ footer a{color:rgba(240,236,227,.25);text-decoration:none}
     const btn=document.getElementById('btnNext');
     btn.disabled=true;btn.textContent='Reservando...';
     const payload={nombre:document.getElementById('nombre').value.trim(),telefono:document.getElementById('telefono').value.replace(/\D/g,''),email:document.getElementById('email').value.trim(),estado:document.getElementById('estado').value,edad:parseInt(document.getElementById('edad').value),tiene_seguro_actual:document.getElementById('seguro').value==='Sí',mensaje:document.getElementById('mensaje').value.trim(),color_favorito:color,tipo_seguro:'Dental',fuente:'landing_dental_v3',url_origen:window.location.href,utm_source:new URLSearchParams(window.location.search).get('utm_source')||'',utm_campaign:new URLSearchParams(window.location.search).get('utm_campaign')||''};
-    try{await fetch('http://localhost:3000/api/save-lead',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})}
+    try{await fetch('https://luxury-shield-crm.vercel.app/api/save-lead',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})}
     catch(err){const q=JSON.parse(localStorage.getItem('pendingLeads')||'[]');q.push({...payload,ts:new Date().toISOString()});localStorage.setItem('pendingLeads',JSON.stringify(q))}
     if(spots>1){spots--;sessionStorage.setItem('ls_s',spots)}
     document.getElementById('mainPage').style.display='none';
