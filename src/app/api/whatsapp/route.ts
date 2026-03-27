@@ -1,3 +1,4 @@
+// Sophia v2 — Luxury Shield CRM — Updated 2026-03-27
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
