@@ -11,7 +11,7 @@ const TWILIO_TOKEN = process.env.TWILIO_AUTH_TOKEN!
 const TWILIO_FROM = process.env.TWILIO_WHATSAPP_FROM!
 const ADMIN_PHONE = process.env.ADMIN_WHATSAPP || '+17869435656'
 
-// Send WhatsApp message via Twilio
+// ── Send WhatsApp via Twilio ──
 async function sendWhatsApp(to: string, message: string) {
   const body = new URLSearchParams({
     From: `whatsapp:${TWILIO_FROM}`,
@@ -34,58 +34,78 @@ async function sendWhatsApp(to: string, message: string) {
   return data
 }
 
-// Call Claude AI to generate response
+// ── Determine stage from conversation context ──
+function determineStage(messageCount: number, isReadyToBuy: boolean, currentStage: string): string {
+  if (isReadyToBuy) return 'listo_comprar'
+  if (messageCount <= 1) return 'nuevo'
+  if (messageCount <= 3) return 'calificando'
+  if (messageCount <= 6) return 'presentando'
+  if (currentStage === 'objecion') return 'objecion'
+  return currentStage
+}
+
+// ── Claude AI — Sophia Agent ──
 async function getAIResponse(lead: any, conversationHistory: any[], incomingMessage: string): Promise<string> {
-  const systemPrompt = `Eres Sophia, una asesora experta en seguros de Luxury Shield Insurance. 
-Eres bilingüe (español/inglés), cálida pero muy directa y persuasiva. Eres una closer experta.
+  const systemPrompt = `Eres Sophia, asesora experta de Luxury Shield Insurance. Eres una amiga experta que guía con calidez, NUNCA una vendedora agresiva.
+
+IDIOMA: Responde en español. Si el cliente escribe en inglés, responde en inglés.
+
+PRODUCTO PRINCIPAL — Cigna DVH Plus (Dental + Visión + Audición):
+- Sin periodo de espera para dental
+- $200 de beneficio en visión el primer año
+- $5,000 de cobertura anual máxima
+- Red de 85,000+ proveedores a nivel nacional
+- Emisión garantizada: NO hay preguntas de salud
+- Edades: 18 a 89 años
+- Renovable de por vida
+- Deducible desde $0
+- Estados disponibles: FL, TX, CA, IL, GA, NC, SC, TN, NJ, AL
 
 INFORMACIÓN DEL LEAD:
-- Nombre: ${lead.name}
-- Tipo de seguro de interés: ${lead.insurance_type}
-- Estado: ${lead.state}
-- Tiene seguro actualmente: ${lead.has_insurance ? 'Sí' : 'No'}
+- Nombre: ${lead.name || 'Amigo/a'}
+- Estado: ${lead.state || 'No especificado'}
 - Edad: ${lead.age || 'No especificada'}
-- Score actual: ${lead.score}/100
-- Color favorito: ${lead.favorite_color || 'No especificado'}
+- Seguro actual: ${lead.has_insurance ? 'Sí tiene' : 'No tiene / No indicó'}
+- Tipo de interés: ${lead.insurance_type || 'dental'}
+- Stage actual: ${lead.stage || 'nuevo'}
 
-TU MISIÓN:
-1. Contactar al lead calurosamente y personalizar el mensaje con su nombre
-2. Identificar su necesidad específica de seguro
-3. Crear urgencia real (cupos limitados, precios que suben, periodo de inscripción)
-4. Manejar objeciones con empatía y datos reales
-5. Cuando el lead muestre interés real, CERRAR pidiendo sus datos para la póliza
-6. Si el lead está listo para comprar, incluir exactamente al final de tu mensaje: [LISTO_PARA_COMPRAR]
+FLUJO DE CONVERSACIÓN (sigue este orden natural):
+1. BIENVENIDA CÁLIDA — Preséntate, usa su nombre, pregunta cómo está
+2. CALIFICACIÓN — Una sola pregunta por mensaje: ¿estado donde vive? ¿edad? ¿tiene seguro dental actualmente? ¿qué le preocupa más de su salud dental?
+3. PRESENTACIÓN PERSONALIZADA — Basada en sus respuestas, destaca los beneficios más relevantes para esa persona
+4. MANEJO DE OBJECIONES — Con empatía y datos reales
+5. CIERRE — Agendar llamada con Carlos, nuestro especialista
 
-REGLAS IMPORTANTES:
-- Mensajes cortos (máximo 3 párrafos)
-- Usa su nombre frecuentemente
-- Habla en el mismo idioma que el lead
-- Nunca menciones competidores
-- Crea urgencia sin mentir
-- Si preguntan el precio, da rangos reales según el estado
-- Cuando detectes que está listo: pide nombre completo, fecha de nacimiento y correo para activar la póliza
-- SOLO agrega [LISTO_PARA_COMPRAR] cuando el lead confirme explícitamente que quiere proceder
+MANEJO DE OBJECIONES:
+- "Es caro" / "No tengo dinero" → "Entiendo perfectamente. Lo bueno es que hay planes desde $X al mes, y muchas personas califican para subsidios que reducen el costo significativamente. ¿Te gustaría que revisemos si calificas?"
+- "Lo voy a pensar" → "¡Claro que sí! Es una decisión importante. Solo te comento que los precios suelen ajustarse cada trimestre. ¿Hay algo específico que te genere duda? Con gusto te lo aclaro."
+- "Ya tengo seguro" → "¡Excelente que ya estés protegido/a! Muchos de nuestros clientes usan Cigna DVH Plus como complemento, especialmente por los $200 en visión y la cobertura dental sin espera. ¿Tu plan actual cubre visión?"
+- "No creo que califique" → "¡Buenas noticias! Cigna DVH Plus tiene emisión garantizada — no hay preguntas de salud ni rechazos. Si tienes entre 18 y 89 años, calificas automáticamente."
 
-SEÑALES DE QUE ESTÁ LISTO PARA COMPRAR:
-- Pregunta cómo pagar o cuánto cuesta exactamente
-- Dice "sí quiero", "me interesa", "cómo empezamos", "quiero aplicar"
-- Pide más información para tomar la decisión final
-- Da sus datos personales para la póliza
+SEÑALES DE COMPRA (cuando detectes estas, escribe exactamente [LISTO_PARA_COMPRAR] al final):
+- "Sí quiero", "me interesa", "¿cómo empezamos?", "quiero aplicar"
+- Pregunta cómo pagar o precio exacto después de la presentación
+- Da datos personales voluntariamente para la póliza
+- Acepta agendar llamada con Carlos
 
-SEÑALES DE OBJECIÓN (maneja con empatía):
-- "Está muy caro" → explica el valor y el subsidio del gobierno
-- "Déjame pensar" → crea urgencia suave
-- "No tengo tiempo" → ofrece llamada de 10 minutos
-- "Ya tengo seguro" → compara beneficios, habla de cross-selling
-
-Mantén la conversación natural, como un experto de confianza, no como un robot.`
+REGLAS ESTRICTAS:
+- Máximo 3-4 oraciones por mensaje
+- NUNCA más de 1 pregunta por mensaje
+- Siempre termina con una pregunta O un call-to-action claro
+- Usa el nombre del lead naturalmente (no en cada oración)
+- Tono: amiga experta, cálida, empática — como si hablaras con alguien que aprecias
+- NO uses jerga de seguros complicada
+- NO menciones competidores
+- NO presiones ni uses tácticas de miedo
+- Cuando el lead esté listo, ofrece agendar llamada con Carlos (especialista) para finalizar
+- SOLO agrega [LISTO_PARA_COMPRAR] cuando el lead confirme explícitamente interés de compra`
 
   const messages = [
     ...conversationHistory.map((c: any) => ({
-      role: c.direction === 'inbound' ? 'user' : 'assistant',
+      role: c.direction === 'inbound' ? 'user' as const : 'assistant' as const,
       content: c.message,
     })),
-    { role: 'user', content: incomingMessage }
+    { role: 'user' as const, content: incomingMessage }
   ]
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -97,17 +117,17 @@ Mantén la conversación natural, como un experto de confianza, no como un robot
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 500,
+      max_tokens: 400,
       system: systemPrompt,
       messages,
     }),
   })
 
   const data = await res.json()
-  return data.content?.[0]?.text || 'Hola, ¿cómo puedo ayudarte?'
+  return data.content?.[0]?.text || 'Hola, soy Sophia de Luxury Shield 😊 ¿En qué puedo ayudarte hoy?'
 }
 
-// Webhook: receives incoming WhatsApp messages from Twilio
+// ── POST: Twilio Webhook — incoming WhatsApp messages ──
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
@@ -121,7 +141,7 @@ export async function POST(req: NextRequest) {
       return new NextResponse('OK', { status: 200 })
     }
 
-    // Find lead by phone number
+    // Find lead by phone
     const cleanPhone = from.replace(/\D/g, '')
     const { data: leads } = await supabase
       .from('leads')
@@ -132,14 +152,14 @@ export async function POST(req: NextRequest) {
 
     let lead = leads?.[0]
 
-    // If no lead found, create one
+    // Create lead if not found
     if (!lead) {
       const { data: newLead } = await supabase
         .from('leads')
         .insert({
           name: profileName || from,
           phone: from,
-          stage: 'contacted',
+          stage: 'nuevo',
           source: 'whatsapp_inbound',
           score: 40,
           ia_active: true,
@@ -149,17 +169,20 @@ export async function POST(req: NextRequest) {
       lead = newLead
     }
 
-    // Get conversation history (last 10 messages)
+    // Get conversation history (last 15 messages for context)
     const { data: history } = await supabase
       .from('conversations')
       .select('*')
       .eq('lead_id', lead.id)
       .order('created_at', { ascending: true })
-      .limit(10)
+      .limit(15)
 
     // Save incoming message
     await supabase.from('conversations').insert({
       lead_id: lead.id,
+      phone: from,
+      role: 'user',
+      content: body,
       lead_name: lead.name,
       lead_phone: from,
       channel: 'ai_text',
@@ -167,26 +190,36 @@ export async function POST(req: NextRequest) {
       message: body,
     })
 
-    // Update lead stage to contacted
-    if (lead.stage === 'new' || lead.stage === 'contact') {
-      await supabase.from('leads').update({
-        stage: 'contacted',
-        ia_active: true,
-        last_contact: new Date().toISOString(),
-        contact_attempts: (lead.contact_attempts || 0) + 1,
-      }).eq('id', lead.id)
-    }
+    // Update lead contact info
+    await supabase.from('leads').update({
+      ia_active: true,
+      last_contact: new Date().toISOString(),
+      contact_attempts: (lead.contact_attempts || 0) + 1,
+      updated_at: new Date().toISOString(),
+    }).eq('id', lead.id)
 
     // Generate AI response
     const aiResponse = await getAIResponse(lead, history || [], body)
 
-    // Check if lead is ready to buy
+    // Check for buy signal
     const isReadyToBuy = aiResponse.includes('[LISTO_PARA_COMPRAR]')
     const cleanResponse = aiResponse.replace('[LISTO_PARA_COMPRAR]', '').trim()
 
-    // Save AI response to conversation
+    // Determine and update stage
+    const messageCount = (history || []).length + 1
+    const newStage = determineStage(messageCount, isReadyToBuy, lead.stage)
+
+    await supabase.from('leads').update({
+      stage: isReadyToBuy ? 'interested' : newStage,
+      updated_at: new Date().toISOString(),
+    }).eq('id', lead.id)
+
+    // Save AI response
     await supabase.from('conversations').insert({
       lead_id: lead.id,
+      phone: from,
+      role: 'assistant',
+      content: cleanResponse,
       lead_name: lead.name,
       lead_phone: from,
       channel: 'ai_text',
@@ -195,43 +228,39 @@ export async function POST(req: NextRequest) {
       ai_summary: isReadyToBuy ? 'LISTO PARA COMPRAR' : null,
     })
 
-    // Send AI response via WhatsApp
+    // Send response via WhatsApp
     await sendWhatsApp(from, cleanResponse)
 
-    // If ready to buy — update lead and notify human agent
+    // If ready to buy — notify Carlos
     if (isReadyToBuy) {
-      // Update lead status
       await supabase.from('leads').update({
         ready_to_buy: true,
         stage: 'interested',
         score: 95,
-        score_recommendation: '🔥 Lead calificado por IA — listo para cerrar',
+        score_recommendation: '🔥 Lead calificado por Sophia IA — listo para cerrar',
         ia_active: false,
       }).eq('id', lead.id)
 
-      // Get last messages for context
-      const contextMessages = (history || []).slice(-4).map((c: any) =>
+      const contextMessages = (history || []).slice(-5).map((c: any) =>
         `${c.direction === 'inbound' ? '👤' : '🤖'}: ${c.message}`
       ).join('\n')
 
-      // Notify admin/agent
       const agentMsg = `🔥 *LEAD LISTO PARA COMPRAR — Luxury Shield*
 
 👤 *${lead.name}*
 📞 ${from}
-📍 ${lead.state || '—'} · ${lead.insurance_type}
+📍 ${lead.state || '—'} · ${lead.insurance_type || 'dental'}
 ⭐ Score: 95/100
-🎨 Color favorito: ${lead.favorite_color || '—'}
 
-📋 *Resumen de la conversación:*
+📋 *Últimos mensajes:*
 ${contextMessages}
 
-⚡ *Acción requerida: Llama AHORA para cerrar la venta*
-_Este lead fue calificado por Sophia IA y está listo para activar su póliza._`
+⚡ *Acción: Llama AHORA para cerrar la venta*
+_Sophia IA calificó este lead como listo para comprar._`
 
       await sendWhatsApp(ADMIN_PHONE, agentMsg)
 
-      // If assigned to specific agent
+      // Notify assigned agent if different from admin
       if (lead.agent_id) {
         const { data: agent } = await supabase
           .from('agents')
@@ -244,10 +273,10 @@ _Este lead fue calificado por Sophia IA y está listo para activar su póliza._`
         }
       }
 
-      console.log(`Lead ${lead.name} is READY TO BUY — agent notified`)
+      console.log(`Lead ${lead.name} READY TO BUY — admin notified`)
     }
 
-    // Return TwiML empty response (Twilio expects this)
+    // Return TwiML empty response
     return new NextResponse(
       `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
       { status: 200, headers: { 'Content-Type': 'text/xml' } }
@@ -263,5 +292,5 @@ _Este lead fue calificado por Sophia IA y está listo para activar su póliza._`
 }
 
 export async function GET() {
-  return NextResponse.json({ status: 'WhatsApp webhook active' })
+  return NextResponse.json({ status: 'WhatsApp webhook active', agent: 'Sophia v2' })
 }
