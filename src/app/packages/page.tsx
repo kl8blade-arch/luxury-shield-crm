@@ -1,5 +1,6 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/design'
 
@@ -61,11 +62,23 @@ interface Order {
   status: string
 }
 
-export default function PackagesPage() {
+export default function PackagesPageWrapper() {
+  return (
+    <Suspense fallback={<div style={{ padding: '48px', textAlign: 'center', color: C.textMuted, background: C.bg, minHeight: '100vh', fontFamily: C.font }}>Cargando...</div>}>
+      <PackagesPage />
+    </Suspense>
+  )
+}
+
+function PackagesPage() {
+  const searchParams = useSearchParams()
   const [packages, setPackages] = useState<Package[]>([])
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedPkg, setSelectedPkg] = useState<Package | null>(null)
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const showSuccess = searchParams.get('success') === 'true'
+  const showCancelled = searchParams.get('cancelled') === 'true'
 
   useEffect(() => { loadData() }, [])
 
@@ -78,6 +91,32 @@ export default function PackagesPage() {
     setPackages(pkgs || [])
     setOrders(ords || [])
     setLoading(false)
+  }
+
+  async function handleCheckout(pkg: Package) {
+    setCheckoutLoading(true)
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          packageId: pkg.id,
+          packageName: pkg.name,
+          price: pkg.price,
+          leadCount: pkg.lead_count,
+        }),
+      })
+      const data = await res.json()
+      if (data.url) {
+        window.location.href = data.url
+      } else {
+        alert(data.error || 'Error al crear sesión de pago')
+        setCheckoutLoading(false)
+      }
+    } catch {
+      alert('Error de conexión. Intenta de nuevo.')
+      setCheckoutLoading(false)
+    }
   }
 
   const badgeColors: Record<string, { bg: string; text: string; border: string }> = {
@@ -93,6 +132,34 @@ export default function PackagesPage() {
         <h1 style={{ color: C.text, fontSize: '26px', fontWeight: 700, letterSpacing: '-0.4px', margin: 0 }}>Paquetes de Leads</h1>
         <p style={{ color: C.textMuted, fontSize: '13px', marginTop: '4px' }}>Compra leads calificados para tu negocio</p>
       </div>
+
+      {/* Success / Cancelled banners */}
+      {showSuccess && (
+        <div style={{
+          background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.3)',
+          borderRadius: '12px', padding: '16px 20px', marginBottom: '20px',
+          display: 'flex', alignItems: 'center', gap: '12px',
+        }}>
+          <span style={{ fontSize: '20px' }}>✅</span>
+          <div>
+            <p style={{ color: '#34d399', fontSize: '14px', fontWeight: 700, margin: 0 }}>Pago completado</p>
+            <p style={{ color: C.textDim, fontSize: '12px', margin: '2px 0 0' }}>Tu paquete de leads ha sido activado. Los créditos ya están disponibles en tu cuenta.</p>
+          </div>
+        </div>
+      )}
+      {showCancelled && (
+        <div style={{
+          background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)',
+          borderRadius: '12px', padding: '16px 20px', marginBottom: '20px',
+          display: 'flex', alignItems: 'center', gap: '12px',
+        }}>
+          <span style={{ fontSize: '20px' }}>⚠️</span>
+          <div>
+            <p style={{ color: '#fbbf24', fontSize: '14px', fontWeight: 700, margin: 0 }}>Pago cancelado</p>
+            <p style={{ color: C.textDim, fontSize: '12px', margin: '2px 0 0' }}>No se realizó ningún cargo. Puedes intentar de nuevo cuando quieras.</p>
+          </div>
+        </div>
+      )}
 
       {/* Packages grid */}
       {loading ? (
@@ -219,12 +286,17 @@ export default function PackagesPage() {
               </div>
             </div>
 
-            <button style={{
-              width: '100%', padding: '14px', borderRadius: '12px', cursor: 'pointer',
-              fontFamily: C.font, fontSize: '14px', fontWeight: 700,
-              background: 'linear-gradient(135deg, #C9A84C, #8B6E2E)', color: '#07080A',
-              border: 'none', marginBottom: '12px',
-            }}>Pagar con Stripe</button>
+            <button
+              onClick={() => handleCheckout(selectedPkg)}
+              disabled={checkoutLoading}
+              style={{
+                width: '100%', padding: '14px', borderRadius: '12px', cursor: checkoutLoading ? 'wait' : 'pointer',
+                fontFamily: C.font, fontSize: '14px', fontWeight: 700,
+                background: checkoutLoading ? 'rgba(201,168,76,0.3)' : 'linear-gradient(135deg, #C9A84C, #8B6E2E)',
+                color: '#07080A', border: 'none', marginBottom: '12px',
+                opacity: checkoutLoading ? 0.7 : 1, transition: 'all 0.2s',
+              }}
+            >{checkoutLoading ? 'Procesando...' : 'Pagar con Stripe'}</button>
             <button onClick={() => setSelectedPkg(null)} style={{
               width: '100%', padding: '12px', borderRadius: '10px', cursor: 'pointer',
               fontFamily: C.font, fontSize: '13px', color: C.textDim,
