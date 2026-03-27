@@ -292,5 +292,5 @@ _Sophia IA calificó este lead como listo para comprar._`
 }
 
 export async function GET() {
-  return NextResponse.json({ status: 'WhatsApp webhook active', agent: 'Sophia v2' })
+  return NextResponse.json({ status: '✅ online', agent: 'Sophia v2' })
 }
