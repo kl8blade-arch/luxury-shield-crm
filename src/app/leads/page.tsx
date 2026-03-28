@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { C, STAGE_META, scoreColor, fmtDate } from '@/lib/design'
 import { Lead, LeadStage } from '@/types'
+import LeadDetailPanel from '@/components/LeadDetailPanel'
 
 const STAGES = [{ value: 'all', label: 'Todas las etapas' }, ...Object.entries(STAGE_META).map(([v, m]) => ({ value: v, label: m.label }))]
 
@@ -151,85 +152,14 @@ export default function LeadsPage() {
 
       {/* DETAIL PANEL */}
       {selected && (
-        <div style={{ width: '360px', flexShrink: 0, background: C.surface, borderLeft: `1px solid ${C.border}`, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '22px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(201,168,76,0.12)', border: '1px solid rgba(201,168,76,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 800, color: C.gold }}>
-                {selected.name.charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <p style={{ color: C.text, fontSize: '14px', fontWeight: 700, margin: 0 }}>{selected.name}</p>
-                <p style={{ color: C.textMuted, fontSize: '11px', margin: '2px 0 0' }}>{selected.insurance_type} · {selected.state || '—'}</p>
-              </div>
-            </div>
-            <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: '4px' }}>✕</button>
-          </div>
-
-          <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
-            {/* Score */}
-            <div style={{ background: C.surface2, borderRadius: '12px', padding: '16px', border: `1px solid ${C.border}` }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <p style={{ color: C.textMuted, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.13em', margin: 0 }}>Score IA</p>
-                <span style={{ color: scoreColor(selected.score), fontWeight: 800, fontSize: '24px' }}>{selected.score}</span>
-              </div>
-              <div style={{ height: '5px', background: 'rgba(255,255,255,0.06)', borderRadius: '999px', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${selected.score}%`, background: scoreColor(selected.score), borderRadius: '999px', transition: 'width 0.5s' }} />
-              </div>
-              {selected.score_recommendation && <p style={{ color: C.textMuted, fontSize: '11px', marginTop: '8px', lineHeight: 1.5 }}>{selected.score_recommendation}</p>}
-              {selected.ready_to_buy && <p style={{ color: '#f97316', fontWeight: 700, fontSize: '12px', marginTop: '8px' }}>🔥 Listo para comprar</p>}
-            </div>
-
-            {/* Info grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-              {[
-                { label: 'Teléfono', value: selected.phone },
-                { label: 'Email', value: selected.email || '—' },
-                { label: 'Edad', value: selected.age ? `${selected.age} años` : '—' },
-                { label: 'Tiene seguro', value: selected.has_insurance ? 'Sí' : 'No' },
-                { label: 'Intentos', value: String(selected.contact_attempts) },
-                { label: 'Color favorito', value: selected.favorite_color || '—' },
-              ].map(({ label, value }) => (
-                <div key={label} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '11px' }}>
-                  <p style={{ color: C.textMuted, fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.13em', margin: '0 0 5px' }}>{label}</p>
-                  <p style={{ color: C.text, fontSize: '12px', fontWeight: 500, margin: 0, wordBreak: 'break-all' }}>{value}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Stage */}
-            <div>
-              <p style={{ color: C.textMuted, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.13em', marginBottom: '8px' }}>Etapa</p>
-              <select value={selected.stage} onChange={e => updateStage(selected.id, e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '10px', color: C.text, fontSize: '13px', outline: 'none', cursor: 'pointer' }}>
-                {Object.entries(STAGE_META).map(([v, m]) => <option key={v} value={v}>{m.label}</option>)}
-              </select>
-            </div>
-
-            {/* Contact attempts */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <p style={{ color: C.textMuted, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.13em', margin: 0 }}>Intentos de contacto</p>
-              <button onClick={() => addContact(selected.id, selected.contact_attempts)}
-                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', background: C.surface2, border: `1px solid ${C.border}`, color: C.text, fontSize: '13px' }}>
-                <span style={{ fontWeight: 800, color: C.gold }}>{selected.contact_attempts}</span>
-                <span style={{ color: C.textMuted }}>+1 llamada</span>
-              </button>
-            </div>
-
-            {/* Notes */}
-            <div>
-              <p style={{ color: C.textMuted, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.13em', marginBottom: '8px' }}>Notas</p>
-              <textarea defaultValue={selected.notes || ''} onBlur={e => updateNotes(selected.id, e.target.value)}
-                placeholder="Agrega notas sobre este lead..." rows={4}
-                style={{ width: '100%', padding: '12px', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '10px', color: C.text, fontSize: '13px', outline: 'none', resize: 'none', fontFamily: C.font, lineHeight: 1.6, boxSizing: 'border-box' as const }} />
-            </div>
-
-            {/* WhatsApp */}
-            <a href={`https://wa.me/${selected.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px', borderRadius: '12px', textDecoration: 'none', background: '#25d366', color: 'white', fontSize: '14px', fontWeight: 700, boxShadow: '0 4px 16px rgba(37,211,102,0.2)' }}>
-              📱 Abrir WhatsApp
-            </a>
-          </div>
-        </div>
+        <LeadDetailPanel
+          lead={selected}
+          onClose={() => setSelected(null)}
+          onStageUpdate={(id, s) => {
+            setLeads(p => p.map(l => l.id === id ? { ...l, stage: s as LeadStage } : l))
+            setSelected(null)
+          }}
+        />
       )}
     </div>
   )

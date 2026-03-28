@@ -2,12 +2,14 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { C, STAGE_META, scoreColor } from '@/lib/design'
+import LeadDetailPanel from '@/components/LeadDetailPanel'
 
 const COLS = Object.entries(STAGE_META).filter(([k]) => k !== 'unqualified')
 
 export default function PipelinePage() {
   const [leads, setLeads] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState<any>(null)
 
   useEffect(() => {
     supabase.from('leads').select('*').order('created_at', { ascending: false })
@@ -17,7 +19,8 @@ export default function PipelinePage() {
   const byStage = (key: string) => leads.filter(l => l.stage === key)
 
   return (
-    <div style={{ height: '100vh', background: C.bg, display: 'flex', flexDirection: 'column', fontFamily: C.font, overflow: 'hidden' }}>
+    <div style={{ height: '100vh', background: C.bg, display: 'flex', fontFamily: C.font, overflow: 'hidden' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
       {/* Header */}
       <div style={{ padding: '32px 32px 22px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
@@ -77,7 +80,7 @@ export default function PipelinePage() {
                       <p style={{ color: C.textMuted, fontSize: '11px', lineHeight: 1.5, margin: 0 }}>Sin leads</p>
                     </div>
                   ) : stageLeads.map(lead => (
-                    <a key={lead.id} href="/leads" style={{ textDecoration: 'none' }}>
+                    <div key={lead.id} onClick={() => setSelected(lead)} style={{ textDecoration: 'none' }}>
                       <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '11px 12px', cursor: 'pointer', transition: 'all 0.15s' }}
                         onMouseEnter={e => { const el = e.currentTarget as HTMLDivElement; el.style.border = `1px solid ${meta.color}38`; el.style.background = C.surface3 }}
                         onMouseLeave={e => { const el = e.currentTarget as HTMLDivElement; el.style.border = `1px solid ${C.border}`; el.style.background = C.surface2 }}
@@ -97,7 +100,7 @@ export default function PipelinePage() {
                           {lead.ready_to_buy && <span style={{ fontSize: '11px' }}>🔥</span>}
                         </div>
                       </div>
-                    </a>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -105,6 +108,14 @@ export default function PipelinePage() {
           })}
         </div>
       </div>
+    </div>
+    {selected && (
+      <LeadDetailPanel
+        lead={selected}
+        onClose={() => setSelected(null)}
+        onStageUpdate={(id, s) => { setLeads(p => p.map(l => l.id === id ? { ...l, stage: s } : l)); setSelected(null) }}
+      />
+    )}
     </div>
   )
 }
