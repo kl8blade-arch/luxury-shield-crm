@@ -120,7 +120,7 @@ REGLAS ESTRICTAS:
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 400,
         system: systemPrompt,
         messages,
@@ -132,7 +132,7 @@ REGLAS ESTRICTAS:
       console.error(`Claude API error (${res.status}):`, errorBody)
       // Fallback to older model if current one fails
       if (res.status === 404 || res.status === 400) {
-        console.log('Retrying with claude-3-5-sonnet-20241022...')
+        console.log('Retrying with claude-3-haiku-20240307...')
         const retryRes = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
@@ -141,7 +141,7 @@ REGLAS ESTRICTAS:
             'anthropic-version': '2023-06-01',
           },
           body: JSON.stringify({
-            model: 'claude-3-5-sonnet-20241022',
+            model: 'claude-3-haiku-20240307',
             max_tokens: 400,
             system: systemPrompt,
             messages,
