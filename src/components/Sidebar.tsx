@@ -19,7 +19,7 @@ const NAV = [
   { href: '/settings',   icon: Settings,        label: 'Configuración',   badge: null },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const pathname = usePathname()
 
   return (
@@ -64,7 +64,7 @@ export default function Sidebar() {
         {NAV.map(({ href, icon: Icon, label, badge }) => {
           const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
           return (
-            <Link key={href} href={href} style={{ textDecoration: 'none' }}>
+            <Link key={href} href={href} onClick={onNavigate} style={{ textDecoration: 'none' }}>
               <div
                 style={{
                   display: 'flex', alignItems: 'center', gap: '10px',

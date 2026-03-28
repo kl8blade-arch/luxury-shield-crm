@@ -22,6 +22,8 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
   const [coachEnabled, setCoachEnabled] = useState(() => { try { return localStorage.getItem('coaching_enabled') !== 'false' } catch { return true } })
   const [lastProcessedMsgId, setLastProcessedMsgId] = useState<string | null>(null)
   const [heatScore, setHeatScore] = useState(lead.score || 50)
+  const [mobileTab, setMobileTab] = useState<'chat' | 'coach'>('chat')
+  const [isMobile, setIsMobile] = useState(false)
   const [copyFeedback, setCopyFeedback] = useState(false)
   const [loseModal, setLoseModal] = useState(false)
   const [loseReason, setLoseReason] = useState('')
@@ -46,6 +48,13 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
 
   // Keep ref in sync
   useEffect(() => { coachEnabledRef.current = coachEnabled }, [coachEnabled])
+
+  // Mobile detection
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check(); window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   // Stable message loader
   const loadMessages = useCallback(async () => {
@@ -214,7 +223,7 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
   const modeColors: Record<Mode, string> = { sophia: C.gold, manual: '#60a5fa' }
 
   return (
-    <div style={{ width: showCoachPanel ? '560px' : '420px', flexShrink: 0, background: C.surface, borderLeft: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', fontFamily: C.font, overflow: 'hidden', transition: 'width 0.3s' }}>
+    <div style={{ width: isMobile ? '100vw' : showCoachPanel ? '560px' : '420px', flexShrink: 0, background: C.surface, borderLeft: isMobile ? 'none' : `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', fontFamily: C.font, overflow: 'hidden', transition: 'width 0.3s', position: isMobile ? 'fixed' : 'relative', inset: isMobile ? 0 : undefined, zIndex: isMobile ? 60 : undefined }}>
 
       {/* Header */}
       <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
@@ -249,11 +258,25 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
         </div>
       </div>
 
+      {/* Mobile tabs */}
+      {isMobile && coachEnabled && (
+        <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+          {[{ key: 'chat' as const, label: 'Conversación' }, { key: 'coach' as const, label: 'Coach IA' }].map(t => (
+            <button key={t.key} onClick={() => setMobileTab(t.key)} style={{
+              flex: 1, padding: '10px', textAlign: 'center', fontSize: '12px', fontWeight: mobileTab === t.key ? 700 : 400,
+              color: mobileTab === t.key ? '#C9A84C' : '#6b7280', cursor: 'pointer',
+              borderBottom: mobileTab === t.key ? '2px solid #C9A84C' : '2px solid transparent',
+              background: 'transparent', border: 'none', borderBottomStyle: 'solid', fontFamily: C.font, transition: 'all 0.15s',
+            }}>{t.label}</button>
+          ))}
+        </div>
+      )}
+
       {/* Main content */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
         {/* Chat column */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ flex: 1, display: isMobile && mobileTab === 'coach' ? 'none' : 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {/* Chat header with live indicator */}
           <div style={{ padding: '4px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
             <span style={{ fontSize: '9px', color: C.textMuted }}>Conversación</span>
@@ -321,8 +344,8 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
         </div>
 
         {/* Coaching sidebar */}
-        {showCoachPanel && (
-          <div style={{ width: '190px', borderLeft: `1px solid ${C.border}`, overflowY: 'auto', padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px', flexShrink: 0 }}>
+        {showCoachPanel && (!isMobile || mobileTab === 'coach') && (
+          <div style={{ width: isMobile ? '100%' : '190px', borderLeft: isMobile ? 'none' : `1px solid ${C.border}`, overflowY: 'auto', padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px', flexShrink: 0 }}>
 
             <button onClick={() => { const lastIn = conversations.filter(m => m.direction === 'inbound').pop(); if (lastIn) triggerCoaching(lastIn.message) }} disabled={coachLoading} style={{ width: '100%', padding: '7px', borderRadius: '7px', fontSize: '9px', fontWeight: 700, fontFamily: C.font, cursor: 'pointer', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.3)', color: '#a855f7' }}>
               {coachLoading ? 'Analizando...' : '🧠 Analizar'}

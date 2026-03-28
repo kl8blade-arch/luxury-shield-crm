@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import Sidebar from '@/components/Sidebar'
+import AppShell from '@/components/AppShell'
 
 export const metadata: Metadata = {
   title: 'Luxury Shield CRM',
@@ -11,10 +11,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es">
       <body style={{ background: '#07080A' }}>
-        <Sidebar />
-        <main style={{ marginLeft: '224px', minHeight: '100vh', overflow: 'hidden' }}>
-          {children}
-        </main>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   )
