@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+/*
+  SQL — ejecutar en Supabase si no existen:
+  ALTER TABLE leads ADD COLUMN IF NOT EXISTS color_favorito text;
+  ALTER TABLE leads ADD COLUMN IF NOT EXISTS resumen_sophia text;
+*/
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -11,9 +17,10 @@ const TWILIO_TOKEN = process.env.TWILIO_AUTH_TOKEN!
 const TWILIO_FROM = process.env.TWILIO_WHATSAPP_FROM!
 
 async function sendWhatsApp(to: string, message: string) {
+  const cleanTo = to.startsWith('+') ? to : `+${to.replace(/\D/g, '')}`
   const body = new URLSearchParams({
     From: `whatsapp:${TWILIO_FROM}`,
-    To: `whatsapp:${to}`,
+    To: `whatsapp:${cleanTo}`,
     Body: message,
   })
   const res = await fetch(
@@ -30,51 +37,27 @@ async function sendWhatsApp(to: string, message: string) {
   return res.json()
 }
 
-// First message templates by insurance type
+// Single welcome message with color security integrated
 function getFirstMessage(lead: any): string {
-  const name = lead.name.split(' ')[0]
-  const type = lead.insurance_type
+  const name = lead.name?.split(' ')[0] || 'Hola'
+  const color = lead.favorite_color || lead.color_favorito
 
-  const templates: Record<string, string> = {
-    'Dental': `Hola ${name} 👋 Te habla Sophia de *Luxury Shield Insurance*.
+  if (color) {
+    return `Hola ${name} 😊 Soy Sophia de *Luxury Shield Insurance*.
 
-Vi que solicitaste información sobre tu cobertura dental gratuita en ${lead.state}. ¡Tenemos muy buenas noticias para ti! 🦷
+Vi que elegiste el color *${color}* — ese es tu código de seguridad personal. Cualquier asesor nuestro lo mencionará antes de darte información confidencial.
 
-Con tu plan dental puedes cubrir:
-✅ Consulta con doctor: $0
-✅ Radiografías: $0  
-✅ Limpieza profesional: $0
-
-¿Es buen momento para contarte los detalles? Solo toma 5 minutos 😊`,
-
-    'ACA': `Hola ${name} 👋 Soy Sophia de *Luxury Shield Insurance*.
-
-Vi que quieres verificar tu elegibilidad para seguro médico en ${lead.state}. ¡Tengo una excelente noticia! 🏥
-
-Con el subsidio del gobierno, muchas familias en tu estado pagan *$0 al mes* por cobertura completa.
-
-¿Cuántas personas cubriría el plan? (tú solo, pareja, familia completa) 😊`,
-
-    'IUL': `Hola ${name} 👋 Te habla Sophia de *Luxury Shield Insurance*.
-
-Vi que te interesa proteger el futuro financiero de tu familia en ${lead.state}. ¡Hoy es el momento perfecto! 💼
-
-El plan IUL que tenemos disponible:
-✅ Protección de vida
-✅ Ahorro con crecimiento garantizado
-✅ Beneficios fiscales
-
-¿Tienes 10 minutos para revisar las opciones disponibles para ti? 😊`,
+¿Tienes un momento? Quiero explicarte cómo funciona tu bono de beneficios de visión 💙`
   }
 
-  return templates[type] || `Hola ${name} 👋 Te habla Sophia de *Luxury Shield Insurance*.
+  return `Hola ${name} 😊 Soy Sophia de *Luxury Shield Insurance*.
 
-Vi que solicitaste información sobre seguro de ${type} en ${lead.state}. ¡Nos alegra mucho contactarte! 🛡️
+Vi que solicitaste información sobre tu cobertura dental en ${lead.state || 'tu estado'}. ¡Tenemos muy buenas noticias para ti! 🦷
 
-Tenemos planes excelentes disponibles para residentes de ${lead.state}. ¿Es buen momento para contarte los detalles?`
+¿Tienes un momento? Quiero contarte cómo puedes cubrir tu limpieza, evaluación y radiografías por $0 💙`
 }
 
-// Called by save-lead API or manually to send first message
+// Called by save-lead API — sends ONE welcome message, Sophia responds only when lead replies
 export async function POST(req: NextRequest) {
   try {
     const { lead_id } = await req.json()
@@ -97,7 +80,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Lead sin teléfono' }, { status: 400 })
     }
 
-    // Check if already contacted by AI
+    // Check if already contacted
     const { count } = await supabase
       .from('conversations')
       .select('*', { count: 'exact', head: true })
@@ -110,7 +93,7 @@ export async function POST(req: NextRequest) {
 
     const message = getFirstMessage(lead)
 
-    // Send first WhatsApp
+    // Send single welcome message
     const result = await sendWhatsApp(lead.phone, message)
 
     if (result.error_code) {
@@ -125,10 +108,10 @@ export async function POST(req: NextRequest) {
       channel: 'ai_text',
       direction: 'outbound',
       message,
-      ai_summary: 'Primer contacto automático de Sophia IA',
+      ai_summary: 'Primer contacto — Sophia IA (con color de seguridad)',
     })
 
-    // Update lead
+    // Update lead — Sophia waits for lead to reply
     await supabase.from('leads').update({
       stage: 'contact',
       ia_active: true,

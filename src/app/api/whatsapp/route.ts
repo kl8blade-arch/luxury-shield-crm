@@ -93,6 +93,9 @@ const STATE_MAP: Record<string, string> = {
 }
 const VALID_STATES = new Set(Object.values(STATE_MAP))
 
+// ── Color detection ──
+const COLORES = ['azul','verde','rojo','dorado','púrpura','purpura','naranja','blue','green','red','gold','purple','orange']
+
 // ── Extract and save lead data from messages ──
 async function extractAndUpdateLeadData(message: string, lead: any) {
   const msg = message.toLowerCase()
@@ -100,14 +103,32 @@ async function extractAndUpdateLeadData(message: string, lead: any) {
 
   // Detect state
   if (!lead.state) {
-    // Check abbreviations (FL, TX, etc.)
     const abbrMatch = message.match(/\b([A-Z]{2})\b/)
     if (abbrMatch && VALID_STATES.has(abbrMatch[1])) {
       updates.state = abbrMatch[1]
     }
-    // Check full names
     for (const [name, abbr] of Object.entries(STATE_MAP)) {
       if (msg.includes(name)) { updates.state = abbr; break }
+    }
+  }
+
+  // Detect color
+  if (!lead.favorite_color && !lead.color_favorito) {
+    const colorDetectado = COLORES.find(c => msg.includes(c))
+    if (colorDetectado) {
+      const colorNormalized = colorDetectado.charAt(0).toUpperCase() + colorDetectado.slice(1)
+      updates.favorite_color = colorNormalized
+      updates.color_favorito = colorNormalized
+      console.log(`[Sophia] Color detected: ${colorNormalized}`)
+    }
+  }
+
+  // Detect name (me llamo X, soy X, my name is X)
+  if (!lead.name || lead.name === lead.phone) {
+    const nameMatch = message.match(/(?:me llamo|soy|my name is|i'm|i am)\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)?)/i)
+    if (nameMatch) {
+      updates.name = nameMatch[1].trim()
+      console.log(`[Sophia] Name detected: ${updates.name}`)
     }
   }
 
@@ -117,7 +138,7 @@ async function extractAndUpdateLeadData(message: string, lead: any) {
     if (numMatch) {
       updates.dependents = parseInt(numMatch[1] || numMatch[2])
     } else {
-      updates.for_crossselling = true // flag family interest
+      updates.for_crossselling = true
     }
   }
 
@@ -131,7 +152,39 @@ async function extractAndUpdateLeadData(message: string, lead: any) {
     updates.updated_at = new Date().toISOString()
     console.log(`[Sophia] Auto-extracted lead data:`, updates)
     await supabase.from('leads').update(updates).eq('id', lead.id)
-    Object.assign(lead, updates) // update in-memory too
+    Object.assign(lead, updates)
+  }
+}
+
+// ── Generate AI summary for Carlos ──
+async function generateSummaryForCarlos(history: any[]): Promise<string> {
+  try {
+    const convoText = history.slice(-10).map((c: any) =>
+      `${c.direction === 'inbound' ? 'Cliente' : 'Sophia'}: ${c.message}`
+    ).join('\n')
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY!,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        system: 'Resume en 5 bullets cortos esta conversación de ventas de seguros. Incluye: qué necesita el cliente, objeciones que tuvo, qué le interesó más, nivel de urgencia. Responde SOLO los bullets, sin introducción.',
+        messages: [{ role: 'user', content: convoText }],
+      }),
+    })
+
+    if (res.ok) {
+      const data = await res.json()
+      return data.content?.[0]?.text || 'Resumen no disponible'
+    }
+    return 'Resumen no disponible'
+  } catch {
+    return 'Resumen no disponible'
   }
 }
 
@@ -236,6 +289,7 @@ EJEMPLOS REALES DEL BROCHURE:
 - Edad: ${lead.age || 'No especificada'}
 - Seguro actual: ${lead.has_insurance === true ? 'Sí tiene' : lead.has_insurance === false ? 'No tiene' : 'No indicó'}
 - Tipo de interés: ${lead.insurance_type || 'dental'}
+- Color de seguridad: ${lead.favorite_color || lead.color_favorito || 'NO TIENE — pídelo en el mensaje 2 o 3'}
 - Stage: ${lead.stage || 'nuevo'}
 
 ═══ FLUJO DE CONVERSACIÓN (sigue este orden) ═══
@@ -243,19 +297,25 @@ EJEMPLOS REALES DEL BROCHURE:
 1. BIENVENIDA — Si mencionan el bono de $200: "¡Hola! 😊 Sí, calificas para el bono de visión. Pero déjame contarte algo mejor — ese bono viene incluido en un plan que cubre tu limpieza dental, evaluación y radiografías, todo por $0. Una familia en Texas tenía $1,895 en gastos y con el plan pagó solo $421. ¿Es solo para ti o también para tu familia?"
    Si no mencionan bono: Preséntate cálidamente, usa su nombre.
 
-2. CALIFICACIÓN (UNA pregunta por mensaje, en este orden):
+2. COLOR DE SEGURIDAD — Si NO tiene color (ver info del lead), en el mensaje 2 o 3 pregunta:
+   "Para proteger tu información, ¿puedes elegir un color secreto? Escríbeme uno: Azul, Verde, Rojo, Dorado, Púrpura o Naranja ��� Tu asesor siempre lo mencionará antes de cualquier llamada."
+   Si YA tiene color, NO lo preguntes de nuevo.
+
+3. CALIFICACIÓN (UNA pregunta por mensaje, en este orden):
    a) ¿En qué estado vives?
    b) ¿Es solo para ti o incluye familia?
    c) ¿Tienes seguro dental actualmente?
    d) ¿Me confirmas tu nombre completo?
 
-3. PRESENTACIÓN — Usa ganchos emocionales según lo que dijo. Adapta ejemplos (Sarah/George).
+4. PRESENTACIÓN — Usa ganchos emocionales según lo que dijo. Adapta ejemplos (Sarah/George).
 
-4. OBJECIONES — Validar PRIMERO, luego dato.
+5. OBJECIONES — Validar PRIMERO, luego dato.
 
-5. CIERRE — Solo cuando tengas TODOS los datos (estado, familia, seguro, nombre), di:
+6. CIERRE — Solo cuando tengas TODOS los datos (estado, familia, seguro, nombre), di:
    "Perfecto [nombre], con esa información Carlos puede prepararte una cotización exacta para [estado]. ¿Prefieres que te contacte hoy o mañana?"
    Y agrega [LISTO_PARA_COMPRAR]
+
+   Si tiene color, agrega en el cierre: "Recuerda: Carlos se identificará mencionando tu color *[COLOR]* antes de darte cualquier información. Si alguien te contacta y NO menciona tu color, no compartas ningún dato."
 
 NO mandes a Carlos hasta tener: estado, familia o solo, seguro actual, nombre completo.
 
@@ -506,32 +566,40 @@ export async function POST(req: NextRequest) {
     // Send response via WhatsApp
     await sendWhatsApp(from, cleanResponse)
 
-    // If ready to buy — notify Carlos
+    // If ready to buy — generate summary and notify Carlos
     if (isReadyToBuy) {
+      const color = lead.favorite_color || lead.color_favorito || '—'
+      const firstName = lead.name?.split(' ')[0] || 'el cliente'
+
+      // Generate AI summary
+      const allMessages = [...(history || []), { direction: 'inbound', message: body }, { direction: 'outbound', message: cleanResponse }]
+      const summary = await generateSummaryForCarlos(allMessages)
+
+      // Save summary to lead
       await supabase.from('leads').update({
         ready_to_buy: true,
         stage: 'interested',
         score: 95,
         score_recommendation: '🔥 Lead calificado por Sophia IA — listo para cerrar',
         ia_active: false,
+        resumen_sophia: summary,
       }).eq('id', lead.id)
 
-      const contextMessages = (history || []).slice(-5).map((c: any) =>
-        `${c.direction === 'inbound' ? '👤' : '🤖'}: ${c.message}`
-      ).join('\n')
+      const agentMsg = `🔥 *LEAD LISTO PARA HABLAR*
 
-      const agentMsg = `🔥 *LEAD LISTO PARA COMPRAR — Luxury Shield*
+👤 *Nombre:* ${lead.name || from}
+📱 *WhatsApp:* ${from}
+📍 *Estado:* ${lead.state || '—'}
+🎨 *Color secreto:* ${color} ← MENCIONA ESTO PRIMERO AL LLAMAR
+⭐ *Score:* 95/100
 
-👤 *${lead.name}*
-📞 ${from}
-📍 ${lead.state || '—'} · ${lead.insurance_type || 'dental'}
-⭐ Score: 95/100
+📋 *RESUMEN DE SOPHIA:*
+${summary}
 
-📋 *Últimos mensajes:*
-${contextMessages}
+💬 *Primera línea sugerida:*
+"Hola ${firstName}, soy Carlos de Luxury Shield. Tu color es ${color}. ¿Tienes 10 minutos?"
 
-⚡ *Acción: Llama AHORA para cerrar la venta*
-_Sophia IA calificó este lead como listo para comprar._`
+🚀 ¡Llámalo ahora — está listo!`
 
       await sendWhatsApp(ADMIN_PHONE, agentMsg)
 

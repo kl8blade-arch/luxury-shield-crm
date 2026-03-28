@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+/*
+  SQL — ejecutar en Supabase si no existen:
+  ALTER TABLE leads ADD COLUMN IF NOT EXISTS color_favorito text;
+  ALTER TABLE leads ADD COLUMN IF NOT EXISTS resumen_sophia text;
+  ALTER TABLE leads ADD COLUMN IF NOT EXISTS dependents integer;
+*/
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
