@@ -142,20 +142,41 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
     setSending(false)
   }
 
-  function extractSuggested(text: string): string {
-    const dq = text.match(/"([^"]{10,})"/)
-    if (dq) return dq[1]
-    const ac = text.match(/(?:envi|manda|respond|di esto|escri)[a-z]*[:\s]+(.+)/i)
-    if (ac) return ac[1].trim()
-    return text.replace(/\*\*(.*?)\*\*/g, '$1').trim()
+  function extractSuggested(coachText: string): string {
+    let message = ''
+    // Try 1: text between double quotes (15+ chars)
+    const quoted = coachText.match(/"([^"]{15,})"/)
+    if (quoted) message = quoted[1]
+    // Try 2: after keywords like "envíale esto", "dile", "mándale"
+    if (!message) {
+      const afterKw = coachText.match(/(?:env[ií]a(?:le)?|manda(?:le)?|d[ií](?:le)?|respon(?:de|dele)?|mensaje sugerido)[:\s]+["']?([^"'\n]{15,})/i)
+      if (afterKw) message = afterKw[1].trim()
+    }
+    // Try 3: last paragraph (often the suggestion)
+    if (!message) {
+      const paras = coachText.split('\n').filter(p => p.trim().length > 20)
+      if (paras.length > 0) message = paras[paras.length - 1].replace(/^["*\-–]+\s*/, '').replace(/["*]+$/, '').trim()
+    }
+    // Fallback: full text
+    if (!message) message = coachText
+    // Clean markdown
+    return message.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1').replace(/^["']+|["']+$/g, '').trim()
   }
 
   function copyToInput(text: string) {
     const clean = text.replace(/^["*]+|["*]+$/g, '').replace(/\*\*(.*?)\*\*/g, '$1').trim()
     setMsgInput(clean)
+    // If not in manual mode, switch to manual so input is visible
+    if (mode !== 'manual') {
+      setMode('manual')
+      supabase.from('leads').update({ conversation_mode: 'manual' }).eq('id', lead.id)
+    }
     setCopyFeedback(true)
     setTimeout(() => setCopyFeedback(false), 2000)
-    document.getElementById('agent-msg-input')?.focus()
+    setTimeout(() => {
+      const input = document.getElementById('agent-msg-input')
+      if (input) { input.focus(); input.scrollIntoView({ behavior: 'smooth', block: 'center' }) }
+    }, 150)
   }
 
   async function askCoach(question: string) {
@@ -373,7 +394,7 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
                     }}>
                       {msg.content}
                       {msg.role === 'assistant' && msg.content.includes('"') && (
-                        <button onClick={() => copyToInput(extractSuggested(msg.content))} style={{ display: 'block', marginTop: '4px', padding: '3px 8px', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: '5px', fontSize: '8px', fontWeight: 600, color: '#a78bfa', cursor: 'pointer', width: '100%', textAlign: 'center' }}>
+                        <button onClick={(e) => { copyToInput(extractSuggested(msg.content)); const b = e.currentTarget; b.textContent = '✓ Copiado'; b.style.color = '#4ade80'; b.style.borderColor = 'rgba(34,197,94,0.3)'; setTimeout(() => { b.textContent = 'Copiar mensaje →'; b.style.color = ''; b.style.borderColor = '' }, 2000) }} style={{ display: 'block', marginTop: '4px', padding: '3px 8px', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: '5px', fontSize: '8px', fontWeight: 600, color: '#a78bfa', cursor: 'pointer', width: '100%', textAlign: 'center' }}>
                           Copiar mensaje →
                         </button>
                       )}
