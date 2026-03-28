@@ -102,7 +102,7 @@ export default function AnalyticsPage() {
       {loading ? <div style={{ padding: '48px', textAlign: 'center', color: C.textMuted }}>Cargando...</div> : (
         <>
           {/* ── Health Score + Top Metrics ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: '16px', marginBottom: '24px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
             <div style={{ ...CARD, padding: '28px 24px', textAlign: 'center' }}
               onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 12px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)' }}
               onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = CARD.boxShadow }}>
@@ -129,7 +129,7 @@ export default function AnalyticsPage() {
           </div>
 
           {/* ── Actions + At Risk ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '24px' }}>
             <div style={{ ...CARD, padding: '20px' }}>
               <h3 style={{ color: C.text, fontSize: '14px', fontWeight: 700, margin: '0 0 14px' }}>Acciones prioritarias</h3>
               {(health?.actions || []).length === 0 ? <p style={{ color: C.textMuted, fontSize: '13px' }}>Todo en orden</p> : (
@@ -194,7 +194,7 @@ export default function AnalyticsPage() {
           </div>
 
           {/* ── Arguments + Objections ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '24px' }}>
             <div style={{ ...CARD, padding: '20px' }}>
               <h3 style={{ color: C.text, fontSize: '14px', fontWeight: 700, margin: '0 0 14px' }}>Argumentos que cierran</h3>
               {topArgs.length === 0 ? <p style={{ color: C.textMuted, fontSize: '13px' }}>Aún sin datos</p> : topArgs.map((a, i) => (

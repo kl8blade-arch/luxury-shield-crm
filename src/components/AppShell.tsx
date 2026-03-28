@@ -15,58 +15,51 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('resize', check)
   }, [])
 
-  // Close sidebar on route change (mobile)
   useEffect(() => { if (isMobile) setOpen(false) }, [pathname, isMobile])
 
   return (
     <>
-      {/* Mobile overlay */}
+      {/* Mobile overlay — z-index ABOVE sidebar, catches all taps */}
       {isMobile && open && (
         <div onClick={() => setOpen(false)} style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
-          zIndex: 49, backdropFilter: 'blur(2px)',
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+          zIndex: 110, backdropFilter: 'blur(3px)',
         }} />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar wrapper — overrides Sidebar's own position:fixed */}
       <div style={{
-        position: 'fixed', left: 0, top: 0, bottom: 0, zIndex: 50,
+        position: 'fixed', left: 0, top: 0, bottom: 0,
+        zIndex: isMobile ? (open ? 120 : -1) : 50,
+        width: '224px',
         transform: isMobile && !open ? 'translateX(-100%)' : 'translateX(0)',
         transition: 'transform 0.25s ease',
+        pointerEvents: isMobile && !open ? 'none' : 'auto',
       }}>
-        {isMobile && (
-          <button onClick={() => setOpen(false)} style={{
-            position: 'absolute', top: 14, right: -40, zIndex: 51,
-            width: 32, height: 32, borderRadius: 8,
-            background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)',
-            display: open ? 'flex' : 'none', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', color: '#9ca3af', fontSize: 16,
-          }}>×</button>
-        )}
         <Sidebar onNavigate={() => isMobile && setOpen(false)} />
       </div>
 
-      {/* Main */}
+      {/* Main content — full width on mobile */}
       <main style={{
         marginLeft: isMobile ? 0 : '224px',
         minHeight: '100vh', overflow: 'hidden',
-        transition: 'margin-left 0.25s ease',
+        width: isMobile ? '100%' : undefined,
       }}>
         {children}
       </main>
 
-      {/* Mobile hamburger button */}
+      {/* Hamburger button — only on mobile */}
       {isMobile && !open && (
         <button onClick={() => setOpen(true)} style={{
-          position: 'fixed', bottom: 20, left: 16, zIndex: 40,
-          background: '#C9A84C', border: 'none', borderRadius: 12,
-          width: 44, height: 44, cursor: 'pointer',
-          boxShadow: '0 4px 20px rgba(201,168,76,0.4)',
+          position: 'fixed', bottom: 24, left: 16, zIndex: 100,
+          background: '#C9A84C', border: 'none', borderRadius: 14,
+          width: 50, height: 50, cursor: 'pointer',
+          boxShadow: '0 4px 24px rgba(201,168,76,0.5)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 5,
         }}>
           <span style={{ width: 18, height: 2, background: '#0a0a0f', borderRadius: 2, display: 'block' }} />
           <span style={{ width: 18, height: 2, background: '#0a0a0f', borderRadius: 2, display: 'block' }} />
-          <span style={{ width: 18, height: 2, background: '#0a0a0f', borderRadius: 2, display: 'block' }} />
+          <span style={{ width: 14, height: 2, background: '#0a0a0f', borderRadius: 2, display: 'block' }} />
         </button>
       )}
     </>

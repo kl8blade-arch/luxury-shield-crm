@@ -382,7 +382,7 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
                 <div style={{ padding: '8px', background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.18)', borderRadius: '8px' }}>
                   <p style={{ fontSize: '8px', fontWeight: 700, color: '#a855f7', margin: '0 0 3px', textTransform: 'uppercase' }}>Respuesta sugerida</p>
                   <p style={{ fontSize: '10px', color: C.text, lineHeight: 1.5, margin: '0 0 5px' }}>{coaching.suggested_response || '—'}</p>
-                  <button onClick={() => copyToInput(coaching.suggested_response || '')} style={{ width: '100%', padding: '4px', borderRadius: '5px', fontSize: '8px', fontWeight: 700, fontFamily: C.font, cursor: 'pointer', background: copyFeedback ? 'rgba(52,211,153,0.15)' : 'rgba(168,85,247,0.12)', border: `1px solid ${copyFeedback ? 'rgba(52,211,153,0.3)' : 'rgba(168,85,247,0.25)'}`, color: copyFeedback ? '#34d399' : '#a855f7' }}>{copyFeedback ? '✓ Copiado' : 'Usar esta'}</button>
+                  <button onClick={() => copyToInput(coaching.suggested_response || '')} style={{ width: '100%', padding: '4px', borderRadius: '5px', fontSize: '8px', fontWeight: 700, fontFamily: C.font, cursor: 'pointer', background: copyFeedback ? 'rgba(52,211,153,0.15)' : 'rgba(168,85,247,0.12)', border: `1px solid ${copyFeedback ? 'rgba(52,211,153,0.3)' : 'rgba(168,85,247,0.25)'}`, color: copyFeedback ? '#34d399' : '#a855f7' }}>{copyFeedback ? '✓ Listo — mira el input ↓' : 'Usar esta'}</button>
                 </div>
 
                 {/* Objection */}

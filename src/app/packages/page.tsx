@@ -188,7 +188,7 @@ function PackagesPage() {
                 </div>
                 <p style={{ color: C.textDim, fontSize: '12px', margin: '0 0 4px' }}>{pkg.lead_count} leads</p>
                 <p style={{ color: C.textMuted, fontSize: '11px', margin: '0 0 16px' }}>
-                  ${(pkg.price / pkg.lead_count).toFixed(2)} por lead
+                  ${pkg.lead_count > 0 ? (pkg.price / pkg.lead_count).toFixed(2) : 'N/A'} por lead
                 </p>
                 <p style={{ color: C.textDim, fontSize: '12px', margin: '0 0 20px', lineHeight: 1.5 }}>{pkg.description}</p>
 
@@ -278,7 +278,7 @@ function PackagesPage() {
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <span style={{ color: C.textDim, fontSize: '13px' }}>Precio por lead</span>
-                <span style={{ color: C.text, fontSize: '13px', fontWeight: 600 }}>${(selectedPkg.price / selectedPkg.lead_count).toFixed(2)}</span>
+                <span style={{ color: C.text, fontSize: '13px', fontWeight: 600 }}>${selectedPkg.lead_count > 0 ? (selectedPkg.price / selectedPkg.lead_count).toFixed(2) : 'N/A'}</span>
               </div>
               <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: '8px', display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: C.text, fontSize: '14px', fontWeight: 700 }}>Total</span>
