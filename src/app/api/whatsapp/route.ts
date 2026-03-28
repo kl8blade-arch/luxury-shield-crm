@@ -361,25 +361,38 @@ ${lead.quiz_has_insurance ? `- Cobertura actual: ${lead.quiz_has_insurance} (del
 - Tono: conversacional, nunca corporativo ni repetitivo
 ${langNote}${speedContext}${learningsContext}`
 
+  // Inject known context into system prompt so Sophia never re-asks
+  const contextSummary = `
+CONTEXTO YA RECOPILADO (NO PREGUNTAR DE NUEVO):
+- Nombre: ${lead.name || 'desconocido'}
+- Estado: ${lead.state || 'desconocido'}
+- Composición: ${lead.quiz_coverage_type || (lead.dependents ? lead.dependents + ' personas' : 'desconocido')}
+- Última visita dentista: ${lead.quiz_dentist_last_visit || 'desconocido'}
+- Tiene seguro: ${lead.has_insurance === true ? 'Sí' : lead.has_insurance === false ? 'No' : lead.quiz_has_insurance || 'desconocido'}
+- Color de seguridad: ${hasColor ? color : 'no asignado'}
+- Mensajes intercambiados: ${conversationHistory.length}
+Si algún dato dice 'desconocido', puedes preguntarlo. Si ya está, NUNCA volver a preguntarlo.
+`
+
+  const fullSystemPrompt = contextSummary + '\n' + systemPrompt
+
   // Build message history for Claude API
   const rawMessages: { role: 'user' | 'assistant'; content: string }[] = []
 
-  // Add conversation history
   for (const msg of conversationHistory) {
     if (!msg.message || !msg.message.trim()) continue
     const role = msg.direction === 'inbound' ? 'user' as const : 'assistant' as const
     rawMessages.push({ role, content: msg.message.trim() })
   }
 
-  // Add current incoming message
   rawMessages.push({ role: 'user', content: incomingMessage })
 
-  // Ensure first message is 'user' (Claude requirement)
+  // Ensure first message is 'user' (Claude API requirement)
   while (rawMessages.length > 0 && rawMessages[0].role === 'assistant') {
     rawMessages.shift()
   }
 
-  // Merge consecutive same-role messages (Claude requires alternation)
+  // Merge consecutive same-role messages
   const messages: { role: 'user' | 'assistant'; content: string }[] = []
   for (const msg of rawMessages) {
     if (messages.length > 0 && messages[messages.length - 1].role === msg.role) {
@@ -389,7 +402,8 @@ ${langNote}${speedContext}${learningsContext}`
     }
   }
 
-  console.log(`[Sophia] Claude messages array: ${messages.length} items | First: ${messages[0]?.role} | Last: ${messages[messages.length - 1]?.role}`)
+  console.log(`[SOPHIA] messages enviados a Claude: ${messages.length}`)
+  console.log(`[SOPHIA] estructura: ${messages.map(m => m.role).join(' → ')}`)
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -402,7 +416,7 @@ ${langNote}${speedContext}${learningsContext}`
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 400,
-        system: systemPrompt,
+        system: fullSystemPrompt,
         messages,
       }),
     })
@@ -422,7 +436,7 @@ ${langNote}${speedContext}${learningsContext}`
           body: JSON.stringify({
             model: 'claude-3-haiku-20240307',
             max_tokens: 400,
-            system: systemPrompt,
+            system: fullSystemPrompt,
             messages,
           }),
         })
@@ -692,13 +706,18 @@ export async function POST(req: NextRequest) {
       return agentResult
     }
 
-    // Find lead by phone
-    const cleanPhone = from.replace(/\D/g, '')
-    console.log(`[Sophia] Looking up lead: ${cleanPhone}`)
+    // Find lead by phone — try ALL possible formats
+    const digitsOnly = from.replace(/\D/g, '')        // 17869435656
+    const last10 = digitsOnly.slice(-10)               // 7869435656
+    const withPlus = from.startsWith('+') ? from : `+${digitsOnly}` // +17869435656
+    const with1 = digitsOnly.startsWith('1') ? digitsOnly : `1${digitsOnly}`
+
+    console.log(`[Sophia] Looking up lead: digits=${digitsOnly} last10=${last10} withPlus=${withPlus}`)
+
     const { data: leads, error: leadErr } = await supabase
       .from('leads')
       .select('*')
-      .or(`phone.eq.${cleanPhone},phone.eq.+${cleanPhone},phone.eq.${from}`)
+      .or(`phone.eq.${digitsOnly},phone.eq.${last10},phone.eq.${withPlus},phone.eq.+${digitsOnly},phone.eq.${from},phone.eq.${with1}`)
       .order('created_at', { ascending: false })
       .limit(1)
 
@@ -751,36 +770,46 @@ export async function POST(req: NextRequest) {
 
     console.log(`[Sophia] Lead found: ${lead.id} — ${lead.name} — stage: ${lead.stage}`)
 
-    // Get conversation history — try by lead_id first, fallback to phone
+    // Get conversation history — try lead_id, then phone variants
     let history: any[] | null = null
+
     const { data: histById, error: histErr } = await supabase
       .from('conversations')
       .select('direction, message, created_at')
       .eq('lead_id', lead.id)
       .order('created_at', { ascending: true })
-      .limit(24)
+      .limit(30)
 
     if (histErr) console.error('[Sophia] History error:', histErr)
     history = histById
 
-    // If no history by lead_id, try by phone number
+    // Fallback: try by phone (multiple formats)
     if (!history || history.length === 0) {
       const { data: histByPhone } = await supabase
         .from('conversations')
-        .select('direction, message, created_at')
-        .eq('lead_phone', from)
+        .select('direction, message, created_at, lead_id')
+        .or(`lead_phone.eq.${from},lead_phone.eq.${digitsOnly},lead_phone.eq.${last10},lead_phone.eq.${withPlus}`)
         .order('created_at', { ascending: true })
-        .limit(24)
+        .limit(30)
+
       if (histByPhone && histByPhone.length > 0) {
         history = histByPhone
-        console.log(`[Sophia] History found by phone (${history.length} msgs) — lead_id mismatch`)
+        console.log(`[Sophia] History found by phone fallback: ${history.length} msgs`)
+        // Fix: update old conversations to use correct lead_id
+        const oldLeadIds = [...new Set(histByPhone.map((m: any) => m.lead_id).filter((id: any) => id && id !== lead.id))]
+        if (oldLeadIds.length > 0) {
+          console.log(`[Sophia] Fixing ${oldLeadIds.length} orphaned lead_ids in conversations`)
+          for (const oldId of oldLeadIds) {
+            await supabase.from('conversations').update({ lead_id: lead.id }).eq('lead_id', oldId)
+          }
+        }
       }
     }
 
-    console.log(`=== SOPHIA DEBUG === Lead: ${lead.id} | Phone: ${from} | History: ${history?.length ?? 0} msgs`)
+    console.log(`[SOPHIA] lead.id: ${lead.id} | lead.name: ${lead.name} | phone: ${from}`)
+    console.log(`[SOPHIA] historial encontrado: ${history?.length ?? 0} mensajes`)
     if (history && history.length > 0) {
-      console.log(`[Sophia] First msg: ${history[0].direction} — "${history[0].message?.substring(0, 60)}"`)
-      console.log(`[Sophia] Last msg: ${history[history.length - 1].direction} — "${history[history.length - 1].message?.substring(0, 60)}"`)
+      console.log(`[SOPHIA] primer msg: ${history[0].direction} — "${history[0].message?.substring(0, 50)}"`)
     }
 
     // Save incoming message
