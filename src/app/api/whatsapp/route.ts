@@ -394,6 +394,162 @@ Incluye [LISTO_PARA_COMPRAR] al final.
   }
 }
 
+// ── SYSTEM 1: Handle agent messages (parser) ──
+async function handleAgentMessage(agent: any, message: string, agentPhone: string) {
+  const TWIML_OK = new NextResponse(
+    `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
+    { status: 200, headers: { 'Content-Type': 'text/xml' } }
+  )
+
+  try {
+    // Parse agent message with Claude
+    const parseRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY!,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 200,
+        system: `Eres un parser de reportes de ventas. El agente envió: "${message}"
+Devuelve SOLO un JSON sin texto adicional:
+{"accion":"vendido"|"perdido"|"seguimiento"|"no_califica"|"desconocido","lead_referencia":string|null,"monto":number|null,"motivo":string|null,"fecha_seguimiento":string|null,"notas":string}
+Ejemplos:
+- "vendido 500 María la de Florida" → {"accion":"vendido","lead_referencia":"María","monto":500,"motivo":null,"fecha_seguimiento":null,"notas":"cliente de Florida"}
+- "perdido precio para Juan" → {"accion":"perdido","lead_referencia":"Juan","monto":null,"motivo":"precio","fecha_seguimiento":null,"notas":""}
+- "llamo a Pedro mañana 3pm" → {"accion":"seguimiento","lead_referencia":"Pedro","monto":null,"motivo":null,"fecha_seguimiento":"mañana 3pm","notas":""}
+- "cerré a la señora por 350" → {"accion":"vendido","lead_referencia":null,"monto":350,"motivo":null,"fecha_seguimiento":null,"notas":"la señora"}`,
+        messages: [{ role: 'user', content: message }],
+      }),
+    })
+
+    let parsed: any = { accion: 'desconocido' }
+    if (parseRes.ok) {
+      const data = await parseRes.json()
+      const text = data.content?.[0]?.text || ''
+      try {
+        parsed = JSON.parse(text.replace(/```json?\n?|\n?```/g, '').trim())
+      } catch { console.error('[Agent Parser] JSON parse failed:', text) }
+    }
+
+    console.log('[Agent Parser] Parsed:', parsed)
+
+    // CASE A: Unknown action
+    if (parsed.accion === 'desconocido') {
+      await sendWhatsApp(agentPhone, `No entendí bien 😅 ¿Puedes decirme el resultado?\n\nEscríbeme así:\n- VENDIDO [nombre] [monto]\n- PERDIDO [nombre] [motivo]\n- SEGUIMIENTO [nombre] [fecha]\n- NO CALIFICA [nombre]`)
+      return TWIML_OK
+    }
+
+    // Find the lead
+    let lead: any = null
+
+    // Try by name reference
+    if (parsed.lead_referencia) {
+      const { data: matchedLeads } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('agent_id', agent.id)
+        .ilike('name', `%${parsed.lead_referencia}%`)
+        .is('fecha_cierre', null)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+      lead = matchedLeads?.[0]
+    }
+
+    // CASE B: No lead found — try last pending lead
+    if (!lead) {
+      const { data: pendingLeads } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('agent_id', agent.id)
+        .in('stage', ['listo_comprar', 'agendado', 'interested', 'seguimiento_agente'])
+        .is('fecha_cierre', null)
+        .order('updated_at', { ascending: false })
+        .limit(5)
+
+      if (!pendingLeads || pendingLeads.length === 0) {
+        await sendWhatsApp(agentPhone, `No encontré leads pendientes asignados a ti. ¿Puedes darme el nombre o teléfono del cliente?`)
+        return TWIML_OK
+      }
+      if (pendingLeads.length === 1) {
+        lead = pendingLeads[0]
+      } else {
+        const list = pendingLeads.map((l: any, i: number) => `${i + 1}. ${l.name} (${l.state || '?'})`).join('\n')
+        await sendWhatsApp(agentPhone, `¿Sobre cuál lead es el reporte?\n\n${list}\n\nResponde con el número o el nombre 😊`)
+        return TWIML_OK
+      }
+    }
+
+    // CASE C: Action recognized + lead identified
+    const now = new Date().toISOString()
+    const feedback = {
+      resultado: parsed.accion,
+      notas: parsed.notas || '',
+      monto: parsed.monto,
+      motivo_perdida: parsed.motivo,
+      fecha_reporte: now,
+      agente: agent.name,
+    }
+
+    const stageMap: Record<string, string> = {
+      vendido: 'closed_won',
+      perdido: 'closed_lost',
+      seguimiento: 'seguimiento_agente',
+      no_califica: 'unqualified',
+    }
+
+    const updates: Record<string, any> = {
+      stage: stageMap[parsed.accion] || lead.stage,
+      agente_feedback: feedback,
+      updated_at: now,
+    }
+
+    if (parsed.accion === 'vendido' || parsed.accion === 'perdido' || parsed.accion === 'no_califica') {
+      updates.fecha_cierre = now
+      updates.resultado_final = parsed.accion
+    }
+
+    await supabase.from('leads').update(updates).eq('id', lead.id)
+    console.log(`[Agent Parser] Updated lead ${lead.name}: ${parsed.accion}`)
+
+    // Confirm to agent
+    const firstName = lead.name?.split(' ')[0] || 'el lead'
+    const agentFirst = agent.name?.split(' ')[0] || ''
+
+    const confirmations: Record<string, string> = {
+      vendido: `🎉 ¡Cerraste a ${firstName}! Actualicé el CRM.\nComisión estimada: $${Math.round((parsed.monto || 0) * 0.15)}.\n¡Excelente trabajo ${agentFirst}! 💪`,
+      perdido: `Anotado. ${firstName} queda en lista para reengagement en 30 días con otro ángulo.\nMotivo guardado: ${parsed.motivo || 'no especificado'} 📝`,
+      seguimiento: `Listo, agendé seguimiento para ${parsed.fecha_seguimiento || 'próximo contacto'}.\nTe recuerdo ese día ${agentFirst} 👍`,
+      no_califica: `Entendido, ${firstName} marcado como no califica.\nGuardé el motivo para futuros filtros.`,
+    }
+
+    await sendWhatsApp(agentPhone, confirmations[parsed.accion] || 'Actualizado ✅')
+
+    // If sold — welcome message to lead
+    if (parsed.accion === 'vendido' && lead.phone) {
+      await sendWhatsApp(lead.phone, `¡${firstName}! 🎉 Tu plan de protección familiar ya está en proceso. Recibirás los detalles completos muy pronto.\n\n¡Bienvenido/a a la familia Luxury Shield! 💙`)
+    }
+
+    // If follow-up — create reminder
+    if (parsed.accion === 'seguimiento') {
+      await supabase.from('reminders').insert({
+        lead_id: lead.id,
+        type: 'agent_followup',
+        notes: `Seguimiento: ${parsed.fecha_seguimiento || 'pendiente'} — ${parsed.notas}`,
+        status: 'pending',
+      })
+    }
+
+    return TWIML_OK
+  } catch (error: any) {
+    console.error('[Agent Parser] Error:', error)
+    await sendWhatsApp(agentPhone, 'Hubo un error procesando tu reporte. Intenta de nuevo en unos segundos.')
+    return TWIML_OK
+  }
+}
+
 // ── POST: Twilio Webhook — incoming WhatsApp messages ──
 export async function POST(req: NextRequest) {
   try {
@@ -424,6 +580,21 @@ export async function POST(req: NextRequest) {
 
     if (!from || !body) {
       return new NextResponse('OK', { status: 200 })
+    }
+
+    // ── SYSTEM 1: Detect if message is from an AGENT ──
+    const cleanFromPhone = from.replace(/\D/g, '')
+    const { data: senderAgent } = await supabase
+      .from('agents')
+      .select('*')
+      .or(`whatsapp_number.eq.${from},whatsapp_number.eq.+${cleanFromPhone},phone.eq.${cleanFromPhone},phone.eq.+${cleanFromPhone}`)
+      .limit(1)
+      .single()
+
+    if (senderAgent) {
+      console.log(`[Agent Parser] Message from agent: ${senderAgent.name} — "${body}"`)
+      const agentResult = await handleAgentMessage(senderAgent, body, from)
+      return agentResult
     }
 
     // Find lead by phone
@@ -557,6 +728,28 @@ export async function POST(req: NextRequest) {
 
     // Send response via WhatsApp
     await sendWhatsApp(from, cleanResponse)
+
+    // ── SYSTEM 4: Voice response (non-blocking) ──
+    const shouldSendVoice = messageCount >= 3
+      && cleanResponse.length > 80
+      && !['cerrado_ganado', 'cerrado_perdido', 'closed_won', 'closed_lost'].includes(lead.stage)
+
+    if (shouldSendVoice && lead.agent_id) {
+      const { data: assignedAgent } = await supabase
+        .from('agents')
+        .select('voice_enabled')
+        .eq('id', lead.agent_id)
+        .single()
+
+      if (assignedAgent?.voice_enabled) {
+        // Import dynamically to avoid breaking if module has issues
+        import('@/lib/voice-response').then(({ generateAndUploadVoice, sendVoiceWhatsApp }) => {
+          generateAndUploadVoice(cleanResponse, from).then(audioUrl => {
+            if (audioUrl) sendVoiceWhatsApp(from, audioUrl)
+          })
+        }).catch(err => console.error('[Voice] Non-blocking error:', err))
+      }
+    }
 
     // If ready to buy — generate summary and notify Carlos
     if (isReadyToBuy) {

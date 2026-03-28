@@ -1,11 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { assignLeadToAgent } from '@/lib/lead-distribution'
 
 /*
   SQL — ejecutar en Supabase si no existen:
   ALTER TABLE leads ADD COLUMN IF NOT EXISTS color_favorito text;
   ALTER TABLE leads ADD COLUMN IF NOT EXISTS resumen_sophia text;
   ALTER TABLE leads ADD COLUMN IF NOT EXISTS dependents integer;
+  ALTER TABLE leads ADD COLUMN IF NOT EXISTS stage_detail jsonb;
+  ALTER TABLE leads ADD COLUMN IF NOT EXISTS agente_feedback jsonb;
+  ALTER TABLE leads ADD COLUMN IF NOT EXISTS fecha_cierre timestamptz;
+  ALTER TABLE leads ADD COLUMN IF NOT EXISTS resultado_final text;
+  ALTER TABLE leads ADD COLUMN IF NOT EXISTS nivel_interes integer;
+
+  ALTER TABLE agents
+  ADD COLUMN IF NOT EXISTS plan text DEFAULT 'elite',
+  ADD COLUMN IF NOT EXISTS available boolean DEFAULT true,
+  ADD COLUMN IF NOT EXISTS monthly_lead_limit integer,
+  ADD COLUMN IF NOT EXISTS leads_this_month integer DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS last_lead_assigned_at timestamptz,
+  ADD COLUMN IF NOT EXISTS voice_enabled boolean DEFAULT true,
+  ADD COLUMN IF NOT EXISTS whatsapp_number text;
 */
 
 const supabase = createClient(
@@ -104,22 +119,17 @@ export async function POST(req: NextRequest) {
 
     if (leadError) throw leadError
 
-    const { data: agents } = await supabase
-      .from('agents').select('id, name, phone, credits, turn_index, status')
-      .eq('status', 'active').gt('credits', 0).order('turn_index', { ascending: true })
-
-    let assignedAgent = null
+    // Weighted round-robin lead distribution by agent plan
+    const assigned = await assignLeadToAgent(supabase)
     let assignedTo = 'SeguriSSimo'
 
-    if (agents && agents.length > 0) {
-      assignedAgent = agents[0]
-      await supabase.from('leads').update({ agent_id: assignedAgent.id, assigned_to: assignedAgent.name, stage: 'contact' }).eq('id', lead.id)
-      await supabase.from('agents').update({ credits: assignedAgent.credits - 1, turn_index: assignedAgent.turn_index + 1 }).eq('id', assignedAgent.id)
-      await supabase.from('lead_orders').insert({ agent_id: assignedAgent.id, agent_name: assignedAgent.name, lead_id: lead.id, status: 'delivered', notes: `Round-robin. Créditos: ${assignedAgent.credits} → ${assignedAgent.credits - 1}` })
-      assignedTo = assignedAgent.name
-    } else {
-      const { data: admin } = await supabase.from('agents').select('id').eq('role', 'admin').single()
-      if (admin) await supabase.from('leads').update({ agent_id: admin.id, assigned_to: 'SeguriSSimo', for_crossselling: true, stage: 'contact' }).eq('id', lead.id)
+    if (assigned) {
+      await supabase.from('leads').update({
+        agent_id: assigned.agentId,
+        assigned_to: assigned.agentName,
+        stage: 'contact',
+      }).eq('id', lead.id)
+      assignedTo = assigned.agentName
     }
 
     // Notify admin
