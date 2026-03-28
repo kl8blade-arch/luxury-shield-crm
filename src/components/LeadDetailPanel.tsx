@@ -82,11 +82,28 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
   // Persist coaching preference
   useEffect(() => { try { localStorage.setItem('coaching_enabled', String(coachEnabled)) } catch {} }, [coachEnabled])
 
-  // Polling every 2.5s — stable, no stale closures
+  // Polling every 2.5s + Supabase Realtime — independent of mode
   useEffect(() => {
     if (!lead?.id) return
     const interval = setInterval(loadMessages, 2500)
-    return () => clearInterval(interval)
+
+    // Supabase Realtime for instant updates
+    const channel = supabase
+      .channel(`conv-${lead.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversations', filter: `lead_id=eq.${lead.id}` }, (payload) => {
+        setConversations(prev => {
+          if (prev.find((m: any) => m.id === payload.new.id)) return prev
+          return [...prev, payload.new]
+        })
+        setLastUpdated(new Date())
+        setTimeout(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, 50)
+        if (payload.new.direction === 'inbound' && coachEnabledRef.current) {
+          triggerCoaching(payload.new.message)
+        }
+      })
+      .subscribe()
+
+    return () => { clearInterval(interval); supabase.removeChannel(channel) }
   }, [lead?.id, loadMessages])
 
   // Tick counter for live indicator
@@ -464,7 +481,13 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
                 <button key={r} onClick={() => setLoseReason(r)} style={{ padding: '8px 10px', borderRadius: '7px', fontSize: '12px', fontFamily: C.font, cursor: 'pointer', textAlign: 'left', background: loseReason === r ? 'rgba(248,113,113,0.12)' : C.surface2, border: `1px solid ${loseReason === r ? 'rgba(248,113,113,0.3)' : C.border}`, color: loseReason === r ? '#f87171' : C.textDim }}>{r}</button>
               ))}
             </div>
-            <button onClick={() => loseReason && markClosed('closed_lost', loseReason)} disabled={!loseReason} style={{ width: '100%', padding: '9px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, fontFamily: C.font, cursor: 'pointer', background: loseReason ? '#f87171' : 'rgba(248,113,113,0.3)', color: 'white', border: 'none' }}>Confirmar</button>
+            <button onClick={() => {
+              if (!loseReason) return
+              const recent = conversations.slice(-5)
+              const hasInterest = recent.some((m: any) => m.direction === 'inbound' && /ya mismo|llamen|quiero|cuánto|cuanto|interesa/i.test(m.message || ''))
+              if (hasInterest && !window.confirm('⚠️ Este lead mostró interés reciente. ¿Estás seguro que quieres marcarlo como perdido?')) return
+              markClosed('closed_lost', loseReason)
+            }} disabled={!loseReason} style={{ width: '100%', padding: '9px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, fontFamily: C.font, cursor: 'pointer', background: loseReason ? '#f87171' : 'rgba(248,113,113,0.3)', color: 'white', border: 'none' }}>Confirmar</button>
           </div>
         </div>
       )}

@@ -289,7 +289,19 @@ async function getAIResponse(lead: any, conversationHistory: any[], incomingMess
   const lang = lead.preferred_language || 'es'
   const langNote = lang === 'en' ? 'IMPORTANT: This lead speaks ENGLISH. Respond entirely in English.' : ''
 
-  const systemPrompt = `Eres Sophia, parte del equipo de asesores de Luxury Shield Insurance. Eres cálida, inteligente, empática y persuasiva — como una amiga cercana que trabaja en salud y quiere que su gente esté protegida. No eres una vendedora. Eres alguien que genuinamente se preocupa.
+  const systemPrompt = `══ REGLA #0 — DETECCIÓN DE CIERRE — MÁXIMA PRIORIDAD ══
+Si el lead dice "ya mismo", "ahora mismo", "quiero que me llamen", "consígueme el plan", "quiero empezar", "dónde firmo", "cómo activo", "ok me interesa", "sí quiero", confirma un número de teléfono, o CUALQUIER frase que indique que quiere proceder:
+→ INCLUIR [LISTO_PARA_COMPRAR] en tu respuesta
+→ Tu mensaje debe ser SOLO: "Perfecto [nombre]! Nuestro especialista te llama en los próximos 15 minutos. ${hasColor ? `Recuerda: mencionará tu color ${color} al inicio.` : ''} ¡Ya casi están protegidos! 🎉"
+→ NO hacer más preguntas. NO repetir el pitch. SOLO confirmar.
+
+══ REGLA #0B — NUNCA RE-PREGUNTAR ══
+Lee TODO el historial. Extrae lo que el lead YA dijo:
+- Estado, familia, dentista, seguro, interés en llamada
+Si alguno ya está → NUNCA volver a preguntarlo.
+Si el lead dice "ya te dije" → pedir disculpas UNA vez y avanzar.
+
+Eres Sophia, parte del equipo de asesores de Luxury Shield Insurance. Eres cálida, inteligente, empática y persuasiva — como una amiga cercana que trabaja en salud y quiere que su gente esté protegida. No eres una vendedora. Eres alguien que genuinamente se preocupa.
 
 IDIOMA: Responde en español. Si el cliente escribe en inglés, responde en inglés.
 
@@ -804,7 +816,10 @@ export async function POST(req: NextRequest) {
 
     console.log(`[Sophia] Lead found: ${lead.id} — ${lead.name} — stage: ${lead.stage} — mode: ${lead.conversation_mode || 'sophia'}`)
 
-    // Check conversation mode — if manual/coaching, don't auto-respond
+    // ══════════════════════════════════════════════
+    // BUG FIX 1: BLOCK SOPHIA IF MODE IS MANUAL/COACHING
+    // This MUST be before any Claude call
+    // ══════════════════════════════════════════════
     if (lead.conversation_mode === 'manual' || lead.conversation_mode === 'coaching') {
       // Save inbound message but don't generate AI response
       await supabase.from('conversations').insert({
@@ -834,6 +849,27 @@ export async function POST(req: NextRequest) {
         { status: 200, headers: { 'Content-Type': 'text/xml' } }
       )
     }
+
+    // ══════════════════════════════════════════════
+    // BUG FIX 5: Processing lock + rate limit
+    // ══════════════════════════════════════════════
+    if (lead.sophia_processing) {
+      console.log(`[SOPHIA] Already processing for ${lead.name}, skip`)
+      return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
+    }
+
+    // Rate limit: max 1 response per 3 seconds per lead
+    const { data: lastOut } = await supabase.from('conversations').select('created_at').eq('lead_id', lead.id).eq('direction', 'outbound').order('created_at', { ascending: false }).limit(1)
+    if (lastOut?.[0]) {
+      const secsSince = (Date.now() - new Date(lastOut[0].created_at).getTime()) / 1000
+      if (secsSince < 3) {
+        console.log(`[RATE LIMIT] ${lead.name}: ${secsSince.toFixed(1)}s since last msg, skip`)
+        return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
+      }
+    }
+
+    // Set processing lock
+    await supabase.from('leads').update({ sophia_processing: true }).eq('id', lead.id)
 
     // Get conversation history — try lead_id, then phone variants
     let history: any[] | null = null
@@ -919,18 +955,48 @@ export async function POST(req: NextRequest) {
     const priorOutbound = (history || []).filter((m: any) => m.direction === 'outbound')
     const alreadyIntroduced = priorOutbound.length > 0
 
-    const aiResponse = await getAIResponse(lead, history || [], body, alreadyIntroduced)
+    let aiResponse = await getAIResponse(lead, history || [], body, alreadyIntroduced)
 
-    // Check for buy signal
-    const isReadyToBuy = aiResponse.includes('[LISTO_PARA_COMPRAR]')
-    const cleanResponse = aiResponse.replace('[LISTO_PARA_COMPRAR]', '').trim()
+    // ══════════════════════════════════════════════
+    // BUG FIX 2: Force closing signal detection
+    // ══════════════════════════════════════════════
+    const CLOSING_SIGNALS = ['ya mismo', 'ahora mismo', 'quiero que me llamen', 'llamenme', 'llamame', 'llámame', 'consígueme', 'consigueme', 'quiero empezar', 'dónde firmo', 'donde firmo', 'cómo activo', 'como activo', 'cuándo me llaman', 'cuando me llaman', 'ok me interesa', 'si quiero', 'sí quiero', 'quiero el plan', 'activa el plan', 'actívalo']
+    const msgLC = body.toLowerCase()
+    const isClosingSignal = CLOSING_SIGNALS.some(s => msgLC.includes(s))
 
-    // Determine and update stage
-    const messageCount = (history || []).length + 1
-    const newStage = determineStage(messageCount, isReadyToBuy, lead.stage)
+    let isReadyToBuy = aiResponse.includes('[LISTO_PARA_COMPRAR]')
+
+    // Force closing if lead gave explicit signal but Sophia missed it
+    if (isClosingSignal && !isReadyToBuy) {
+      console.log(`[SOPHIA] Closing signal FORCED: "${body}"`)
+      isReadyToBuy = true
+      // Sophia's response should have included it — append if not
+      if (!aiResponse.includes('[LISTO_PARA_COMPRAR]')) {
+        aiResponse = aiResponse + '\n[LISTO_PARA_COMPRAR]'
+      }
+    }
+
+    const cleanResponse = aiResponse.replace(/\[LISTO_PARA_COMPRAR\]/g, '').trim()
+
+    // BUG FIX 4: Smart stage detection
+    function detectStage(leadMsg: string, currentStage: string, ready: boolean): string {
+      if (ready) return 'listo_comprar'
+      const m = leadMsg.toLowerCase()
+      if (/\d{10}/.test(leadMsg)) return 'listo_comprar'
+      if (m.match(/cu[aá]nto|precio|cuesta|costo|how much/)) return currentStage === 'new' || currentStage === 'nuevo' || currentStage === 'contacted' || currentStage === 'calificando' ? 'interested' : currentStage
+      if (m.match(/no s[eé]|pensarlo|despu[eé]s|after|caro|expensive/)) return 'objecion'
+      if (currentStage === 'new' || currentStage === 'nuevo') return 'calificando'
+      return currentStage
+    }
+
+    const newStage = detectStage(body, lead.stage, isReadyToBuy)
+
+    if (newStage !== lead.stage) {
+      console.log(`[STAGE] ${lead.name}: ${lead.stage} → ${newStage}`)
+    }
 
     await supabase.from('leads').update({
-      stage: isReadyToBuy ? 'interested' : newStage,
+      stage: newStage,
       updated_at: new Date().toISOString(),
     }).eq('id', lead.id)
 
@@ -956,6 +1022,7 @@ export async function POST(req: NextRequest) {
     await sendWhatsApp(from, cleanResponse)
 
     // ── SYSTEM 4: Voice response (non-blocking) ──
+    const messageCount = (history || []).length + 1
     const shouldSendVoice = messageCount >= 3
       && cleanResponse.length > 80
       && !['cerrado_ganado', 'cerrado_perdido', 'closed_won', 'closed_lost'].includes(lead.stage)
@@ -1086,7 +1153,8 @@ ${productOppsText}
       }
     }
 
-    // Return TwiML empty response
+    // Release processing lock + return
+    if (lead?.id) await supabase.from('leads').update({ sophia_processing: false }).eq('id', lead.id)
     return new NextResponse(
       `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
       { status: 200, headers: { 'Content-Type': 'text/xml' } }
@@ -1094,6 +1162,9 @@ ${productOppsText}
 
   } catch (error: any) {
     console.error('[Sophia] FATAL webhook error:', error?.message || error, error?.stack)
+    // Always release lock on error
+    // Release lock best-effort (from may not be in scope)
+    try { await supabase.from('leads').update({ sophia_processing: false }).eq('sophia_processing', true) } catch {}
     return new NextResponse(
       `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
       { status: 200, headers: { 'Content-Type': 'text/xml' } }
