@@ -299,6 +299,13 @@ export async function POST(req: NextRequest) {
       ai_summary: isReadyToBuy ? 'LISTO PARA COMPRAR' : null,
     })
 
+    // Human-like typing delay before sending
+    const len = cleanResponse.length
+    const [min, max] = len < 100 ? [8, 12] : len < 200 ? [12, 18] : [18, 25]
+    const delay = Math.floor(Math.random() * (max - min + 1)) + min
+    console.log(`[Sophia] Typing delay: ${delay}s for ${len} chars`)
+    await new Promise(resolve => setTimeout(resolve, delay * 1000))
+
     // Send response via WhatsApp
     await sendWhatsApp(from, cleanResponse)
 
