@@ -256,9 +256,6 @@ export async function POST(req: NextRequest) {
     // Save incoming message
     const { error: saveErr } = await supabase.from('conversations').insert({
       lead_id: lead.id,
-      phone: from,
-      role: 'user',
-      content: body,
       lead_name: lead.name,
       lead_phone: from,
       channel: 'ai_text',
@@ -294,9 +291,6 @@ export async function POST(req: NextRequest) {
     // Save AI response
     await supabase.from('conversations').insert({
       lead_id: lead.id,
-      phone: from,
-      role: 'assistant',
-      content: cleanResponse,
       lead_name: lead.name,
       lead_phone: from,
       channel: 'ai_text',

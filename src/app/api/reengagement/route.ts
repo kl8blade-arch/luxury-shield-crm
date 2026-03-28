@@ -105,9 +105,6 @@ export async function GET(req: NextRequest) {
         // Save message to conversations
         await supabase.from('conversations').insert({
           lead_id: lead.id,
-          phone: lead.phone,
-          role: 'assistant',
-          content: message,
           lead_name: lead.name,
           lead_phone: lead.phone,
           channel: 'ai_text',
