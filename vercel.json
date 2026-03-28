@@ -1,12 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/reengagement",
+      "path": "/api/send-scheduled",
       "schedule": "0 14 * * *"
-    },
-    {
-      "path": "/api/daily-agent-checkin",
-      "schedule": "0 1 * * *"
     }
   ]
 }

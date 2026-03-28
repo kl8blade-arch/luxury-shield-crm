@@ -37,24 +37,53 @@ async function sendWhatsApp(to: string, message: string) {
   return res.json()
 }
 
-// Single welcome message with color security integrated
+// Single welcome message with color + quiz personalization
 function getFirstMessage(lead: any): string {
   const name = lead.name?.split(' ')[0] || 'Hola'
   const color = lead.favorite_color || lead.color_favorito
+  const quiz = lead.quiz_dentist_last_visit
+  const coverage = lead.quiz_coverage_type
+  const colorLine = color ? `\nVi que elegiste el color *${color}* — ese es tu código de seguridad personal. Cualquier asesor nuestro lo mencionará antes de darte información.\n` : ''
 
-  if (color) {
-    return `Hola ${name} 😊 Soy Sophia de *Luxury Shield Insurance*.
+  // Personalize based on quiz answers
+  if (quiz === 'Nunca he ido') {
+    return `Hola ${name} 😊 Soy Sophia del equipo de *Luxury Shield*.
+${colorLine}
+Vi que nunca has ido al dentista — ¡este es el momento perfecto para empezar! Con tu plan de protección, tu primera evaluación, radiografías y limpieza salen por **$0**. Sin período de espera.
 
-Vi que elegiste el color *${color}* — ese es tu código de seguridad personal. Cualquier asesor nuestro lo mencionará antes de darte información confidencial.
-
-¿Tienes un momento? Quiero explicarte cómo funciona tu bono de beneficios de visión 💙`
+¿Tienes un momento? Te cuento cómo funciona 💙`
   }
 
-  return `Hola ${name} 😊 Soy Sophia de *Luxury Shield Insurance*.
+  if (coverage === 'Familia con hijos' || coverage === 'Familia grande (5+)') {
+    return `Hola ${name} 😊 Soy Sophia del equipo de *Luxury Shield*.
+${colorLine}
+Vi que quieres proteger a toda tu familia — ¡excelente decisión! El plan cubre evaluación, radiografías y limpieza para todos por **$0** desde el día 1. Una familia en Texas ahorró $1,474 en un solo mes.
 
-Vi que solicitaste información sobre tu cobertura dental en ${lead.state || 'tu estado'}. ¡Tenemos muy buenas noticias para ti! 🦷
+¿Cuántos son en total? Así te doy el precio exacto 💙`
+  }
 
-¿Tienes un momento? Quiero contarte cómo puedes cubrir tu limpieza, evaluación y radiografías por $0 💙`
+  if (lead.quiz_has_insurance === 'No tengo nada') {
+    return `Hola ${name} 😊 Soy Sophia del equipo de *Luxury Shield*.
+${colorLine}
+Vi que actualmente no tienes cobertura dental. ¿Sabías que una evaluación + radiografías + limpieza cuestan $280 sin plan? Con el plan DVH, todo eso es **$0** desde el primer mes.
+
+¿Tienes un momento para contarte los detalles? 💙`
+  }
+
+  if (lead.quiz_has_insurance === 'Sí pero quiero comparar') {
+    return `Hola ${name} 😊 Soy Sophia del equipo de *Luxury Shield*.
+${colorLine}
+Vi que ya tienes algo de cobertura pero quieres comparar. ¡Me encanta que busques lo mejor! Nuestro plan DVH cubre limpieza desde el día 1 sin espera — muchos planes tienen 6-12 meses de espera para eso.
+
+¿Qué cubre tu plan actual? Así te digo exactamente en qué mejoramos 💙`
+  }
+
+  // Default with color
+  return `Hola ${name} 😊 Soy Sophia del equipo de *Luxury Shield*.
+${colorLine}
+Vi que quieres información sobre protección dental en ${lead.state || 'tu estado'}. ¡Tenemos muy buenas noticias!
+
+Tu evaluación, radiografías y limpieza quedan cubiertos por **$0** desde el día 1. ¿Tienes un momento? 💙`
 }
 
 // Called by save-lead API — sends ONE welcome message, Sophia responds only when lead replies

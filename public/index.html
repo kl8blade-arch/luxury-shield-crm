@@ -205,6 +205,9 @@ select option{background:var(--ink3);color:var(--cream)}
 .ropt.on .rdot{border-color:var(--gold);background:var(--gold);box-shadow:0 0 0 3px rgba(201,168,76,.14)}
 
 .color-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:9px}
+.quiz-btn{width:100%;padding:14px 18px;border-radius:12px;border:1.5px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:rgba(240,236,227,.8);font-family:'Outfit',sans-serif;font-size:14px;font-weight:500;cursor:pointer;text-align:left;transition:all .18s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.quiz-btn:hover{background:rgba(201,168,76,.08);border-color:rgba(201,168,76,.25);color:#E2C060}
+.quiz-btn.selected{background:rgba(201,168,76,.12);border-color:rgba(201,168,76,.4);color:#E2C060;font-weight:600}
 .cbtn{display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--ink4);border:1.5px solid rgba(255,255,255,.07);border-radius:11px;padding:10px 4px;cursor:pointer;font-family:'Outfit',sans-serif;font-size:11px;color:var(--cream3);transition:all .18s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .cbtn:hover{border-color:rgba(255,255,255,.16);color:var(--cream2)}
 .cbtn.on{border-color:var(--gold);background:rgba(201,168,76,.07);color:var(--gold-b);font-weight:600}
@@ -574,26 +577,71 @@ footer a{color:rgba(240,236,227,.25);text-decoration:none}
       </div>
     </div>
 
-    <!-- 2-STEP FORM -->
+    <!-- 3-STEP FORM (Quiz → Data → Color) -->
     <div class="form-card" id="formCard">
       <div class="step-indicator">
         <div class="step-pip">
-          <div class="pip active" id="pip1">1</div>
-          <span class="pip-label active" id="plbl1">Tus datos</span>
+          <div class="pip active" id="pip0">1</div>
+          <span class="pip-label active" id="plbl0">Quiz</span>
         </div>
         <div class="pip-line"></div>
         <div class="step-pip">
-          <div class="pip" id="pip2">2</div>
+          <div class="pip" id="pip1">2</div>
+          <span class="pip-label" id="plbl1">Tus datos</span>
+        </div>
+        <div class="pip-line"></div>
+        <div class="step-pip">
+          <div class="pip" id="pip2">3</div>
           <span class="pip-label" id="plbl2">Tu color</span>
         </div>
       </div>
 
       <div class="form-head">
-        <h2 class="form-title" id="formTitle">Reserva tu consultoría</h2>
-        <p class="form-sub" id="formSub">Gratis · Sin compromiso · En español · 15 minutos</p>
+        <h2 class="form-title" id="formTitle">Veamos si calificas</h2>
+        <p class="form-sub" id="formSub">3 preguntas rápidas · 30 segundos</p>
       </div>
 
-      <div class="form-step active" id="step1">
+      <!-- STEP 0: Quiz -->
+      <div class="form-step active" id="step0">
+        <div class="fstack">
+          <div class="quiz-q" id="qq1">
+            <label class="flabel" style="margin-bottom:10px">¿Cuándo fue tu última visita al dentista?</label>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <button type="button" class="quiz-btn" onclick="pickQuiz('quiz_dentist','Nunca he ido',this)">🚨 Nunca he ido</button>
+              <button type="button" class="quiz-btn" onclick="pickQuiz('quiz_dentist','Hace más de 1 año',this)">⚠️ Hace más de 1 año</button>
+              <button type="button" class="quiz-btn" onclick="pickQuiz('quiz_dentist','Hace 6-12 meses',this)">👍 Hace 6-12 meses</button>
+              <button type="button" class="quiz-btn" onclick="pickQuiz('quiz_dentist','Menos de 6 meses',this)">✅ Menos de 6 meses</button>
+            </div>
+          </div>
+          <div class="quiz-q" id="qq2" style="display:none">
+            <label class="flabel" style="margin-bottom:10px">¿A quién protegerías con el plan?</label>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <button type="button" class="quiz-btn" onclick="pickQuiz('quiz_coverage','Solo a mí',this)">Solo a mí</button>
+              <button type="button" class="quiz-btn" onclick="pickQuiz('quiz_coverage','Yo + pareja',this)">Yo + pareja</button>
+              <button type="button" class="quiz-btn" onclick="pickQuiz('quiz_coverage','Familia con hijos',this)">Familia con hijos</button>
+              <button type="button" class="quiz-btn" onclick="pickQuiz('quiz_coverage','Familia grande (5+)',this)">Familia grande (5+)</button>
+            </div>
+          </div>
+          <div class="quiz-q" id="qq3" style="display:none">
+            <label class="flabel" style="margin-bottom:10px">¿Actualmente tienes cobertura dental?</label>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <button type="button" class="quiz-btn" onclick="pickQuiz('quiz_insurance','No tengo nada',this)">No tengo nada</button>
+              <button type="button" class="quiz-btn" onclick="pickQuiz('quiz_insurance','Tengo algo limitado',this)">Tengo algo pero es limitado</button>
+              <button type="button" class="quiz-btn" onclick="pickQuiz('quiz_insurance','Sí pero quiero comparar',this)">Sí, pero quiero comparar</button>
+            </div>
+          </div>
+          <div id="quizResult" style="display:none;text-align:center;padding:16px 0">
+            <div style="font-size:24px;margin-bottom:8px">✅</div>
+            <p style="color:#34d399;font-size:15px;font-weight:700;margin:0" id="quizResultText">¡Calificas para cobertura inmediata!</p>
+            <p style="color:rgba(240,236,227,.5);font-size:12px;margin:6px 0 0">Completa tus datos para reservar tu consultoría</p>
+          </div>
+        </div>
+        <input type="hidden" id="quizDentist" value="">
+        <input type="hidden" id="quizCoverage" value="">
+        <input type="hidden" id="quizInsurance" value="">
+      </div>
+
+      <div class="form-step" id="step1">
         <div class="fstack">
           <div class="field"><label class="flabel">Nombre completo *</label><input type="text" id="nombre" placeholder="Tu nombre completo" required autocomplete="name"></div>
           <div class="field"><label class="flabel">Teléfono / WhatsApp *</label><input type="tel" id="telefono" placeholder="(305) 000-0000" required autocomplete="tel"></div>
@@ -645,7 +693,7 @@ footer a{color:rgba(240,236,227,.25);text-decoration:none}
       </div>
 
       <div class="step-nav">
-        <button class="btn-back" id="btnBack" style="display:none" onclick="goStep(1)">← Volver</button>
+        <button class="btn-back" id="btnBack" style="display:none" onclick="goStep(currentStep-1)">← Volver</button>
         <button class="btn-next" id="btnNext" onclick="goNext()">Continuar →</button>
       </div>
       <p class="cta-note" id="ctaNote">Paso 1 de 2 — solo tus datos básicos</p>
@@ -709,12 +757,22 @@ footer a{color:rgba(240,236,227,.25);text-decoration:none}
   const observer=new IntersectionObserver((entries)=>{entries.forEach((e,i)=>{if(e.isIntersecting){setTimeout(()=>e.target.classList.add('visible'),i*100);observer.unobserve(e.target)}})},{threshold:.15});
   document.querySelectorAll('.svc-card').forEach(c=>observer.observe(c));
 
-  let currentStep=1;
+  let currentStep=0;
+  let quizStep=1;
   function pickRadio(v){var no=document.getElementById('rNo');var si=document.getElementById('rSi');no.classList.remove('on');si.classList.remove('on');if(v==='no'){no.classList.add('on');}else{si.classList.add('on');}document.getElementById('seguro').value=v==='si'?'Sí':'No';}
   function pickColor(c,btn){document.querySelectorAll('.cbtn').forEach(function(b){b.classList.remove('on');});btn.classList.add('on');document.getElementById('colorFavorito').value=c;}
   document.getElementById('telefono').addEventListener('input',function(e){let v=e.target.value.replace(/\D/g,'').slice(0,10);if(v.length>=6)v=`(${v.slice(0,3)}) ${v.slice(3,6)}-${v.slice(6)}`;else if(v.length>=3)v=`(${v.slice(0,3)}) ${v.slice(3)}`;e.target.value=v});
 
+  function pickQuiz(field,value,btn){
+    btn.parentElement.querySelectorAll('.quiz-btn').forEach(function(b){b.classList.remove('selected')});
+    btn.classList.add('selected');
+    if(field==='quiz_dentist'){document.getElementById('quizDentist').value=value;setTimeout(function(){document.getElementById('qq1').style.display='none';document.getElementById('qq2').style.display='block';quizStep=2},300)}
+    else if(field==='quiz_coverage'){document.getElementById('quizCoverage').value=value;setTimeout(function(){document.getElementById('qq2').style.display='none';document.getElementById('qq3').style.display='block';quizStep=3},300)}
+    else if(field==='quiz_insurance'){document.getElementById('quizInsurance').value=value;setTimeout(function(){document.getElementById('qq3').style.display='none';var r=document.getElementById('quizResult');r.style.display='block';var d=document.getElementById('quizDentist').value;var txt=d==='Nunca he ido'?'¡Prioridad alta! Calificas para cobertura inmediata':d==='Hace más de 1 año'?'¡Buen momento para activar tu protección!':'¡Calificas para cobertura desde el día 1!';document.getElementById('quizResultText').textContent=txt;setTimeout(function(){goStep(1)},1500)},300)}
+  }
+
   function goNext(){
+    if(currentStep===0){goStep(1);return}
     if(currentStep===1){
       const n=document.getElementById('nombre').value.trim(),t=document.getElementById('telefono').value.trim(),e=document.getElementById('estado').value,s=document.getElementById('seguro').value,a=document.getElementById('edad').value;
       if(!n||!t||!e||!s||!a){var missing=[];if(!n)missing.push('Nombre');if(!t)missing.push('Teléfono');if(!e)missing.push('Estado');if(!a)missing.push('Edad');if(!s)missing.push('¿Tienes seguro?');alert('Campos requeridos:\n'+missing.join(', '));return}
@@ -724,18 +782,23 @@ footer a{color:rgba(240,236,227,.25);text-decoration:none}
 
   function goStep(n){
     currentStep=n;
+    document.getElementById('step0').classList.toggle('active',n===0);
     document.getElementById('step1').classList.toggle('active',n===1);
     document.getElementById('step2').classList.toggle('active',n===2);
+    document.getElementById('pip0').className=n===0?'pip active':n>0?'pip done':'pip';
     document.getElementById('pip1').className=n===1?'pip active':n>1?'pip done':'pip';
     document.getElementById('pip2').className=n===2?'pip active':'pip';
+    document.getElementById('plbl0').className=n===0?'pip-label active':'pip-label';
     document.getElementById('plbl1').className=n===1?'pip-label active':'pip-label';
     document.getElementById('plbl2').className=n===2?'pip-label active':'pip-label';
-    document.getElementById('pip1').textContent=n===1?'1':'✓';
-    document.getElementById('btnBack').style.display=n===2?'block':'none';
-    document.getElementById('btnNext').textContent=n===2?'Reservar mi consultoría →':'Continuar →';
-    document.getElementById('formTitle').textContent=n===1?'Reserva tu consultoría':'Un último paso';
-    document.getElementById('formSub').textContent=n===1?'Gratis · Sin compromiso · En español · 15 minutos':'Elige tu color y confirma';
-    document.getElementById('ctaNote').textContent=n===1?'Paso 1 de 2 — solo tus datos básicos':'Paso 2 de 2 — ya casi terminamos';
+    document.getElementById('pip0').textContent=n>0?'✓':'1';
+    document.getElementById('pip1').textContent=n<=1?(n===1?'2':'2'):(n>1?'✓':'2');
+    document.getElementById('pip2').textContent=n===2?'3':'3';
+    document.getElementById('btnBack').style.display=n>=1?'block':'none';
+    document.getElementById('btnNext').textContent=n===0?'Continuar →':n===1?'Continuar →':'Reservar mi consultoría →';
+    document.getElementById('formTitle').textContent=n===0?'Veamos si calificas':n===1?'Tus datos':'Un último paso';
+    document.getElementById('formSub').textContent=n===0?'3 preguntas rápidas · 30 segundos':n===1?'Gratis · Sin compromiso · En español':'Elige tu color y confirma';
+    document.getElementById('ctaNote').textContent=n===0?'Paso 1 de 3 — quiz rápido':n===1?'Paso 2 de 3 — tus datos básicos':'Paso 3 de 3 — ya casi terminamos';
   }
 
   async function submitLead(){
@@ -743,7 +806,7 @@ footer a{color:rgba(240,236,227,.25);text-decoration:none}
     if(!color){alert('Selecciona tu color favorito');return}
     const btn=document.getElementById('btnNext');
     btn.disabled=true;btn.textContent='Reservando...';
-    const payload={nombre:document.getElementById('nombre').value.trim(),telefono:document.getElementById('telefono').value.replace(/\D/g,''),email:document.getElementById('email').value.trim(),estado:document.getElementById('estado').value,edad:parseInt(document.getElementById('edad').value),tiene_seguro_actual:document.getElementById('seguro').value==='Sí',mensaje:document.getElementById('mensaje').value.trim(),color_favorito:color,tipo_seguro:'Dental',fuente:'landing_dental_v3',url_origen:window.location.href,utm_source:new URLSearchParams(window.location.search).get('utm_source')||'',utm_campaign:new URLSearchParams(window.location.search).get('utm_campaign')||''};
+    const payload={nombre:document.getElementById('nombre').value.trim(),telefono:document.getElementById('telefono').value.replace(/\D/g,''),email:document.getElementById('email').value.trim(),estado:document.getElementById('estado').value,edad:parseInt(document.getElementById('edad').value),tiene_seguro_actual:document.getElementById('seguro').value==='Sí',mensaje:document.getElementById('mensaje').value.trim(),color_favorito:color,tipo_seguro:'Dental',fuente:'landing_dental_v3',url_origen:window.location.href,utm_source:new URLSearchParams(window.location.search).get('utm_source')||'',utm_campaign:new URLSearchParams(window.location.search).get('utm_campaign')||'',quiz_dentist_last_visit:document.getElementById('quizDentist').value||'',quiz_coverage_type:document.getElementById('quizCoverage').value||'',quiz_has_insurance:document.getElementById('quizInsurance').value||''};
     try{await fetch('https://luxury-shield-crm.vercel.app/api/save-lead',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})}
     catch(err){const q=JSON.parse(localStorage.getItem('pendingLeads')||'[]');q.push({...payload,ts:new Date().toISOString()});localStorage.setItem('pendingLeads',JSON.stringify(q))}
     if(spots>1){spots--;sessionStorage.setItem('ls_s',spots)}

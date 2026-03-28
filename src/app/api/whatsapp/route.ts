@@ -321,6 +321,9 @@ Cuando confirme → ${hasColor ? `"Recuerda: cuando te llame, mencionará tu col
 - Edad: ${lead.age || 'No proporcionada'}
 - Cobertura actual: ${lead.has_insurance === true ? 'Sí tiene' : lead.has_insurance === false ? 'No tiene' : 'No indicó'}
 - Color: ${hasColor ? color : 'No tiene'}
+${lead.quiz_dentist_last_visit ? `- Última visita dentista: ${lead.quiz_dentist_last_visit} (del quiz — NO preguntar de nuevo)` : ''}
+${lead.quiz_coverage_type ? `- Tipo cobertura: ${lead.quiz_coverage_type} (del quiz — NO preguntar de nuevo)` : ''}
+${lead.quiz_has_insurance ? `- Cobertura actual: ${lead.quiz_has_insurance} (del quiz — NO preguntar de nuevo)` : ''}
 
 ━━━ FORMATO ━━━
 - Máximo 5-6 líneas por mensaje
@@ -539,9 +542,42 @@ Ejemplos:
 
     await sendWhatsApp(agentPhone, confirmations[parsed.accion] || 'Actualizado ✅')
 
-    // If sold — welcome message to lead
+    // If sold — welcome message + schedule referral followup (48h)
     if (parsed.accion === 'vendido' && lead.phone) {
       await sendWhatsApp(lead.phone, `¡${firstName}! 🎉 Tu plan de protección familiar ya está en proceso. Recibirás los detalles completos muy pronto.\n\n¡Bienvenido/a a la familia Luxury Shield! 💙`)
+
+      // Schedule referral followup for 48h later (System 3)
+      const in48h = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
+      try {
+        const refRes = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5-20251001', max_tokens: 150,
+            messages: [{ role: 'user', content: `Eres Sophia de Luxury Shield. ${firstName} activó su plan DVH hace 2 días. Escribe un mensaje de seguimiento de máximo 4 líneas que: pregunte cómo se siente con su nuevo plan, mencione naturalmente que si conoce a alguien sin cobertura dental hay un beneficio especial. NO uses 'referido' ni 'comisión'. Usa 'si conoces a alguien que lo necesite...'. Que suene como amiga. Responde SOLO el mensaje.` }],
+          }),
+        })
+        const refMsg = refRes.ok ? (await refRes.json()).content?.[0]?.text : ''
+        await supabase.from('reminders').insert({
+          lead_id: lead.id, lead_phone: lead.phone,
+          message_text: refMsg || `Hola ${firstName} 😊 ¿Cómo te va con tu nuevo plan? Si conoces a alguien que lo necesite, hay algo especial para ti 💙`,
+          scheduled_for: in48h, type: 'referral_followup', status: 'pending',
+        })
+      } catch (e) { console.error('[Referral followup] Error:', e) }
+    }
+
+    // If lost — trigger rescue sequence (System 2)
+    if (parsed.accion === 'perdido' && lead.phone) {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://luxury-shield-crm.vercel.app'
+      fetch(`${appUrl}/api/rescue-sequence`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lead_id: lead.id, motivo_perdida: parsed.motivo,
+          lead_phone: lead.phone, lead_name: lead.name,
+          estado: lead.state, familia: lead.dependents ? `${lead.dependents} personas` : '',
+        }),
+      }).catch(e => console.error('[Rescue] Trigger error:', e))
     }
 
     // If follow-up — create reminder
@@ -773,10 +809,11 @@ export async function POST(req: NextRequest) {
         `${c.direction === 'inbound' ? 'Lead' : 'Sophia'}: ${c.message}`
       ).join('\n')
 
-      let analysis: any = { nivel_interes: 8, argumento_principal: 'Cobertura dental', objeciones: [], angulo_recomendado: 'Mencionar color y beneficios', resumen: 'Lead interesado en plan dental' }
+      // Generate battle card with Claude
+      let bc: any = { nombre: lead.name, estado: lead.state, familia: '', telefono: from, color, nivel_interes: 8, argumento_ganador: 'Cobertura dental', objecion_probable: 'Ninguna', contraargumento: '', dias_considerando: 1, como_abrir: `Hola, soy de Luxury Shield. Tu color es ${color}.`, estado_emocional: 'curioso', resumen: 'Lead interesado en plan dental' }
 
       try {
-        const analysisRes = await fetch('https://api.anthropic.com/v1/messages', {
+        const bcRes = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -785,16 +822,16 @@ export async function POST(req: NextRequest) {
           },
           body: JSON.stringify({
             model: 'claude-haiku-4-5-20251001',
-            max_tokens: 300,
-            system: `Analiza esta conversación de WhatsApp entre Sophia y un lead. Devuelve SOLO JSON:
-{"nivel_interes":number(1-10),"argumento_principal":"qué le interesó más","objeciones":["lista"],"angulo_recomendado":"cómo debe abrir la llamada el especialista","resumen":"2-3 líneas de contexto"}`,
+            max_tokens: 400,
+            system: `Analiza esta conversación entre Sophia y un lead. Devuelve SOLO JSON:
+{"nombre":"string","estado":"string","familia":"string","telefono":"string","color":"string","nivel_interes":number(1-10),"argumento_ganador":"qué le resonó más","objecion_probable":"la objeción más probable","contraargumento":"mejor respuesta a esa objeción","dias_considerando":number,"como_abrir":"frase exacta para abrir la llamada","estado_emocional":"ansioso|curioso|desconfiado|convencido|indeciso","resumen":"2 líneas máximo"}`,
             messages: [{ role: 'user', content: convoText }],
           }),
         })
-        if (analysisRes.ok) {
-          const d = await analysisRes.json()
+        if (bcRes.ok) {
+          const d = await bcRes.json()
           const t = d.content?.[0]?.text || ''
-          try { analysis = JSON.parse(t.replace(/```json?\n?|\n?```/g, '').trim()) } catch {}
+          try { bc = { ...bc, ...JSON.parse(t.replace(/```json?\n?|\n?```/g, '').trim()) } } catch {}
         }
       } catch {}
 
@@ -805,29 +842,31 @@ export async function POST(req: NextRequest) {
         score: 95,
         score_recommendation: '🔥 Lead calificado por Sophia IA — listo para cerrar',
         ia_active: false,
-        resumen_sophia: analysis.resumen,
-        nivel_interes: analysis.nivel_interes,
+        resumen_sophia: bc.resumen,
+        nivel_interes: bc.nivel_interes,
       }).eq('id', lead.id)
 
-      const objeciones = Array.isArray(analysis.objeciones) && analysis.objeciones.length > 0
-        ? analysis.objeciones.join(', ')
-        : 'Ninguna significativa'
-
-      const agentMsg = `🎯 *LEAD CALIENTE* — ${lead.name || from}
-━━━━━━━━━━━━━━━
-📍 Estado: ${lead.state || '—'}
-👨‍👩‍👧 Familia: ${lead.dependents ? lead.dependents + ' personas' : 'No especificó'}
+      const agentMsg = `🔥 *LEAD CALIENTE* — ${bc.nombre || lead.name || from}
+━━━━━━━━━━━━━━━━━━━
 📱 Llamar a: ${from}
-🎨 Color: ${color} ← MENCIONAR AL INICIO
-⭐ Interés: ${analysis.nivel_interes}/10
-━━━━━━━━━━━━━━━
-💬 Lo que más le resonó: ${analysis.argumento_principal}
-⚠️ Objeciones: ${objeciones}
-━━━━━━━━━━━━━━━
-🎯 Cómo abrir: ${analysis.angulo_recomendado}
-📝 Contexto: ${analysis.resumen}
-━━━━━━━━━━━━━━━
-⏰ Lead caliente ahora — contactar en los próximos 30 min`
+📍 ${bc.estado || lead.state || '—'} • ${bc.familia || (lead.dependents ? lead.dependents + ' personas' : '—')}
+🎨 Color: *${color}* ← mencionar al inicio
+⭐ Interés: ${bc.nivel_interes}/10 • ${bc.estado_emocional}
+━━━━━━━━━━━━━━━━━━━
+🎯 *CÓMO ABRIR LA LLAMADA:*
+_"${bc.como_abrir}"_
+━━━━━━━━━━━━━━━━━━━
+💡 *LO QUE MÁS LE RESONÓ:*
+${bc.argumento_ganador}
+━━━━━━━━━━━━━━━━━━━
+⚠️ *OBJECIÓN PROBABLE:*
+${bc.objecion_probable}
+💬 *RESPÓNDELE:*
+${bc.contraargumento}
+━━━━━━━━━━━━━━━━━━━
+📝 ${bc.resumen}
+━━━━━━━━━━━━━━━━━━━
+⏰ Lead caliente — llamar en los próximos 20 min`
 
       // Send ONLY to assigned agent (not to admin separately)
       if (lead.agent_id) {
