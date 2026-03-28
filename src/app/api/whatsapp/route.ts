@@ -787,7 +787,38 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    console.log(`[Sophia] Lead found: ${lead.id} — ${lead.name} — stage: ${lead.stage}`)
+    console.log(`[Sophia] Lead found: ${lead.id} — ${lead.name} — stage: ${lead.stage} — mode: ${lead.conversation_mode || 'sophia'}`)
+
+    // Check conversation mode — if manual/coaching, don't auto-respond
+    if (lead.conversation_mode === 'manual' || lead.conversation_mode === 'coaching') {
+      // Save inbound message but don't generate AI response
+      await supabase.from('conversations').insert({
+        lead_id: lead.id, lead_name: lead.name, lead_phone: from,
+        channel: 'whatsapp', direction: 'inbound', message: body,
+      })
+      await supabase.from('leads').update({ last_contact: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', lead.id)
+
+      // If coaching mode, trigger coaching API (non-blocking)
+      if (lead.conversation_mode === 'coaching') {
+        const { data: hist } = await supabase.from('conversations').select('direction, message').eq('lead_id', lead.id).order('created_at', { ascending: true }).limit(20)
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://luxury-shield-crm.vercel.app'
+        fetch(`${appUrl}/api/coaching`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lead_id: lead.id, last_message: body,
+            conversation_history: hist || [],
+            lead_context: { name: lead.name, state: lead.state, family: lead.quiz_coverage_type, insurance: lead.has_insurance, color: lead.favorite_color || lead.color_favorito, score: lead.score },
+          }),
+        }).catch(() => {})
+      }
+
+      console.log(`[Sophia] Mode ${lead.conversation_mode} — saved msg, no auto-response`)
+      return new NextResponse(
+        `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
+        { status: 200, headers: { 'Content-Type': 'text/xml' } }
+      )
+    }
 
     // Get conversation history — try lead_id, then phone variants
     let history: any[] | null = null

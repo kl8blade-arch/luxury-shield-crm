@@ -1,87 +1,71 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { C, STAGE_META, scoreColor } from '@/lib/design'
 
-interface Props {
-  lead: any
-  onClose: () => void
-  onStageUpdate?: (id: string, stage: string) => void
-}
+interface Props { lead: any; onClose: () => void; onStageUpdate?: (id: string, stage: string) => void }
+
+type Mode = 'sophia' | 'manual' | 'coaching'
 
 export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props) {
   const [conversations, setConversations] = useState<any[]>([])
-  const [reconnectMsg, setReconnectMsg] = useState('')
-  const [loadingMsg, setLoadingMsg] = useState(false)
+  const [mode, setMode] = useState<Mode>((lead.conversation_mode as Mode) || 'sophia')
+  const [msgInput, setMsgInput] = useState('')
   const [sending, setSending] = useState(false)
-  const [sent, setSent] = useState(false)
+  const [coaching, setCoaching] = useState<any>(null)
+  const [coachLoading, setCoachLoading] = useState(false)
   const [showAllConvos, setShowAllConvos] = useState(false)
   const [loseModal, setLoseModal] = useState(false)
   const [loseReason, setLoseReason] = useState('')
+  const chatRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!lead?.id) return
-    loadConversations()
-    generateReconnectMessage()
-  }, [lead?.id])
+  useEffect(() => { if (lead?.id) { loadConversations(); loadCoaching() } }, [lead?.id])
+  useEffect(() => { chatRef.current?.scrollTo(0, chatRef.current.scrollHeight) }, [conversations])
 
   async function loadConversations() {
-    const { data } = await supabase
-      .from('conversations')
-      .select('*')
-      .eq('lead_id', lead.id)
-      .order('created_at', { ascending: true })
-      .limit(showAllConvos ? 50 : 8)
+    const { data } = await supabase.from('conversations').select('*').eq('lead_id', lead.id).order('created_at', { ascending: true }).limit(showAllConvos ? 50 : 12)
     setConversations(data || [])
   }
 
-  async function generateReconnectMessage() {
-    setLoadingMsg(true)
-    try {
-      const hoursInactive = Math.round((Date.now() - new Date(lead.updated_at).getTime()) / 3600000)
-      const { data: lastMsg } = await supabase
-        .from('conversations')
-        .select('message')
-        .eq('lead_id', lead.id)
-        .eq('direction', 'inbound')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
-
-      const res = await fetch('/api/business-health') // just to test endpoint availability
-      // Generate via a simple template since we can't call Claude from client
-      const name = lead.name?.split(' ')[0] || ''
-      const color = lead.favorite_color || lead.color_favorito || ''
-      const msgs = [
-        `Hola ${name} 😊 Solo quería saber cómo estás. ¿Tuviste oportunidad de pensar en lo de tu plan de protección?`,
-        `${name}, me quedé pensando en nuestra conversación. ¿Hay algo que te genere duda? Con gusto te aclaro 💙`,
-        `Hola ${name}! Quería contarte que hay beneficios nuevos disponibles en ${lead.state || 'tu estado'}. ¿Tienes un momento?`,
-      ]
-      const msg = msgs[Math.floor(Math.random() * msgs.length)] + (color ? `\n\nRecuerda: tu color de seguridad es *${color}* 🎨` : '')
-      setReconnectMsg(msg)
-    } catch {}
-    setLoadingMsg(false)
+  async function loadCoaching() {
+    const { data } = await supabase.from('coaching_sessions').select('*').eq('lead_id', lead.id).order('created_at', { ascending: false }).limit(1)
+    if (data?.[0]) setCoaching(data[0])
   }
 
-  async function sendReconnect() {
-    if (!reconnectMsg || sending) return
+  async function changeMode(newMode: Mode) {
+    setMode(newMode)
+    await supabase.from('leads').update({ conversation_mode: newMode }).eq('id', lead.id)
+  }
+
+  async function sendAgentMessage() {
+    if (!msgInput.trim() || sending) return
     setSending(true)
     try {
-      // Send via WhatsApp webhook simulation
-      const phone = lead.phone.startsWith('+') ? lead.phone : `+${lead.phone.replace(/\D/g, '')}`
-      const res = await fetch('/api/whatsapp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          From: `whatsapp:${phone}`,
-          Body: '__ADMIN_SEND__' + reconnectMsg,
-        }).toString(),
+      await fetch('/api/agent-send', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_id: lead.id, message: msgInput.trim() }),
       })
-      // Direct Twilio send would be better, but this works for now
-      setSent(true)
-      setTimeout(() => setSent(false), 3000)
+      setMsgInput('')
+      setTimeout(loadConversations, 500)
     } catch {}
     setSending(false)
+  }
+
+  async function requestCoaching() {
+    setCoachLoading(true)
+    const lastInbound = conversations.filter(m => m.direction === 'inbound').pop()
+    try {
+      const res = await fetch('/api/coaching', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lead_id: lead.id, last_message: lastInbound?.message || '',
+          conversation_history: conversations,
+          lead_context: { name: lead.name, state: lead.state, family: lead.quiz_coverage_type, color: lead.favorite_color || lead.color_favorito, score: lead.score },
+        }),
+      })
+      if (res.ok) { setCoaching(await res.json()); loadCoaching() }
+    } catch {}
+    setCoachLoading(false)
   }
 
   async function markClosed(stage: string, reason?: string) {
@@ -95,131 +79,180 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
   const meta = STAGE_META[lead.stage] || STAGE_META.unqualified
   const hoursInactive = Math.round((Date.now() - new Date(lead.updated_at || lead.created_at).getTime()) / 3600000)
   const products = (lead.product_opportunities || []) as any[]
-  const feedback = lead.agente_feedback as any
+
+  const modeColors: Record<Mode, string> = { sophia: C.gold, manual: '#60a5fa', coaching: '#a855f7' }
+  const modeLabels: Record<Mode, string> = { sophia: 'Sophia IA', manual: 'Manual', coaching: 'Coaching IA' }
+
+  const heatColor = coaching?.heat?.score >= 80 ? '#34d399' : coaching?.heat?.score >= 50 ? '#fbbf24' : '#f87171'
 
   return (
-    <div style={{ width: '420px', flexShrink: 0, background: C.surface, borderLeft: `1px solid ${C.border}`, overflowY: 'auto', display: 'flex', flexDirection: 'column', fontFamily: C.font }}>
+    <div style={{ width: mode === 'coaching' ? '520px' : '420px', flexShrink: 0, background: C.surface, borderLeft: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', fontFamily: C.font, overflow: 'hidden', transition: 'width 0.3s' }}>
 
       {/* Header */}
-      <div style={{ padding: '20px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'linear-gradient(135deg, #C9A84C, #8B6E2E)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 800, color: '#07080A' }}>
-              {lead.name?.charAt(0).toUpperCase()}
-            </div>
+      <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: `linear-gradient(135deg, ${modeColors[mode]}, ${modeColors[mode]}80)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px', fontWeight: 800, color: '#07080A' }}>{lead.name?.charAt(0).toUpperCase()}</div>
             <div>
-              <p style={{ color: C.text, fontSize: '15px', fontWeight: 700, margin: 0 }}>{lead.name}</p>
-              <p style={{ color: C.textMuted, fontSize: '12px', margin: '2px 0 0' }}>{lead.phone} · {lead.state || '—'}</p>
+              <p style={{ color: C.text, fontSize: '14px', fontWeight: 700, margin: 0 }}>{lead.name}</p>
+              <p style={{ color: C.textMuted, fontSize: '11px', margin: '2px 0 0' }}>{lead.phone} · {lead.state || '—'}</p>
             </div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: '18px', padding: '4px' }}>✕</button>
         </div>
 
+        {/* Mode selector */}
+        <div style={{ display: 'flex', gap: '4px', background: C.surface2, borderRadius: '10px', padding: '3px' }}>
+          {(['sophia', 'manual', 'coaching'] as Mode[]).map(m => (
+            <button key={m} onClick={() => changeMode(m)} style={{
+              flex: 1, padding: '7px 8px', borderRadius: '8px', fontSize: '11px', fontWeight: mode === m ? 700 : 400,
+              fontFamily: C.font, cursor: 'pointer', border: 'none', transition: 'all 0.15s',
+              background: mode === m ? `${modeColors[m]}18` : 'transparent',
+              color: mode === m ? modeColors[m] : C.textMuted,
+              boxShadow: mode === m ? `0 0 8px ${modeColors[m]}20` : 'none',
+            }}>{modeLabels[m]}</button>
+          ))}
+        </div>
+
         {/* Badges */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-          <span style={{ padding: '3px 10px', borderRadius: '100px', fontSize: '11px', fontWeight: 600, background: meta.bg, color: meta.color, border: `1px solid ${meta.color}35` }}>{meta.label}</span>
-          <span style={{ padding: '3px 10px', borderRadius: '100px', fontSize: '11px', fontWeight: 600, background: 'rgba(96,165,250,0.1)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.25)' }}>{lead.insurance_type || 'Dental'}</span>
-          {lead.favorite_color && <span style={{ padding: '3px 10px', borderRadius: '100px', fontSize: '11px', fontWeight: 600, background: 'rgba(201,168,76,0.1)', color: C.gold, border: '1px solid rgba(201,168,76,0.25)' }}>🎨 {lead.favorite_color}</span>}
-          {hoursInactive > 6 && <span style={{ padding: '3px 10px', borderRadius: '100px', fontSize: '11px', fontWeight: 600, background: 'rgba(248,113,113,0.1)', color: '#f87171', border: '1px solid rgba(248,113,113,0.25)' }}>{hoursInactive}h inactivo</span>}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '10px' }}>
+          <span style={{ padding: '2px 8px', borderRadius: '100px', fontSize: '10px', fontWeight: 600, background: meta.bg, color: meta.color, border: `1px solid ${meta.color}35` }}>{meta.label}</span>
+          {lead.favorite_color && <span style={{ padding: '2px 8px', borderRadius: '100px', fontSize: '10px', fontWeight: 600, background: 'rgba(201,168,76,0.1)', color: C.gold }}>🎨 {lead.favorite_color}</span>}
+          <span style={{ padding: '2px 8px', borderRadius: '100px', fontSize: '10px', fontWeight: 600, color: scoreColor(lead.score), background: `${scoreColor(lead.score)}15` }}>{lead.score} pts</span>
+          {hoursInactive > 6 && <span style={{ padding: '2px 8px', borderRadius: '100px', fontSize: '10px', fontWeight: 600, background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>{hoursInactive}h</span>}
         </div>
       </div>
 
-      <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
+      {/* Main content area */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
-        {/* Score + Stats */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ textAlign: 'center' }}>
-            <span style={{ color: scoreColor(lead.score), fontWeight: 800, fontSize: '28px' }}>{lead.score}</span>
-            <p style={{ color: C.textMuted, fontSize: '9px', margin: '2px 0 0', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Score</p>
-          </div>
-          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
-            {[
-              { label: 'Familia', value: lead.quiz_coverage_type || (lead.dependents ? `${lead.dependents} personas` : '—') },
-              { label: 'Seguro', value: lead.has_insurance ? 'Sí tiene' : 'No tiene' },
-              { label: 'Dentista', value: lead.quiz_dentist_last_visit || '—' },
-            ].map(({ label, value }) => (
-              <div key={label} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '8px' }}>
-                <p style={{ color: C.textMuted, fontSize: '8px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 3px' }}>{label}</p>
-                <p style={{ color: C.text, fontSize: '11px', fontWeight: 500, margin: 0 }}>{value}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Chat column */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-        {/* Conversation bubbles */}
-        <div>
-          <p style={{ color: C.textMuted, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', margin: '0 0 10px' }}>Conversación con Sophia</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: showAllConvos ? '500px' : '280px', overflowY: 'auto', padding: '4px' }}>
+          {/* Conversation bubbles */}
+          <div ref={chatRef} style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {conversations.length === 0 ? (
-              <p style={{ color: C.textMuted, fontSize: '12px', textAlign: 'center', padding: '20px 0' }}>Sin mensajes aún</p>
+              <p style={{ color: C.textMuted, fontSize: '12px', textAlign: 'center', padding: '20px 0' }}>Sin mensajes</p>
             ) : conversations.map((msg, i) => {
               const isInbound = msg.direction === 'inbound'
+              const isAgent = msg.ai_summary?.includes('agente') || msg.ai_summary?.includes('manualmente')
               return (
                 <div key={i} style={{ display: 'flex', justifyContent: isInbound ? 'flex-end' : 'flex-start' }}>
                   <div style={{
-                    maxWidth: '85%', padding: '10px 14px', borderRadius: isInbound ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                    background: isInbound ? 'rgba(96,165,250,0.12)' : 'rgba(201,168,76,0.1)',
-                    border: `1px solid ${isInbound ? 'rgba(96,165,250,0.2)' : 'rgba(201,168,76,0.2)'}`,
+                    maxWidth: '85%', padding: '8px 12px', borderRadius: isInbound ? '12px 12px 3px 12px' : '12px 12px 12px 3px',
+                    background: isInbound ? 'rgba(96,165,250,0.12)' : isAgent ? 'rgba(168,85,247,0.1)' : 'rgba(201,168,76,0.1)',
+                    border: `1px solid ${isInbound ? 'rgba(96,165,250,0.2)' : isAgent ? 'rgba(168,85,247,0.2)' : 'rgba(201,168,76,0.2)'}`,
                   }}>
+                    {!isInbound && <p style={{ fontSize: '9px', fontWeight: 700, color: isAgent ? '#a855f7' : C.gold, margin: '0 0 2px' }}>{isAgent ? 'Agente' : 'Sophia'}</p>}
                     <p style={{ color: C.text, fontSize: '12px', lineHeight: 1.5, margin: 0, whiteSpace: 'pre-wrap' }}>{msg.message}</p>
-                    <p style={{ color: C.textMuted, fontSize: '9px', margin: '4px 0 0', textAlign: isInbound ? 'right' : 'left' }}>
-                      {new Date(msg.created_at).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
+                    <p style={{ color: C.textMuted, fontSize: '8px', margin: '3px 0 0', textAlign: isInbound ? 'right' : 'left' }}>{new Date(msg.created_at).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</p>
                   </div>
                 </div>
               )
             })}
           </div>
-          <button onClick={() => { setShowAllConvos(!showAllConvos); setTimeout(loadConversations, 100) }} style={{ width: '100%', padding: '6px', background: 'transparent', border: 'none', color: C.gold, fontSize: '11px', cursor: 'pointer', marginTop: '6px' }}>
-            {showAllConvos ? 'Mostrar menos ↑' : 'Ver conversación completa ↓'}
-          </button>
-        </div>
 
-        {/* Objeciones + Oportunidades */}
-        {(feedback?.motivo_perdida || products.length > 1) && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-            {feedback?.motivo_perdida && <span style={{ padding: '3px 10px', borderRadius: '100px', fontSize: '10px', fontWeight: 600, background: 'rgba(248,113,113,0.1)', color: '#f87171', border: '1px solid rgba(248,113,113,0.2)' }}>Objeción: {feedback.motivo_perdida}</span>}
-            {products.slice(1).map((p: any, i: number) => (
-              <span key={i} style={{ padding: '3px 10px', borderRadius: '100px', fontSize: '10px', fontWeight: 600, background: 'rgba(52,211,153,0.1)', color: '#34d399', border: '1px solid rgba(52,211,153,0.2)' }}>💰 {p.product}</span>
-            ))}
-          </div>
-        )}
+          <button onClick={() => { setShowAllConvos(!showAllConvos); setTimeout(loadConversations, 100) }} style={{ padding: '4px', background: 'transparent', border: 'none', color: C.gold, fontSize: '10px', cursor: 'pointer' }}>{showAllConvos ? '↑ Menos' : '↓ Ver todo'}</button>
 
-        {/* Reconnection message */}
-        <div style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.18)', borderRadius: '12px', padding: '14px' }}>
-          <p style={{ color: C.gold, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 8px' }}>Mensaje sugerido</p>
-          {loadingMsg ? <p style={{ color: C.textMuted, fontSize: '12px' }}>Generando...</p> : (
-            <>
-              <p style={{ color: C.text, fontSize: '12px', lineHeight: 1.6, margin: '0 0 10px', whiteSpace: 'pre-wrap' }}>{reconnectMsg}</p>
-              <button onClick={sendReconnect} disabled={sending || sent} style={{
-                width: '100%', padding: '10px', borderRadius: '10px', cursor: sending ? 'wait' : 'pointer',
-                fontFamily: C.font, fontSize: '12px', fontWeight: 700,
-                background: sent ? 'rgba(52,211,153,0.15)' : 'linear-gradient(135deg, #25D366, #128C7E)',
-                color: sent ? '#34d399' : 'white', border: sent ? '1px solid rgba(52,211,153,0.3)' : 'none',
-              }}>{sending ? 'Enviando...' : sent ? '✓ Enviado' : '📱 Enviar por WhatsApp'}</button>
-            </>
+          {/* Agent input (manual/coaching mode) */}
+          {(mode === 'manual' || mode === 'coaching') && (
+            <div style={{ padding: '10px 16px', borderTop: `1px solid ${C.border}`, display: 'flex', gap: '8px' }}>
+              <input value={msgInput} onChange={e => setMsgInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendAgentMessage()}
+                placeholder="Escribe un mensaje..." style={{ flex: 1, padding: '9px 12px', borderRadius: '10px', fontSize: '12px', background: C.surface2, border: `1px solid ${C.border}`, color: C.text, outline: 'none', fontFamily: C.font }} />
+              <button onClick={sendAgentMessage} disabled={sending} style={{ padding: '9px 16px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, fontFamily: C.font, cursor: 'pointer', background: modeColors[mode], color: '#07080A', border: 'none', opacity: sending ? 0.5 : 1 }}>
+                {sending ? '...' : '→'}
+              </button>
+            </div>
           )}
         </div>
+
+        {/* Coaching sidebar (only in coaching mode) */}
+        {mode === 'coaching' && (
+          <div style={{ width: '200px', borderLeft: `1px solid ${C.border}`, overflowY: 'auto', padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px', flexShrink: 0 }}>
+
+            <button onClick={requestCoaching} disabled={coachLoading} style={{ width: '100%', padding: '8px', borderRadius: '8px', fontSize: '10px', fontWeight: 700, fontFamily: C.font, cursor: 'pointer', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.3)', color: '#a855f7' }}>
+              {coachLoading ? 'Analizando...' : '🧠 Analizar ahora'}
+            </button>
+
+            {coaching && (
+              <>
+                {/* Heat meter */}
+                <div style={{ padding: '10px', background: C.surface2, borderRadius: '10px', border: `1px solid ${C.border}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '9px', fontWeight: 700, color: C.textMuted, textTransform: 'uppercase' }}>Temperatura</span>
+                    <span style={{ fontSize: '16px', fontWeight: 800, color: heatColor }}>{coaching.heat?.score || coaching.heat_score || 50}</span>
+                  </div>
+                  <div style={{ height: '4px', background: 'rgba(255,255,255,0.06)', borderRadius: '2px', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${coaching.heat?.score || coaching.heat_score || 50}%`, background: heatColor, borderRadius: '2px', transition: 'width 0.5s' }} />
+                  </div>
+                  <p style={{ fontSize: '9px', color: C.textMuted, margin: '4px 0 0', textTransform: 'capitalize' }}>{coaching.heat?.fase || '—'}</p>
+                </div>
+
+                {/* Close signal */}
+                {(coaching.heat?.momento_cierre || coaching.close_signal) && (
+                  <div style={{ padding: '10px', background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.3)', borderRadius: '10px', textAlign: 'center' }}>
+                    <p style={{ fontSize: '11px', fontWeight: 800, color: C.gold, margin: 0 }}>PIDE LA LLAMADA</p>
+                    <p style={{ fontSize: '9px', color: C.textDim, margin: '3px 0 0' }}>{coaching.heat?.razon || ''}</p>
+                  </div>
+                )}
+
+                {/* Suggested response */}
+                <div style={{ padding: '10px', background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.18)', borderRadius: '10px' }}>
+                  <p style={{ fontSize: '9px', fontWeight: 700, color: '#a855f7', margin: '0 0 4px', textTransform: 'uppercase' }}>Respuesta sugerida</p>
+                  <p style={{ fontSize: '11px', color: C.text, lineHeight: 1.5, margin: '0 0 6px' }}>{coaching.suggested_response || '—'}</p>
+                  <button onClick={() => setMsgInput(coaching.suggested_response || '')} style={{ width: '100%', padding: '5px', borderRadius: '6px', fontSize: '9px', fontWeight: 700, fontFamily: C.font, cursor: 'pointer', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.25)', color: '#a855f7' }}>Usar esta</button>
+                </div>
+
+                {/* Objection */}
+                {(coaching.objection?.tiene_objecion || coaching.objection_detected?.tiene_objecion) && (
+                  <div style={{ padding: '10px', background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.18)', borderRadius: '10px' }}>
+                    <p style={{ fontSize: '9px', fontWeight: 700, color: '#f87171', margin: '0 0 3px', textTransform: 'uppercase' }}>Objeción: {(coaching.objection || coaching.objection_detected)?.tipo}</p>
+                    <p style={{ fontSize: '10px', color: C.textDim, margin: '0 0 4px' }}>{(coaching.objection || coaching.objection_detected)?.objecion_exacta}</p>
+                    <p style={{ fontSize: '10px', color: '#34d399', margin: 0 }}>{(coaching.objection || coaching.objection_detected)?.respuesta_sugerida}</p>
+                  </div>
+                )}
+
+                {/* Facts */}
+                {(coaching.facts || coaching.relevant_facts) && (
+                  <div style={{ padding: '10px', background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.18)', borderRadius: '10px' }}>
+                    <p style={{ fontSize: '9px', fontWeight: 700, color: '#34d399', margin: '0 0 4px', textTransform: 'uppercase' }}>Datos útiles</p>
+                    <p style={{ fontSize: '10px', color: C.textDim, lineHeight: 1.5, margin: 0, whiteSpace: 'pre-wrap' }}>{coaching.facts || coaching.relevant_facts}</p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Cross-sell opportunities */}
+            {products.length > 1 && (
+              <div style={{ padding: '10px', background: C.surface2, borderRadius: '10px', border: `1px solid ${C.border}` }}>
+                <p style={{ fontSize: '9px', fontWeight: 700, color: C.textMuted, margin: '0 0 4px', textTransform: 'uppercase' }}>Oportunidades</p>
+                {products.slice(1).map((p: any, i: number) => (
+                  <p key={i} style={{ fontSize: '10px', color: '#34d399', margin: '2px 0' }}>💰 {p.product}</p>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Action bar */}
-      <div style={{ padding: '16px 20px', borderTop: `1px solid ${C.border}`, display: 'flex', gap: '8px', flexShrink: 0 }}>
-        <button onClick={() => markClosed('closed_won')} style={{ flex: 1, padding: '10px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, fontFamily: C.font, cursor: 'pointer', background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.25)', color: '#34d399' }}>✓ Cerrado</button>
-        <button onClick={() => setLoseModal(true)} style={{ flex: 1, padding: '10px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, fontFamily: C.font, cursor: 'pointer', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)', color: '#f87171' }}>✕ Perder</button>
-        <a href={`https://wa.me/${lead.phone?.replace(/\D/g, '')}`} target="_blank" style={{ flex: 1, padding: '10px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, textAlign: 'center', textDecoration: 'none', background: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.25)', color: '#25D366' }}>📱 WhatsApp</a>
+      <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}`, display: 'flex', gap: '6px', flexShrink: 0 }}>
+        <button onClick={() => markClosed('closed_won')} style={{ flex: 1, padding: '8px', borderRadius: '8px', fontSize: '11px', fontWeight: 700, fontFamily: C.font, cursor: 'pointer', background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.25)', color: '#34d399' }}>✓ Cerrado</button>
+        <button onClick={() => setLoseModal(true)} style={{ flex: 1, padding: '8px', borderRadius: '8px', fontSize: '11px', fontWeight: 700, fontFamily: C.font, cursor: 'pointer', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)', color: '#f87171' }}>✕ Perder</button>
+        <a href={`https://wa.me/${lead.phone?.replace(/\D/g, '')}`} target="_blank" style={{ flex: 1, padding: '8px', borderRadius: '8px', fontSize: '11px', fontWeight: 700, textAlign: 'center', textDecoration: 'none', background: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.25)', color: '#25D366' }}>📱 WA</a>
       </div>
 
       {/* Lose modal */}
       {loseModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setLoseModal(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: C.surface, border: `1px solid ${C.borderMd}`, borderRadius: '16px', padding: '24px', width: '340px' }}>
-            <h3 style={{ color: C.text, fontSize: '16px', fontWeight: 700, margin: '0 0 16px' }}>Motivo de pérdida</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.surface, border: `1px solid ${C.borderMd}`, borderRadius: '16px', padding: '24px', width: '320px' }}>
+            <h3 style={{ color: C.text, fontSize: '15px', fontWeight: 700, margin: '0 0 14px' }}>Motivo de pérdida</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '14px' }}>
               {['Precio', 'Ya tiene seguro', 'No califica', 'No responde', 'Otro'].map(r => (
-                <button key={r} onClick={() => setLoseReason(r)} style={{ padding: '10px 14px', borderRadius: '10px', fontSize: '13px', fontFamily: C.font, cursor: 'pointer', textAlign: 'left', background: loseReason === r ? 'rgba(248,113,113,0.12)' : C.surface2, border: `1px solid ${loseReason === r ? 'rgba(248,113,113,0.3)' : C.border}`, color: loseReason === r ? '#f87171' : C.textDim }}>{r}</button>
+                <button key={r} onClick={() => setLoseReason(r)} style={{ padding: '9px 12px', borderRadius: '8px', fontSize: '12px', fontFamily: C.font, cursor: 'pointer', textAlign: 'left', background: loseReason === r ? 'rgba(248,113,113,0.12)' : C.surface2, border: `1px solid ${loseReason === r ? 'rgba(248,113,113,0.3)' : C.border}`, color: loseReason === r ? '#f87171' : C.textDim }}>{r}</button>
               ))}
             </div>
-            <button onClick={() => loseReason && markClosed('closed_lost', loseReason)} disabled={!loseReason} style={{ width: '100%', padding: '12px', borderRadius: '10px', fontSize: '13px', fontWeight: 700, fontFamily: C.font, cursor: 'pointer', background: loseReason ? '#f87171' : 'rgba(248,113,113,0.3)', color: 'white', border: 'none' }}>Confirmar pérdida</button>
+            <button onClick={() => loseReason && markClosed('closed_lost', loseReason)} disabled={!loseReason} style={{ width: '100%', padding: '10px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, fontFamily: C.font, cursor: 'pointer', background: loseReason ? '#f87171' : 'rgba(248,113,113,0.3)', color: 'white', border: 'none' }}>Confirmar</button>
           </div>
         </div>
       )}
