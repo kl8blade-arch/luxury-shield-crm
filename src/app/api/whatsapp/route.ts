@@ -185,42 +185,76 @@ export async function POST(req: NextRequest) {
 
     // Find lead by phone
     const cleanPhone = from.replace(/\D/g, '')
-    const { data: leads } = await supabase
+    console.log(`[Sophia] Looking up lead: ${cleanPhone}`)
+    const { data: leads, error: leadErr } = await supabase
       .from('leads')
       .select('*')
-      .or(`phone.eq.${cleanPhone},phone.eq.+${cleanPhone}`)
+      .or(`phone.eq.${cleanPhone},phone.eq.+${cleanPhone},phone.eq.${from}`)
       .order('created_at', { ascending: false })
       .limit(1)
+
+    if (leadErr) console.error('[Sophia] Lead lookup error:', leadErr)
 
     let lead = leads?.[0]
 
     // Create lead if not found
     if (!lead) {
-      const { data: newLead } = await supabase
+      console.log(`[Sophia] Creating new lead for ${from}`)
+      const { data: newLead, error: insertErr } = await supabase
         .from('leads')
         .insert({
           name: profileName || from,
           phone: from,
-          stage: 'nuevo',
+          stage: 'new',
           source: 'whatsapp_inbound',
           score: 40,
           ia_active: true,
         })
         .select()
         .single()
-      lead = newLead
+
+      if (insertErr) {
+        console.error('[Sophia] Lead insert error:', insertErr)
+        // Try without stage constraint
+        const { data: fallbackLead, error: fallbackErr } = await supabase
+          .from('leads')
+          .insert({
+            name: profileName || from,
+            phone: from,
+            source: 'whatsapp_inbound',
+            score: 40,
+          })
+          .select()
+          .single()
+        if (fallbackErr) console.error('[Sophia] Fallback lead insert also failed:', fallbackErr)
+        lead = fallbackLead
+      } else {
+        lead = newLead
+      }
     }
 
+    if (!lead) {
+      console.error('[Sophia] CRITICAL: Could not find or create lead for', from)
+      return new NextResponse(
+        `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
+        { status: 200, headers: { 'Content-Type': 'text/xml' } }
+      )
+    }
+
+    console.log(`[Sophia] Lead found: ${lead.id} — ${lead.name} — stage: ${lead.stage}`)
+
     // Get conversation history (last 15 messages for context)
-    const { data: history } = await supabase
+    const { data: history, error: histErr } = await supabase
       .from('conversations')
       .select('*')
       .eq('lead_id', lead.id)
       .order('created_at', { ascending: true })
       .limit(15)
 
+    if (histErr) console.error('[Sophia] History error:', histErr)
+
     // Save incoming message
-    await supabase.from('conversations').insert({
+    const { error: saveErr } = await supabase.from('conversations').insert({
       lead_id: lead.id,
       phone: from,
       role: 'user',
@@ -231,6 +265,7 @@ export async function POST(req: NextRequest) {
       direction: 'inbound',
       message: body,
     })
+    if (saveErr) console.error('[Sophia] Save message error:', saveErr)
 
     // Update lead contact info
     await supabase.from('leads').update({
@@ -325,7 +360,7 @@ _Sophia IA calificó este lead como listo para comprar._`
     )
 
   } catch (error: any) {
-    console.error('WhatsApp webhook error:', error)
+    console.error('[Sophia] FATAL webhook error:', error?.message || error, error?.stack)
     return new NextResponse(
       `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
       { status: 200, headers: { 'Content-Type': 'text/xml' } }
@@ -333,6 +368,15 @@ _Sophia IA calificó este lead como listo para comprar._`
   }
 }
 
+// ── GET: Health check + debug info ──
 export async function GET() {
-  return NextResponse.json({ status: '✅ online', agent: 'Sophia v2' })
+  const hasAnthropicKey = !!process.env.ANTHROPIC_API_KEY
+  const hasSupabaseUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL
+  const hasSupabaseKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY
+  const hasTwilioSid = !!process.env.TWILIO_ACCOUNT_SID
+  return NextResponse.json({
+    status: '✅ online',
+    agent: 'Sophia v2',
+    env: { anthropic: hasAnthropicKey, supabase: hasSupabaseUrl && hasSupabaseKey, twilio: hasTwilioSid },
+  })
 }
