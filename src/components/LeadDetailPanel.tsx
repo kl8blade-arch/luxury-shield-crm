@@ -22,7 +22,7 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
   const [coachEnabled, setCoachEnabled] = useState(() => { try { return localStorage.getItem('coaching_enabled') !== 'false' } catch { return true } })
   const [lastProcessedMsgId, setLastProcessedMsgId] = useState<string | null>(null)
   const [heatScore, setHeatScore] = useState(lead.score || 50)
-  const [showAllConvos, setShowAllConvos] = useState(false)
+  const [copyFeedback, setCopyFeedback] = useState(false)
   const [loseModal, setLoseModal] = useState(false)
   const [loseReason, setLoseReason] = useState('')
   const [coachMessages, setCoachMessages] = useState<{ role: string; content: string }[]>([
@@ -50,7 +50,7 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
   // Stable message loader
   const loadMessages = useCallback(async () => {
     if (!lead?.id) return
-    const { data: msgs } = await supabase.from('conversations').select('*').eq('lead_id', lead.id).order('created_at', { ascending: true }).limit(50)
+    const { data: msgs } = await supabase.from('conversations').select('*').eq('lead_id', lead.id).order('created_at', { ascending: true }).limit(40)
     if (!msgs?.length) return
 
     const lastMsg = msgs[msgs.length - 1]
@@ -112,9 +112,23 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
   }
 
   async function changeMode(newMode: Mode) {
+    const prevMode = mode
     setMode(newMode)
-    const dbMode = newMode === 'manual' && coachEnabled ? 'coaching' : newMode
-    await supabase.from('leads').update({ conversation_mode: dbMode }).eq('id', lead.id)
+
+    if (prevMode === 'sophia' && newMode === 'manual') {
+      // Sophia → Manual: send transition message
+      const name = lead.name?.split(' ')[0] || ''
+      const transMsg = `${name}, ahora te atiende directamente nuestro especialista. Está aquí para ayudarte 😊`
+      await fetch('/api/agent-send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lead_id: lead.id, message: transMsg }) })
+      await supabase.from('leads').update({ conversation_mode: 'manual' }).eq('id', lead.id)
+    } else if (prevMode === 'manual' && newMode === 'sophia') {
+      // Manual → Sophia: record timestamp so Sophia reconnects naturally
+      await supabase.from('leads').update({ conversation_mode: 'sophia', manual_ended_at: new Date().toISOString() }).eq('id', lead.id)
+    } else {
+      await supabase.from('leads').update({ conversation_mode: newMode }).eq('id', lead.id)
+    }
+
+    setTimeout(loadMessages, 500)
   }
 
   async function sendAgentMessage() {
@@ -126,6 +140,22 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
       setTimeout(loadMessages, 500)
     } catch {}
     setSending(false)
+  }
+
+  function extractSuggested(text: string): string {
+    const dq = text.match(/"([^"]{10,})"/)
+    if (dq) return dq[1]
+    const ac = text.match(/(?:envi|manda|respond|di esto|escri)[a-z]*[:\s]+(.+)/i)
+    if (ac) return ac[1].trim()
+    return text.replace(/\*\*(.*?)\*\*/g, '$1').trim()
+  }
+
+  function copyToInput(text: string) {
+    const clean = text.replace(/^["*]+|["*]+$/g, '').replace(/\*\*(.*?)\*\*/g, '$1').trim()
+    setMsgInput(clean)
+    setCopyFeedback(true)
+    setTimeout(() => setCopyFeedback(false), 2000)
+    document.getElementById('agent-msg-input')?.focus()
   }
 
   async function askCoach(question: string) {
@@ -227,7 +257,7 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
             })}
             <div ref={chatEndRef} />
           </div>
-          <button onClick={() => { setShowAllConvos(!showAllConvos); setTimeout(loadMessages, 100) }} style={{ padding: '3px', background: 'transparent', border: 'none', color: C.gold, fontSize: '9px', cursor: 'pointer' }}>{showAllConvos ? '↑ Menos' : '↓ Ver todo'}</button>
+          {/* Chat always expanded — no collapse button */}
 
           {/* Temperature bar — always visible */}
           <div style={{ padding: '8px 14px', borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.01)' }}>
@@ -261,7 +291,7 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
             </div>
             {mode === 'manual' && (
               <div style={{ display: 'flex', gap: '6px' }}>
-                <input value={msgInput} onChange={e => setMsgInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendAgentMessage()}
+                <input id="agent-msg-input" value={msgInput} onChange={e => setMsgInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendAgentMessage()}
                   placeholder="Escribe un mensaje..." style={{ flex: 1, padding: '8px 11px', borderRadius: '8px', fontSize: '12px', background: C.surface2, border: `1px solid ${C.border}`, color: C.text, outline: 'none', fontFamily: C.font }} />
                 <button onClick={sendAgentMessage} disabled={sending} style={{ padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, fontFamily: C.font, cursor: 'pointer', background: '#60a5fa', color: '#07080A', border: 'none', opacity: sending ? 0.5 : 1 }}>{sending ? '...' : '→'}</button>
               </div>
@@ -291,7 +321,7 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
                 <div style={{ padding: '8px', background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.18)', borderRadius: '8px' }}>
                   <p style={{ fontSize: '8px', fontWeight: 700, color: '#a855f7', margin: '0 0 3px', textTransform: 'uppercase' }}>Respuesta sugerida</p>
                   <p style={{ fontSize: '10px', color: C.text, lineHeight: 1.5, margin: '0 0 5px' }}>{coaching.suggested_response || '—'}</p>
-                  <button onClick={() => setMsgInput(coaching.suggested_response || '')} style={{ width: '100%', padding: '4px', borderRadius: '5px', fontSize: '8px', fontWeight: 700, fontFamily: C.font, cursor: 'pointer', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.25)', color: '#a855f7' }}>Usar esta</button>
+                  <button onClick={() => copyToInput(coaching.suggested_response || '')} style={{ width: '100%', padding: '4px', borderRadius: '5px', fontSize: '8px', fontWeight: 700, fontFamily: C.font, cursor: 'pointer', background: copyFeedback ? 'rgba(52,211,153,0.15)' : 'rgba(168,85,247,0.12)', border: `1px solid ${copyFeedback ? 'rgba(52,211,153,0.3)' : 'rgba(168,85,247,0.25)'}`, color: copyFeedback ? '#34d399' : '#a855f7' }}>{copyFeedback ? '✓ Copiado' : 'Usar esta'}</button>
                 </div>
 
                 {/* Objection */}
@@ -343,11 +373,8 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
                     }}>
                       {msg.content}
                       {msg.role === 'assistant' && msg.content.includes('"') && (
-                        <button onClick={() => {
-                          const match = msg.content.match(/"([^"]+)"/)?.[1]
-                          if (match) setMsgInput(match)
-                        }} style={{ display: 'block', marginTop: '4px', padding: '3px 8px', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: '5px', fontSize: '8px', fontWeight: 600, color: '#a78bfa', cursor: 'pointer', width: '100%', textAlign: 'center' }}>
-                          Copiar mensaje sugerido →
+                        <button onClick={() => copyToInput(extractSuggested(msg.content))} style={{ display: 'block', marginTop: '4px', padding: '3px 8px', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: '5px', fontSize: '8px', fontWeight: 600, color: '#a78bfa', cursor: 'pointer', width: '100%', textAlign: 'center' }}>
+                          Copiar mensaje →
                         </button>
                       )}
                     </div>

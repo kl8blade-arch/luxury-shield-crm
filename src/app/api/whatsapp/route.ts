@@ -260,6 +260,21 @@ async function getAIResponse(lead: any, conversationHistory: any[], incomingMess
   const hasColor = !!color
   const messageNumber = conversationHistory.length + 1
 
+  // Module: Stage context
+  let stageContext = ''
+  try {
+    const { STAGE_SOPHIA_CONTEXT } = await import('@/lib/stage-context')
+    const ctx = STAGE_SOPHIA_CONTEXT[lead.stage] || STAGE_SOPHIA_CONTEXT.nuevo
+    stageContext = `\n═══ STAGE ACTUAL: ${(lead.stage || 'nuevo').toUpperCase()} ═══\n${ctx}`
+    // Check if manual mode just ended (sophia retaking)
+    if (lead.manual_ended_at) {
+      const minsSince = (Date.now() - new Date(lead.manual_ended_at).getTime()) / 60000
+      if (minsSince < 10) {
+        stageContext += '\nIMPORTANTE: Un agente humano acaba de devolverte esta conversación. Retoma naturalmente sin presentarte de nuevo. Reconecta con el lead.'
+      }
+    }
+  } catch {}
+
   // Module 1: Sophia learnings
   let learningsContext = ''
   try {
@@ -359,7 +374,7 @@ ${lead.quiz_has_insurance ? `- Cobertura actual: ${lead.quiz_has_insurance} (del
 - Emojis: 1-2, nunca en exceso
 - Negrita para datos: **$0**, **día 1**
 - Tono: conversacional, nunca corporativo ni repetitivo
-${langNote}${speedContext}${learningsContext}`
+${langNote}${speedContext}${stageContext}${learningsContext}`
 
   // Inject known context into system prompt so Sophia never re-asks
   const contextSummary = `

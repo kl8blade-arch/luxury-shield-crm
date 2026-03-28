@@ -10,11 +10,22 @@ export default function PipelinePage() {
   const [leads, setLeads] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<any>(null)
+  const [draggedLead, setDraggedLead] = useState<any>(null)
+  const [dragOverStage, setDragOverStage] = useState<string | null>(null)
 
-  useEffect(() => {
-    supabase.from('leads').select('*').order('created_at', { ascending: false })
-      .then(({ data }) => { setLeads(data || []); setLoading(false) })
-  }, [])
+  useEffect(() => { loadLeads() }, [])
+
+  async function loadLeads() {
+    const { data } = await supabase.from('leads').select('*').order('created_at', { ascending: false })
+    setLeads(data || []); setLoading(false)
+  }
+
+  async function moveLeadToStage(leadId: string, newStage: string) {
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, stage: newStage } : l))
+    const { error } = await supabase.from('leads').update({ stage: newStage, updated_at: new Date().toISOString() }).eq('id', leadId)
+    if (error) { loadLeads(); return }
+    fetch('/api/stage-change', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lead_id: leadId, new_stage: newStage, changed_by: 'agent_manual' }) }).catch(() => {})
+  }
 
   const byStage = (key: string) => leads.filter(l => l.stage === key)
 
@@ -53,7 +64,11 @@ export default function PipelinePage() {
           {COLS.map(([key, meta]) => {
             const stageLeads = byStage(key)
             return (
-              <div key={key} style={{ width: '216px', flexShrink: 0, display: 'flex', flexDirection: 'column', background: C.surface, borderRadius: '16px', border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+              <div key={key}
+                onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverStage(key) }}
+                onDragLeave={() => setDragOverStage(null)}
+                onDrop={e => { e.preventDefault(); if (draggedLead && draggedLead.stage !== key) { moveLeadToStage(draggedLead.id, key) }; setDraggedLead(null); setDragOverStage(null) }}
+                style={{ width: '216px', flexShrink: 0, display: 'flex', flexDirection: 'column', background: dragOverStage === key ? 'rgba(201,168,76,0.06)' : C.surface, borderRadius: '16px', border: dragOverStage === key ? '1px dashed rgba(201,168,76,0.3)' : `1px solid ${C.border}`, overflow: 'hidden', transition: 'background 0.2s, border 0.2s' }}>
 
                 {/* Column header */}
                 <div style={{ padding: '13px 14px 11px', borderBottom: `2px solid ${meta.color}35`, background: `${meta.color}07`, flexShrink: 0 }}>
@@ -80,8 +95,10 @@ export default function PipelinePage() {
                       <p style={{ color: C.textMuted, fontSize: '11px', lineHeight: 1.5, margin: 0 }}>Sin leads</p>
                     </div>
                   ) : stageLeads.map(lead => (
-                    <div key={lead.id} onClick={() => setSelected(lead)} style={{ textDecoration: 'none' }}>
-                      <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '11px 12px', cursor: 'pointer', transition: 'all 0.15s' }}
+                    <div key={lead.id} onClick={() => setSelected(lead)}
+                      draggable onDragStart={e => { setDraggedLead(lead); e.currentTarget.style.opacity = '0.5' }} onDragEnd={e => { e.currentTarget.style.opacity = '1'; setDraggedLead(null); setDragOverStage(null) }}
+                      style={{ textDecoration: 'none', cursor: 'grab' }}>
+                      <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '11px 12px', cursor: 'grab', transition: 'all 0.15s' }}
                         onMouseEnter={e => { const el = e.currentTarget as HTMLDivElement; el.style.border = `1px solid ${meta.color}38`; el.style.background = C.surface3 }}
                         onMouseLeave={e => { const el = e.currentTarget as HTMLDivElement; el.style.border = `1px solid ${C.border}`; el.style.background = C.surface2 }}
                       >
