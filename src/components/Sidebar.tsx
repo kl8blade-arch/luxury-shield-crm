@@ -4,11 +4,12 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, Kanban, Bell,
   MessageSquare, Settings, Shield,
-  UserCheck, Package, ChevronRight,
+  UserCheck, Package, ChevronRight, BarChart3,
 } from 'lucide-react'
 
 const NAV = [
   { href: '/dashboard',  icon: LayoutDashboard, label: 'Dashboard',      badge: null },
+  { href: '/analytics',  icon: BarChart3,       label: 'Analytics',      badge: null },
   { href: '/leads',      icon: Users,           label: 'Mis Leads',       badge: null },
   { href: '/pipeline',   icon: Kanban,          label: 'Pipeline',        badge: null },
   { href: '/reminders',  icon: Bell,            label: 'Recordatorios',   badge: null },

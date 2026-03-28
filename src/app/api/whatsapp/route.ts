@@ -241,10 +241,38 @@ function determineStage(messageCount: number, isReadyToBuy: boolean, currentStag
 }
 
 // ── Claude AI — Sophia Agent ──
+// ── Response speed detection ──
+function getSpeedContext(history: any[]): string {
+  const inbound = history.filter((m: any) => m.direction === 'inbound' && m.created_at)
+  if (inbound.length < 2) return ''
+  const last = new Date(inbound[inbound.length - 1].created_at).getTime()
+  const prev = new Date(inbound[inbound.length - 2].created_at).getTime()
+  const mins = Math.round((last - prev) / 60000)
+  if (mins < 3) return '\nESTADO: Lead CALIENTE. Respondió en menos de 3 min. Acelera hacia el cierre. Si ya tienes estado y familia, presenta el plan y crea urgencia. Máximo 2 mensajes más antes de pedir la llamada.'
+  if (mins < 60) return ''
+  if (mins < 240) return '\nESTADO: Lead enfriándose. Reconecta emocionalmente antes de continuar. Una línea que recuerde por qué empezó esta conversación.'
+  if (mins < 1440) return '\nESTADO: Lead frío. NO continúes donde quedaste. Abre con algo nuevo o personal. Reconstruye rapport antes de vender.'
+  return '\nESTADO: Lead muy frío (>24h). Trátalo casi como nuevo. Saluda cálidamente, menciona que habían hablado antes. No menciones el plan hasta el 2do mensaje.'
+}
+
 async function getAIResponse(lead: any, conversationHistory: any[], incomingMessage: string, alreadyIntroduced: boolean = false): Promise<string> {
   const color = lead.favorite_color || lead.color_favorito || ''
   const hasColor = !!color
   const messageNumber = conversationHistory.length + 1
+
+  // Module 1: Sophia learnings
+  let learningsContext = ''
+  try {
+    const { getRelevantLearnings } = await import('@/lib/sophia-learning')
+    learningsContext = await getRelevantLearnings(supabase, lead.state)
+  } catch {}
+
+  // Module 2: Speed detection
+  const speedContext = getSpeedContext(conversationHistory)
+
+  // Module 3: Language detection
+  const lang = lead.preferred_language || 'es'
+  const langNote = lang === 'en' ? 'IMPORTANT: This lead speaks ENGLISH. Respond entirely in English.' : ''
 
   const systemPrompt = `Eres Sophia, parte del equipo de asesores de Luxury Shield Insurance. Eres cálida, inteligente, empática y persuasiva — como una amiga cercana que trabaja en salud y quiere que su gente esté protegida. No eres una vendedora. Eres alguien que genuinamente se preocupa.
 
@@ -330,7 +358,8 @@ ${lead.quiz_has_insurance ? `- Cobertura actual: ${lead.quiz_has_insurance} (del
 - Una sola pregunta por mensaje
 - Emojis: 1-2, nunca en exceso
 - Negrita para datos: **$0**, **día 1**
-- Tono: conversacional, nunca corporativo ni repetitivo`
+- Tono: conversacional, nunca corporativo ni repetitivo
+${langNote}${speedContext}${learningsContext}`
 
   // Build message history — filter empty messages and ensure alternating roles
   const rawMessages = [
@@ -542,6 +571,14 @@ Ejemplos:
 
     await sendWhatsApp(agentPhone, confirmations[parsed.accion] || 'Actualizado ✅')
 
+    // Module 1: Learn from closed deal
+    if (parsed.accion === 'vendido') {
+      try {
+        const { learnFromClosedDeal } = await import('@/lib/sophia-learning')
+        learnFromClosedDeal(supabase, lead.id, process.env.ANTHROPIC_API_KEY!).catch(() => {})
+      } catch {}
+    }
+
     // If sold — welcome message + schedule referral followup (48h)
     if (parsed.accion === 'vendido' && lead.phone) {
       await sendWhatsApp(lead.phone, `¡${firstName}! 🎉 Tu plan de protección familiar ya está en proceso. Recibirás los detalles completos muy pronto.\n\n¡Bienvenido/a a la familia Luxury Shield! 💙`)
@@ -725,6 +762,21 @@ export async function POST(req: NextRequest) {
     })
     if (saveErr) console.error('[Sophia] Save message error:', saveErr)
 
+    // Module 3: Language detection
+    if (!lead.preferred_language || lead.preferred_language === 'es') {
+      const enWords = body.match(/\b(the|is|are|want|have|how|much|need|yes|no|please|thank|what|when|where|can|do|my|your)\b/gi)
+      if (enWords && enWords.length >= 3) {
+        await supabase.from('leads').update({ preferred_language: 'en' }).eq('id', lead.id)
+        lead.preferred_language = 'en'
+      }
+    }
+
+    // Update message tracking
+    await supabase.from('leads').update({
+      last_message_at: new Date().toISOString(),
+      total_messages: (lead.total_messages || 0) + 1,
+    }).eq('id', lead.id)
+
     // Auto-extract lead data from message (state, family, email)
     await extractAndUpdateLeadData(body, lead)
 
@@ -809,6 +861,21 @@ export async function POST(req: NextRequest) {
         `${c.direction === 'inbound' ? 'Lead' : 'Sophia'}: ${c.message}`
       ).join('\n')
 
+      // Module 4: Product radar
+      let productOppsText = ''
+      try {
+        const { detectProductOpportunities, formatOpportunitiesForAgent } = await import('@/lib/product-radar')
+        const opps = detectProductOpportunities(lead, convoText)
+        productOppsText = formatOpportunitiesForAgent(opps)
+        await supabase.from('leads').update({ product_opportunities: opps }).eq('id', lead.id)
+      } catch {}
+
+      // Module 1: Trigger learning from this conversation
+      try {
+        const { learnFromClosedDeal } = await import('@/lib/sophia-learning')
+        learnFromClosedDeal(supabase, lead.id, process.env.ANTHROPIC_API_KEY!).catch(() => {})
+      } catch {}
+
       // Generate battle card with Claude
       let bc: any = { nombre: lead.name, estado: lead.state, familia: '', telefono: from, color, nivel_interes: 8, argumento_ganador: 'Cobertura dental', objecion_probable: 'Ninguna', contraargumento: '', dias_considerando: 1, como_abrir: `Hola, soy de Luxury Shield. Tu color es ${color}.`, estado_emocional: 'curioso', resumen: 'Lead interesado en plan dental' }
 
@@ -865,6 +932,7 @@ ${bc.objecion_probable}
 ${bc.contraargumento}
 ━━━━━━━━━━━━━━━━━━━
 📝 ${bc.resumen}
+${productOppsText}
 ━━━━━━━━━━━━━━━━━━━
 ⏰ Lead caliente — llamar en los próximos 20 min`
 
