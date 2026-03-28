@@ -1,5 +1,6 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { C, STAGE_META, scoreColor, fmtDate } from '@/lib/design'
 import { Lead, LeadStage } from '@/types'
@@ -7,7 +8,12 @@ import LeadDetailPanel from '@/components/LeadDetailPanel'
 
 const STAGES = [{ value: 'all', label: 'Todas las etapas' }, ...Object.entries(STAGE_META).map(([v, m]) => ({ value: v, label: m.label }))]
 
-export default function LeadsPage() {
+export default function LeadsPageWrapper() {
+  return <Suspense fallback={<div style={{ padding: '48px', textAlign: 'center', color: C.textMuted, background: C.bg, minHeight: '100vh', fontFamily: C.font }}>Cargando...</div>}><LeadsPage /></Suspense>
+}
+
+function LeadsPage() {
+  const searchParams = useSearchParams()
   const [leads, setLeads] = useState<Lead[]>([])
   const [filtered, setFiltered] = useState<Lead[]>([])
   const [selected, setSelected] = useState<Lead | null>(null)
@@ -15,15 +21,45 @@ export default function LeadsPage() {
   const [stage, setStage] = useState('all')
   const [loading, setLoading] = useState(true)
   const [focused, setFocused] = useState(false)
+  const [filterLabel, setFilterLabel] = useState('')
 
   useEffect(() => { loadLeads() }, [])
 
+  // Handle query params from analytics
   useEffect(() => {
+    if (!leads.length) return
+    const filter = searchParams.get('filter')
+    const selectedId = searchParams.get('selected')
+    const agent = searchParams.get('agent')
+    const sixHoursAgo = Date.now() - 6 * 60 * 60 * 1000
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+    const closedStages = ['closed_won', 'closed_lost', 'unqualified']
+
     let r = leads
-    if (search) { const q = search.toLowerCase(); r = r.filter(l => l.name.toLowerCase().includes(q) || l.phone.includes(q) || (l.email||'').toLowerCase().includes(q)) }
+    let label = ''
+
+    if (filter === 'activos') { r = r.filter(l => !closedStages.includes(l.stage)); label = 'Leads activos' }
+    else if (filter === 'cerrados') { r = r.filter(l => l.stage === 'closed_won' && new Date(l.created_at).getTime() > weekAgo); label = 'Cerrados esta semana' }
+    else if (filter === 'listo_comprar') { r = r.filter(l => l.ready_to_buy); label = 'Listos para comprar' }
+    else if (filter === 'calientes') { r = r.filter(l => l.score >= 75); label = 'Leads calientes (75+)' }
+    else if (filter === 'inactivos') { r = r.filter(l => !closedStages.includes(l.stage) && new Date(l.updated_at || l.created_at).getTime() < sixHoursAgo); label = 'Sin actividad >6h' }
+
+    if (agent) { r = r.filter(l => (l.assigned_to || '').toLowerCase().includes(agent)); label = `Leads de ${agent}` }
+
+    if (label) { setFiltered(r); setFilterLabel(label); return }
+
+    // Default filtering
+    if (search) { const q = search.toLowerCase(); r = r.filter(l => l.name.toLowerCase().includes(q) || l.phone.includes(q) || (l.email || '').toLowerCase().includes(q)) }
     if (stage !== 'all') r = r.filter(l => l.stage === stage)
     setFiltered(r)
-  }, [leads, search, stage])
+    setFilterLabel('')
+
+    // Auto-select lead if specified
+    if (selectedId) {
+      const lead = leads.find(l => l.id === selectedId)
+      if (lead) setSelected(lead)
+    }
+  }, [leads, search, stage, searchParams])
 
   async function loadLeads() {
     setLoading(true)
@@ -62,7 +98,7 @@ export default function LeadsPage() {
             <div>
               <h1 style={{ color: C.text, fontSize: '22px', fontWeight: 700, letterSpacing: '-0.3px', margin: 0 }}>Mis Leads</h1>
               <p style={{ color: C.textMuted, fontSize: '13px', marginTop: '5px' }}>
-                {loading ? 'Cargando...' : `${filtered.length} lead${filtered.length !== 1 ? 's' : ''}`}
+                {loading ? 'Cargando...' : filterLabel ? `${filterLabel} (${filtered.length})` : `${filtered.length} lead${filtered.length !== 1 ? 's' : ''}`}
               </p>
             </div>
             <button style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '11px 22px', borderRadius: '10px', border: 'none', cursor: 'pointer', background: `linear-gradient(135deg, ${C.goldBright}, ${C.gold})`, color: '#07080A', fontSize: '13px', fontWeight: 700, boxShadow: '0 4px 20px rgba(201,168,76,0.3)' }}>
