@@ -361,17 +361,25 @@ ${lead.quiz_has_insurance ? `- Cobertura actual: ${lead.quiz_has_insurance} (del
 - Tono: conversacional, nunca corporativo ni repetitivo
 ${langNote}${speedContext}${learningsContext}`
 
-  // Build message history — filter empty messages and ensure alternating roles
-  const rawMessages = [
-    ...conversationHistory
-      .filter((c: any) => c.message && c.message.trim())
-      .map((c: any) => ({
-        role: c.direction === 'inbound' ? 'user' as const : 'assistant' as const,
-        content: c.message.trim(),
-      })),
-    { role: 'user' as const, content: incomingMessage }
-  ]
-  // Claude requires alternating user/assistant — merge consecutive same-role messages
+  // Build message history for Claude API
+  const rawMessages: { role: 'user' | 'assistant'; content: string }[] = []
+
+  // Add conversation history
+  for (const msg of conversationHistory) {
+    if (!msg.message || !msg.message.trim()) continue
+    const role = msg.direction === 'inbound' ? 'user' as const : 'assistant' as const
+    rawMessages.push({ role, content: msg.message.trim() })
+  }
+
+  // Add current incoming message
+  rawMessages.push({ role: 'user', content: incomingMessage })
+
+  // Ensure first message is 'user' (Claude requirement)
+  while (rawMessages.length > 0 && rawMessages[0].role === 'assistant') {
+    rawMessages.shift()
+  }
+
+  // Merge consecutive same-role messages (Claude requires alternation)
   const messages: { role: 'user' | 'assistant'; content: string }[] = []
   for (const msg of rawMessages) {
     if (messages.length > 0 && messages[messages.length - 1].role === msg.role) {
@@ -380,6 +388,8 @@ ${langNote}${speedContext}${learningsContext}`
       messages.push({ ...msg })
     }
   }
+
+  console.log(`[Sophia] Claude messages array: ${messages.length} items | First: ${messages[0]?.role} | Last: ${messages[messages.length - 1]?.role}`)
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -741,22 +751,44 @@ export async function POST(req: NextRequest) {
 
     console.log(`[Sophia] Lead found: ${lead.id} — ${lead.name} — stage: ${lead.stage}`)
 
-    // Get conversation history (last 15 messages for context)
-    const { data: history, error: histErr } = await supabase
+    // Get conversation history — try by lead_id first, fallback to phone
+    let history: any[] | null = null
+    const { data: histById, error: histErr } = await supabase
       .from('conversations')
-      .select('*')
+      .select('direction, message, created_at')
       .eq('lead_id', lead.id)
       .order('created_at', { ascending: true })
-      .limit(15)
+      .limit(24)
 
     if (histErr) console.error('[Sophia] History error:', histErr)
+    history = histById
+
+    // If no history by lead_id, try by phone number
+    if (!history || history.length === 0) {
+      const { data: histByPhone } = await supabase
+        .from('conversations')
+        .select('direction, message, created_at')
+        .eq('lead_phone', from)
+        .order('created_at', { ascending: true })
+        .limit(24)
+      if (histByPhone && histByPhone.length > 0) {
+        history = histByPhone
+        console.log(`[Sophia] History found by phone (${history.length} msgs) — lead_id mismatch`)
+      }
+    }
+
+    console.log(`=== SOPHIA DEBUG === Lead: ${lead.id} | Phone: ${from} | History: ${history?.length ?? 0} msgs`)
+    if (history && history.length > 0) {
+      console.log(`[Sophia] First msg: ${history[0].direction} — "${history[0].message?.substring(0, 60)}"`)
+      console.log(`[Sophia] Last msg: ${history[history.length - 1].direction} — "${history[history.length - 1].message?.substring(0, 60)}"`)
+    }
 
     // Save incoming message
     const { error: saveErr } = await supabase.from('conversations').insert({
       lead_id: lead.id,
       lead_name: lead.name,
       lead_phone: from,
-      channel: 'ai_text',
+      channel: 'whatsapp',
       direction: 'inbound',
       message: body,
     })
@@ -813,7 +845,7 @@ export async function POST(req: NextRequest) {
       lead_id: lead.id,
       lead_name: lead.name,
       lead_phone: from,
-      channel: 'ai_text',
+      channel: 'whatsapp',
       direction: 'outbound',
       message: cleanResponse,
       ai_summary: isReadyToBuy ? 'LISTO PARA COMPRAR' : null,
