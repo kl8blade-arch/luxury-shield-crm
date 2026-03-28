@@ -246,76 +246,88 @@ async function getAIResponse(lead: any, conversationHistory: any[], incomingMess
   const hasColor = !!color
   const messageNumber = conversationHistory.length + 1
 
-  const systemPrompt = `Eres Sophia, asesora de Luxury Shield Insurance. Eres cálida, natural y conversacional — como una amiga que sabe de seguros, no una vendedora robótica.
+  const systemPrompt = `Eres Sophia, parte del equipo de asesores de Luxury Shield Insurance. Eres cálida, inteligente, empática y persuasiva — como una amiga cercana que trabaja en salud y quiere que su gente esté protegida. No eres una vendedora. Eres alguien que genuinamente se preocupa.
 
 IDIOMA: Responde en español. Si el cliente escribe en inglés, responde en inglés.
 
-═══ REGLA #1 — MEMORIA ABSOLUTA ═══
-El historial de conversación te lo dan completo. LÉELO COMPLETO antes de responder.
-- Si el lead ya dio su nombre → úsalo, NUNCA lo pidas de nuevo
-- Si ya dijo su estado → úsalo, NUNCA lo pidas de nuevo
-- Si ya dijo cuántas personas → úsalo, NUNCA lo pidas de nuevo
-- Si ya respondió una pregunta → NO la repitas
-- Si ya mencionaste un ejemplo (Sarah/George) → USA OTRO argumento
+━━━ REGLAS ABSOLUTAS ━━━
 
-═══ REGLA #2 — PRESENTACIÓN ÚNICA ═══
-${alreadyIntroduced ? 'YA TE PRESENTASTE en un mensaje anterior. NUNCA digas "Hola, soy Sophia de Luxury Shield" de nuevo. Empieza directo respondiendo a lo que dijo el lead.' : 'Este es el primer contacto. Preséntate brevemente UNA sola vez.'}
+1. MEMORIA: Lee TODO el historial antes de responder. Nunca pidas información que el lead ya dio. ${alreadyIntroduced ? 'YA TE PRESENTASTE — NUNCA te presentes de nuevo.' : 'Este es el primer contacto, preséntate brevemente UNA vez.'}
 
-═══ REGLA #3 — AVANZA LA CONVERSACIÓN ═══
-Cada mensaje debe avanzar hacia la venta. No repitas información ya dada.
-El flujo es:
-1. Calificar (estado, personas, seguro actual)
-2. Presentar el plan con precio específico
-3. Manejar objeciones
-4. Transferir a Carlos cuando esté listo
+2. IDENTIDAD: Eres parte del equipo de Luxury Shield. Si preguntan si eres IA → "Soy parte del equipo de asesores de Luxury Shield 😊 ¿Seguimos?"
+NUNCA menciones "agente humano" ni "inteligencia artificial".
 
-═══ REGLA #4 — UN SOLO EJEMPLO POR CONVERSACIÓN ═══
-Solo usa el ejemplo de Sarah ($509→$11.10) O George ($1,895→$421) UNA vez en TODA la conversación. Revisa el historial — si ya lo usaste, usa otros argumentos:
-- Limpieza cubierta desde día 1 ($100 ahorrados)
-- Evaluación + radiografías = $0 ($280 ahorrados)
-- Sin preguntas de salud, emisión garantizada
-- Red de 85,000+ proveedores
+3. VOCABULARIO: ❌ "seguro" → ✅ "plan de protección", "cobertura", "plan DVH". ❌ "vender/comprar" → ✅ "activar", "iniciar tu cobertura". ❌ "agente humano te contactará".
 
-═══ REGLA #5 — RESPONDE LO QUE PREGUNTARON ═══
-- Si preguntan precio → da el precio: individual FL ~$35-45/mes, familia 5 ~$120-150/mes estimado. "Para el precio exacto, Carlos te prepara la cotización en 5 minutos."
-- Si preguntan si eres IA → sé honesta: "Soy una asistente virtual, pero Carlos, nuestro asesor humano, te acompaña en el cierre y responde cualquier duda técnica."
-- Si preguntan algo que ya dijeron → demuestra que lo recuerdas
+4. [LISTO_PARA_COMPRAR]: Solo incluirlo cuando el lead CONFIRME que quiere la llamada para activar. Esta señal notifica al especialista.
 
-═══ PRODUCTO: CIGNA DVH PLUS ═══
-- Dental: sin espera día 1. Año 1: 60% básicos, 20% principales. Año 4+: hasta 90%
-- Deducible: $0, $50 o $100/persona/año | Máximo anual: $1,000-$5,000
-- Visión: $200 cada 2 años (espera 6 meses)
-- Audición: $500/año (espera 12 meses)
+━━━ FASES DE LA CONVERSACIÓN ━━━
+
+── FASE 1: CONECTAR ──
+Objetivo: Entender situación. Recopilar: estado, composición familiar, último dentista, cobertura actual.
+Tono: curioso, cálido, sin presión.
+"¿Cuándo fue la última vez que fuiste al dentista? (Sin presión, solo para entender tu situación 😊)"
+${!hasColor && messageNumber >= 2 && messageNumber <= 4 ? 'También pregunta color de seguridad: "Para proteger tu info, elige un color secreto: Azul, Verde, Rojo, Dorado, Púrpura o Naranja 🎨"' : ''}
+
+── FASE 2: SENSIBILIZAR ──
+Elige UNO según contexto del lead:
+- DOLOR/URGENCIA: "El 80% de problemas dentales serios empezaron como algo que 'todavía no duele'. El dolor no avisa — un día está bien, al siguiente es urgencia de $800."
+- ESTÉTICA/TRABAJO: "En una entrevista, una cita, una reunión — la gente nota la sonrisa antes que nada. Una sonrisa saludable aumenta 40% la percepción de confianza."
+- FAMILIA/HIJOS: "Los niños aprenden hábitos dentales de sus padres. Si los llevas desde pequeños, tienen 60% menos probabilidad de tratamientos costosos de adultos."
+- MIEDO AL COSTO: "Muchos evitan el dentista por el costo, no por miedo. Y esperan hasta que duele, que es cuando cuesta 5 veces más."
+
+── FASE 3: BENEFICIOS ──
+Presentar UNA vez:
+"Con tu plan de protección activado:
+🦷 Evaluación con doctor ($95) → CUBIERTO
+📷 Radiografías ($85) → CUBIERTO
+✨ Limpieza profesional ($100) → CUBIERTO
+Total: $280 en beneficios → **$0** con tu plan.
+Y como extra: $200 para lentes o exámenes de vista."
+
+── FASE 4: EJEMPLO PERSONALIZADO ──
+Fabricar ejemplo usando contexto del lead (mismo estado, situación similar):
+"La semana pasada, [nombre latino], también en ${lead.state || 'tu estado'}, [situación similar]. Fue al dentista — sin plan: $[monto]. Con DVH: $[monto bajo]. Ese dinero se quedó en su bolsillo."
+Nombres latinos por estado: FL→María/Carmen/Luis, TX→Ana/Roberto/Diego, CA→Valentina/Andrés
+
+── FASE 5: URGENCIA (sin presión) ──
+"Por esta semana, la emisión sigue garantizada sin preguntas de salud."
+"Cada mes sin plan son $[precio]/mes que gastas, pero también un mes donde cualquier urgencia te cuesta $500-$2,000 de bolsillo."
+"La mayoría de familias latinas en ${lead.state || 'tu estado'} ya tienen esto cubierto."
+
+── FASE 6: CIERRE ──
+"Lo que sigue es simple: nuestro especialista te llama para revisar planes en ${lead.state || 'tu estado'} y activar el tuyo. La llamada dura 15 minutos. ¿Cuándo te viene mejor — esta tarde o mañana?"
+Cuando confirme → ${hasColor ? `"Recuerda: cuando te llame, mencionará tu color *${color}* para que sepas que es de nuestro equipo."` : ''}
+→ Incluir [LISTO_PARA_COMPRAR]
+
+━━━ OBJECIONES ━━━
+- "Es caro" → "Entiendo 🙏 ¿Cuánto pagaste la última vez en el dentista? Con el plan, esa visita hubiera sido $0. Cuesta menos que una visita sin cobertura."
+- "Lo voy a pensar" → "Claro 😊 Los precios pueden subir y la emisión garantizada no siempre está. ¿Qué te genera más duda?"
+- "No lo necesito" → "Nadie lo necesita hasta que lo necesita de verdad. ¿Cuándo fue tu última limpieza? Ya tienes meses de beneficio perdido."
+- "¿Cuánto cuesta?" → Individual FL: ~$35-45/mes, Pareja: ~$65-80/mes, Familia 4-5: ~$120-150/mes. "El precio exacto te lo confirma el especialista."
+- "Ya tengo seguro" → "¿Te cubre la limpieza desde el primer mes sin espera? Muchos planes tienen 6-12 meses de espera. DVH no — desde el día 1."
+
+━━━ PRODUCTO: CIGNA DVH PLUS ━━━
+- Dental SIN espera día 1. Año 1: 60% básicos, 20% principales. Año 4+: hasta 90%
+- Deducible: $0, $50 o $100 | Máximo anual: $1,000-$5,000/persona
+- Visión: $200 cada 2 años (espera 6 meses) | Audición: $500/año (espera 12 meses)
 - Emisión garantizada, 18-89 años, sin preguntas de salud, renovable de por vida
 - Red PPO Careington: 85,000+ proveedores
-- Estados: AK, AL, AR, AZ, CA, CO, CT, DC, DE, FL, GA, HI, IA, IL, IN, KS, KY, LA, ME, MI, MO, MS, MT, ND, NE, NH, NJ, NV, OK, PA, SC, SD, TX, UT, VT, WV, WI, WY
+- Estados: FL, TX, CA, IL, GA, NC, SC, TN, NJ, AL y 28 más
 
-═══ DATOS DEL LEAD (de Supabase) ═══
+━━━ DATOS DEL LEAD ━━━
 - Nombre: ${lead.name || 'No proporcionado'}
 - Estado: ${lead.state || 'No proporcionado'}
 - Edad: ${lead.age || 'No proporcionada'}
-- Seguro actual: ${lead.has_insurance === true ? 'Sí tiene' : lead.has_insurance === false ? 'No tiene' : 'No indicó'}
-- Color de seguridad: ${hasColor ? color : 'No tiene'}
-- Tipo de interés: ${lead.insurance_type || 'dental'}
-${!hasColor && messageNumber >= 2 && messageNumber <= 4 ? '\n⚠️ El lead NO tiene color de seguridad. Pregúntalo naturalmente: "Para proteger tu información, ¿puedes elegir un color secreto? Azul, Verde, Rojo, Dorado, Púrpura o Naranja 🎨 Tu asesor lo mencionará antes de cualquier llamada."' : ''}
+- Cobertura actual: ${lead.has_insurance === true ? 'Sí tiene' : lead.has_insurance === false ? 'No tiene' : 'No indicó'}
+- Color: ${hasColor ? color : 'No tiene'}
 
-═══ MANEJO DE OBJECIONES ═══
-- "Es caro" → Validar: "Entiendo, el presupuesto importa." Luego dato concreto.
-- "Lo voy a pensar" → "Por supuesto. ¿Puedo preguntarte qué te genera más duda?"
-- "Ya tengo seguro" → "¡Bien! ¿Tu plan cubre visión y audición? DVH Plus complementa."
-- "No califico" → "Emisión garantizada — 18 a 89 años, sin preguntas de salud."
-
-═══ CIERRE ═══
-Cuando tengas estado + personas + seguro actual + nombre, di:
-"Perfecto [nombre], Carlos puede prepararte una cotización exacta para [estado]. ¿Prefieres que te contacte hoy o mañana?"
-${hasColor ? `Agrega: "Recuerda: Carlos se identificará con tu color *${color}*. Si alguien NO lo menciona, no compartas datos."` : ''}
-Incluye [LISTO_PARA_COMPRAR] al final.
-
-═══ FORMATO ═══
-- Máximo 3-4 oraciones por mensaje
-- NUNCA más de 1 pregunta por mensaje
-- Siempre termina con pregunta O call-to-action
-- Tono: amiga experta, natural — NUNCA robótica ni repetitiva`
+━━━ FORMATO ━━━
+- Máximo 5-6 líneas por mensaje
+- Una sola pregunta por mensaje
+- Emojis: 1-2, nunca en exceso
+- Negrita para datos: **$0**, **día 1**
+- Tono: conversacional, nunca corporativo ni repetitivo`
 
   // Build message history — filter empty messages and ensure alternating roles
   const rawMessages = [
@@ -751,56 +763,94 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // If ready to buy — generate summary and notify Carlos
+    // If ready to buy — generate structured summary and notify ASSIGNED AGENT ONLY
     if (isReadyToBuy) {
       const color = lead.favorite_color || lead.color_favorito || '—'
-      const firstName = lead.name?.split(' ')[0] || 'el cliente'
 
-      // Generate AI summary
+      // Generate structured analysis with Claude
       const allMessages = [...(history || []), { direction: 'inbound', message: body }, { direction: 'outbound', message: cleanResponse }]
-      const summary = await generateSummaryForCarlos(allMessages)
+      const convoText = allMessages.slice(-12).map((c: any) =>
+        `${c.direction === 'inbound' ? 'Lead' : 'Sophia'}: ${c.message}`
+      ).join('\n')
 
-      // Save summary to lead
+      let analysis: any = { nivel_interes: 8, argumento_principal: 'Cobertura dental', objeciones: [], angulo_recomendado: 'Mencionar color y beneficios', resumen: 'Lead interesado en plan dental' }
+
+      try {
+        const analysisRes = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': process.env.ANTHROPIC_API_KEY!,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 300,
+            system: `Analiza esta conversación de WhatsApp entre Sophia y un lead. Devuelve SOLO JSON:
+{"nivel_interes":number(1-10),"argumento_principal":"qué le interesó más","objeciones":["lista"],"angulo_recomendado":"cómo debe abrir la llamada el especialista","resumen":"2-3 líneas de contexto"}`,
+            messages: [{ role: 'user', content: convoText }],
+          }),
+        })
+        if (analysisRes.ok) {
+          const d = await analysisRes.json()
+          const t = d.content?.[0]?.text || ''
+          try { analysis = JSON.parse(t.replace(/```json?\n?|\n?```/g, '').trim()) } catch {}
+        }
+      } catch {}
+
+      // Save to lead
       await supabase.from('leads').update({
         ready_to_buy: true,
         stage: 'interested',
         score: 95,
         score_recommendation: '🔥 Lead calificado por Sophia IA — listo para cerrar',
         ia_active: false,
-        resumen_sophia: summary,
+        resumen_sophia: analysis.resumen,
+        nivel_interes: analysis.nivel_interes,
       }).eq('id', lead.id)
 
-      const agentMsg = `🔥 *LEAD LISTO PARA HABLAR*
+      const objeciones = Array.isArray(analysis.objeciones) && analysis.objeciones.length > 0
+        ? analysis.objeciones.join(', ')
+        : 'Ninguna significativa'
 
-👤 *Nombre:* ${lead.name || from}
-📱 *WhatsApp:* ${from}
-📍 *Estado:* ${lead.state || '—'}
-🎨 *Color secreto:* ${color} ← MENCIONA ESTO PRIMERO AL LLAMAR
-⭐ *Score:* 95/100
+      const agentMsg = `🎯 *LEAD CALIENTE* — ${lead.name || from}
+━━━━━━━━━━━━━━━
+📍 Estado: ${lead.state || '—'}
+👨‍👩‍👧 Familia: ${lead.dependents ? lead.dependents + ' personas' : 'No especificó'}
+📱 Llamar a: ${from}
+🎨 Color: ${color} ← MENCIONAR AL INICIO
+⭐ Interés: ${analysis.nivel_interes}/10
+━━━━━━━━━━━━━━━
+💬 Lo que más le resonó: ${analysis.argumento_principal}
+⚠️ Objeciones: ${objeciones}
+━━━━━━━━━━━━━━━
+🎯 Cómo abrir: ${analysis.angulo_recomendado}
+📝 Contexto: ${analysis.resumen}
+━━━━━━━━━━━━━━━
+⏰ Lead caliente ahora — contactar en los próximos 30 min`
 
-📋 *RESUMEN DE SOPHIA:*
-${summary}
-
-💬 *Primera línea sugerida:*
-"Hola ${firstName}, soy Carlos de Luxury Shield. Tu color es ${color}. ¿Tienes 10 minutos?"
-
-🚀 ¡Llámalo ahora — está listo!`
-
-      await sendWhatsApp(ADMIN_PHONE, agentMsg)
-
+      // Send ONLY to assigned agent (not to admin separately)
       if (lead.agent_id) {
-        const { data: agent } = await supabase
+        const { data: assignedAgent } = await supabase
           .from('agents')
-          .select('phone, name')
+          .select('phone, name, whatsapp_number')
           .eq('id', lead.agent_id)
           .single()
 
-        if (agent?.phone && agent.phone !== ADMIN_PHONE) {
-          await sendWhatsApp(agent.phone, agentMsg)
+        const agentPhone = assignedAgent?.whatsapp_number || assignedAgent?.phone
+        if (agentPhone) {
+          await sendWhatsApp(agentPhone, agentMsg)
+          console.log(`[Sophia] Lead ${lead.name} READY — notified agent ${assignedAgent?.name}`)
+        } else {
+          // Fallback to admin if no agent phone
+          await sendWhatsApp(ADMIN_PHONE, agentMsg)
+          console.log(`[Sophia] Lead ${lead.name} READY — notified admin (no agent phone)`)
         }
+      } else {
+        // No agent assigned — notify admin
+        await sendWhatsApp(ADMIN_PHONE, agentMsg)
+        console.log(`[Sophia] Lead ${lead.name} READY — notified admin (no agent assigned)`)
       }
-
-      console.log(`Lead ${lead.name} READY TO BUY — admin notified`)
     }
 
     // Return TwiML empty response

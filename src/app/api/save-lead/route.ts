@@ -132,10 +132,7 @@ export async function POST(req: NextRequest) {
       assignedTo = assigned.agentName
     }
 
-    // Notify admin
-    const adminPhone = process.env.ADMIN_WHATSAPP || '+17869435656'
-    await sendWhatsApp(adminPhone, `📥 *Nuevo lead — Luxury Shield*\n\n👤 ${name}\n📞 ${phone}\n📍 ${state} · ${insuranceType}\n⭐ Score: ${score}\n👨‍💼 Asignado: ${assignedTo}\n🎨 Color: ${body.color_favorito || '—'}\n\n🤖 Sophia IA lo contactará en menos de 2 minutos.`)
-
+    // Agent is NOT notified here — only when Sophia detects [LISTO_PARA_COMPRAR]
     // Trigger AI agent (non-blocking)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://luxury-shield-crm.vercel.app'
     fetch(`${appUrl}/api/ai-contact`, {
