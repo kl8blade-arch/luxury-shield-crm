@@ -301,7 +301,7 @@ export async function POST(req: NextRequest) {
 
     // Human-like typing delay before sending
     const len = cleanResponse.length
-    const [min, max] = len < 100 ? [8, 12] : len < 200 ? [12, 18] : [18, 25]
+    const [min, max] = len < 100 ? [3, 5] : len < 200 ? [5, 7] : [7, 9]
     const delay = Math.floor(Math.random() * (max - min + 1)) + min
     console.log(`[Sophia] Typing delay: ${delay}s for ${len} chars`)
     await new Promise(resolve => setTimeout(resolve, delay * 1000))
