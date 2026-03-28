@@ -241,8 +241,11 @@ function determineStage(messageCount: number, isReadyToBuy: boolean, currentStag
 }
 
 // ── Claude AI — Sophia Agent ──
-async function getAIResponse(lead: any, conversationHistory: any[], incomingMessage: string): Promise<string> {
+async function getAIResponse(lead: any, conversationHistory: any[], incomingMessage: string, alreadyIntroduced: boolean = false): Promise<string> {
   const conversationContext = extractConversationContext(conversationHistory, lead)
+  const continuationNote = alreadyIntroduced
+    ? `\n\nIMPORTANTE: Ya te presentaste con este lead y mencionaste su color de seguridad. NO te vuelvas a presentar. NO digas "Hola soy Sophia". Responde directamente a su mensaje como continuación natural de la conversación que ya iniciaste.`
+    : ''
 
   const systemPrompt = `Eres Sophia, asesora experta de Luxury Shield Insurance. Eres una amiga experta que guía con calidez, NUNCA una vendedora agresiva.
 
@@ -339,7 +342,7 @@ NO mandes a Carlos hasta tener: estado, familia o solo, seguro actual, nombre co
 - REGLA DE ORO: VALIDAR emoción primero, LUEGO dato/beneficio
 - Tono: amiga experta, cálida, empática — nunca agresiva
 - NO inventes datos. NO menciones competidores. NO presiones.
-- SOLO [LISTO_PARA_COMPRAR] cuando confirme explícitamente o acepte llamada con Carlos${conversationContext}`
+- SOLO [LISTO_PARA_COMPRAR] cuando confirme explícitamente o acepte llamada con Carlos${conversationContext}${continuationNote}`
 
   const messages = [
     ...conversationHistory.map((c: any) => ({
@@ -530,7 +533,11 @@ export async function POST(req: NextRequest) {
     }).eq('id', lead.id)
 
     // Generate AI response
-    const aiResponse = await getAIResponse(lead, history || [], body)
+    // Check if ai-contact already sent a welcome message
+    const priorOutbound = (history || []).filter((m: any) => m.direction === 'outbound')
+    const alreadyIntroduced = priorOutbound.length > 0
+
+    const aiResponse = await getAIResponse(lead, history || [], body, alreadyIntroduced)
 
     // Check for buy signal
     const isReadyToBuy = aiResponse.includes('[LISTO_PARA_COMPRAR]')
