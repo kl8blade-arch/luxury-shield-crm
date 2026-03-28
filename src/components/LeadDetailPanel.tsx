@@ -25,7 +25,13 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
   const [showAllConvos, setShowAllConvos] = useState(false)
   const [loseModal, setLoseModal] = useState(false)
   const [loseReason, setLoseReason] = useState('')
+  const [coachMessages, setCoachMessages] = useState<{ role: string; content: string }[]>([
+    { role: 'assistant', content: `Listo. Conozco toda la conversación con ${lead.name || 'el lead'}. Score: ${lead.score || 50}/100. ¿En qué te ayudo?` }
+  ])
+  const [coachInput, setCoachInput] = useState('')
+  const [coachChatLoading, setCoachChatLoading] = useState(false)
   const chatRef = useRef<HTMLDivElement>(null)
+  const coachChatRef = useRef<HTMLDivElement>(null)
 
   const products = (lead.product_opportunities || []) as any[]
   const meta = STAGE_META[lead.stage] || STAGE_META.unqualified
@@ -107,6 +113,30 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
     } catch {}
     setSending(false)
   }
+
+  async function askCoach(question: string) {
+    if (!question.trim() || coachChatLoading) return
+    const updated = [...coachMessages, { role: 'user', content: question }]
+    setCoachMessages(updated)
+    setCoachInput('')
+    setCoachChatLoading(true)
+    try {
+      const { data: hist } = await supabase.from('conversations').select('direction, message, created_at').eq('lead_id', lead.id).order('created_at', { ascending: true }).limit(30)
+      const res = await fetch('/api/coach-chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question, coach_history: updated,
+          lead_context: { name: lead.name, state: lead.state, family: lead.quiz_coverage_type, last_dentist: lead.quiz_dentist_last_visit, has_insurance: lead.quiz_has_insurance, color: lead.favorite_color || lead.color_favorito, score: lead.score, stage: lead.stage, hours_inactive: hoursInactive, product_opportunities: lead.product_opportunities },
+          conversation_history: hist || [],
+        }),
+      })
+      const data = await res.json()
+      setCoachMessages(prev => [...prev, { role: 'assistant', content: data.response }])
+    } catch { setCoachMessages(prev => [...prev, { role: 'assistant', content: 'Error al consultar. Intenta de nuevo.' }]) }
+    setCoachChatLoading(false)
+  }
+
+  useEffect(() => { coachChatRef.current?.scrollTo(0, coachChatRef.current.scrollHeight) }, [coachMessages])
 
   async function markClosed(stage: string, reason?: string) {
     const updates: any = { stage, fecha_cierre: new Date().toISOString(), resultado_final: stage === 'closed_won' ? 'vendido' : 'perdido' }
@@ -267,6 +297,60 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
                 {products.slice(1).map((p: any, i: number) => <p key={i} style={{ fontSize: '9px', color: '#34d399', margin: '2px 0' }}>💰 {p.product}</p>)}
               </div>
             )}
+
+            {/* Coach Chat */}
+            <div style={{ background: '#12121a', border: '1px solid rgba(167,139,250,0.12)', borderRadius: '10px', padding: '10px', marginTop: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                <span style={{ fontSize: '11px' }}>💬</span>
+                <span style={{ fontSize: '9px', fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Pregúntale al Coach</span>
+                {coachChatLoading && <span style={{ fontSize: '8px', color: '#a78bfa', marginLeft: 'auto' }}>pensando...</span>}
+              </div>
+
+              <div ref={coachChatRef} style={{ maxHeight: '220px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
+                {coachMessages.map((msg, i) => (
+                  <div key={i} style={{ display: 'flex', gap: '6px', flexDirection: msg.role === 'user' ? 'row-reverse' : 'row', alignItems: 'flex-start' }}>
+                    {msg.role === 'assistant' && (
+                      <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '7px', fontWeight: 700, color: '#a78bfa', flexShrink: 0 }}>IA</div>
+                    )}
+                    <div style={{
+                      maxWidth: '88%', padding: '6px 9px', fontSize: '10px', lineHeight: 1.5, whiteSpace: 'pre-wrap',
+                      borderRadius: msg.role === 'user' ? '9px 3px 9px 9px' : '3px 9px 9px 9px',
+                      background: msg.role === 'user' ? 'rgba(59,130,246,0.1)' : 'rgba(167,139,250,0.08)',
+                      border: `1px solid ${msg.role === 'user' ? 'rgba(59,130,246,0.15)' : 'rgba(167,139,250,0.15)'}`,
+                      color: '#e5e7eb',
+                    }}>
+                      {msg.content}
+                      {msg.role === 'assistant' && msg.content.includes('"') && (
+                        <button onClick={() => {
+                          const match = msg.content.match(/"([^"]+)"/)?.[1]
+                          if (match) setMsgInput(match)
+                        }} style={{ display: 'block', marginTop: '4px', padding: '3px 8px', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: '5px', fontSize: '8px', fontWeight: 600, color: '#a78bfa', cursor: 'pointer', width: '100%', textAlign: 'center' }}>
+                          Copiar mensaje sugerido →
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {coachChatLoading && (
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
+                    <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '7px', fontWeight: 700, color: '#a78bfa', flexShrink: 0 }}>IA</div>
+                    <div style={{ padding: '8px 12px', borderRadius: '3px 9px 9px 9px', background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.15)', fontSize: '14px', color: '#a78bfa' }}>...</div>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: '5px', marginBottom: '6px' }}>
+                <input value={coachInput} onChange={e => setCoachInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && askCoach(coachInput)}
+                  placeholder="Ej: ¿qué le digo?" style={{ flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: '7px', padding: '6px 9px', fontSize: '10px', color: '#f3f4f6', outline: 'none', fontFamily: C.font }} />
+                <button onClick={() => askCoach(coachInput)} disabled={coachChatLoading} style={{ padding: '6px 10px', background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.25)', borderRadius: '7px', fontSize: '12px', color: '#a78bfa', cursor: 'pointer', fontWeight: 600 }}>→</button>
+              </div>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                {['¿Qué le digo?', '¿Cómo manejo el precio?', '¿Es momento de cerrar?'].map(q => (
+                  <button key={q} onClick={() => askCoach(q)} style={{ fontSize: '8px', padding: '3px 7px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', color: '#9ca3af', cursor: 'pointer', whiteSpace: 'nowrap' }}>{q}</button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </div>
