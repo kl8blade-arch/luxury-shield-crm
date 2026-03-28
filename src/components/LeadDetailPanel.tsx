@@ -30,47 +30,61 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
   ])
   const [coachInput, setCoachInput] = useState('')
   const [coachChatLoading, setCoachChatLoading] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [tick, setTick] = useState(0)
   const chatRef = useRef<HTMLDivElement>(null)
+  const chatEndRef = useRef<HTMLDivElement>(null)
   const coachChatRef = useRef<HTMLDivElement>(null)
+  const lastMsgIdRef = useRef<string | null>(null)
+  const coachEnabledRef = useRef(coachEnabled)
 
   const products = (lead.product_opportunities || []) as any[]
   const meta = STAGE_META[lead.stage] || STAGE_META.unqualified
   const hoursInactive = Math.round((Date.now() - new Date(lead.updated_at || lead.created_at).getTime()) / 3600000)
-  const showCoachPanel = mode === 'manual' && coachEnabled
+  const showCoachPanel = coachEnabled // Independent of mode
   const currentPhase = getTempPhase(heatScore)
 
-  const loadConversations = useCallback(async () => {
-    const { data } = await supabase.from('conversations').select('*').eq('lead_id', lead.id).order('created_at', { ascending: true }).limit(showAllConvos ? 50 : 15)
-    setConversations(data || [])
-  }, [lead.id, showAllConvos])
+  // Keep ref in sync
+  useEffect(() => { coachEnabledRef.current = coachEnabled }, [coachEnabled])
+
+  // Stable message loader
+  const loadMessages = useCallback(async () => {
+    if (!lead?.id) return
+    const { data: msgs } = await supabase.from('conversations').select('*').eq('lead_id', lead.id).order('created_at', { ascending: true }).limit(50)
+    if (!msgs?.length) return
+
+    const lastMsg = msgs[msgs.length - 1]
+    if (lastMsg.id !== lastMsgIdRef.current) {
+      lastMsgIdRef.current = lastMsg.id
+      setConversations(msgs)
+      setLastUpdated(new Date())
+      setTimeout(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, 100)
+
+      // Trigger coaching on new inbound
+      if (lastMsg.direction === 'inbound' && coachEnabledRef.current) {
+        triggerCoaching(lastMsg.message)
+      }
+    }
+  }, [lead?.id])
 
   // Initial load
-  useEffect(() => { if (lead?.id) { loadConversations(); loadLatestCoaching() } }, [lead?.id, loadConversations])
-  useEffect(() => { chatRef.current?.scrollTo(0, chatRef.current.scrollHeight) }, [conversations])
+  useEffect(() => { if (lead?.id) { loadMessages(); loadLatestCoaching() } }, [lead?.id, loadMessages])
 
   // Persist coaching preference
   useEffect(() => { try { localStorage.setItem('coaching_enabled', String(coachEnabled)) } catch {} }, [coachEnabled])
 
-  // Polling: every 3s refresh chat + check for new inbound to trigger coaching
+  // Polling every 2.5s — stable, no stale closures
   useEffect(() => {
     if (!lead?.id) return
-    const interval = setInterval(async () => {
-      // Refresh conversations
-      const { data: latest } = await supabase.from('conversations').select('id, direction, message').eq('lead_id', lead.id).order('created_at', { ascending: false }).limit(1)
-      const lastMsg = latest?.[0]
-      if (!lastMsg) return
-
-      // Refresh chat if anything new
-      loadConversations()
-
-      // If new inbound message and coaching is enabled, trigger coaching
-      if (lastMsg.direction === 'inbound' && lastMsg.id !== lastProcessedMsgId && coachEnabled) {
-        setLastProcessedMsgId(lastMsg.id)
-        triggerCoaching(lastMsg.message)
-      }
-    }, 3000)
+    const interval = setInterval(loadMessages, 2500)
     return () => clearInterval(interval)
-  }, [lead?.id, lastProcessedMsgId, coachEnabled, loadConversations])
+  }, [lead?.id, loadMessages])
+
+  // Tick counter for live indicator
+  useEffect(() => {
+    const t = setInterval(() => setTick(c => c + 1), 1000)
+    return () => clearInterval(t)
+  }, [])
 
   async function loadLatestCoaching() {
     const { data } = await supabase.from('coaching_sessions').select('*').eq('lead_id', lead.id).order('created_at', { ascending: false }).limit(1)
@@ -109,7 +123,7 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
     try {
       await fetch('/api/agent-send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lead_id: lead.id, message: msgInput.trim() }) })
       setMsgInput('')
-      setTimeout(loadConversations, 500)
+      setTimeout(loadMessages, 500)
     } catch {}
     setSending(false)
   }
@@ -126,7 +140,7 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           question, coach_history: updated,
-          lead_context: { name: lead.name, state: lead.state, family: lead.quiz_coverage_type, last_dentist: lead.quiz_dentist_last_visit, has_insurance: lead.quiz_has_insurance, color: lead.favorite_color || lead.color_favorito, score: lead.score, stage: lead.stage, hours_inactive: hoursInactive, product_opportunities: lead.product_opportunities },
+          lead_context: { lead_id: lead.id, name: lead.name, state: lead.state, family: lead.quiz_coverage_type, last_dentist: lead.quiz_dentist_last_visit, has_insurance: lead.quiz_has_insurance, color: lead.favorite_color || lead.color_favorito, score: lead.score, stage: lead.stage, hours_inactive: hoursInactive, product_opportunities: lead.product_opportunities },
           conversation_history: hist || [],
         }),
       })
@@ -189,7 +203,14 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
 
         {/* Chat column */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {/* Chat */}
+          {/* Chat header with live indicator */}
+          <div style={{ padding: '4px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+            <span style={{ fontSize: '9px', color: C.textMuted }}>Conversación</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#34d399', boxShadow: '0 0 6px rgba(52,211,153,0.5)', animation: 'pulse 2s infinite' }} />
+              <span style={{ fontSize: '8px', color: C.textMuted }}>{lastUpdated ? `${Math.max(0, Math.floor((Date.now() - lastUpdated.getTime()) / 1000))}s` : '...'}</span>
+            </div>
+          </div>
           <div ref={chatRef} style={{ flex: 1, overflowY: 'auto', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
             {conversations.length === 0 ? <p style={{ color: C.textMuted, fontSize: '12px', textAlign: 'center', padding: '20px 0' }}>Sin mensajes</p> : conversations.map((msg, i) => {
               const isIn = msg.direction === 'inbound'
@@ -204,8 +225,9 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
                 </div>
               )
             })}
+            <div ref={chatEndRef} />
           </div>
-          <button onClick={() => { setShowAllConvos(!showAllConvos) }} style={{ padding: '3px', background: 'transparent', border: 'none', color: C.gold, fontSize: '9px', cursor: 'pointer' }}>{showAllConvos ? '↑ Menos' : '↓ Ver todo'}</button>
+          <button onClick={() => { setShowAllConvos(!showAllConvos); setTimeout(loadMessages, 100) }} style={{ padding: '3px', background: 'transparent', border: 'none', color: C.gold, fontSize: '9px', cursor: 'pointer' }}>{showAllConvos ? '↑ Menos' : '↓ Ver todo'}</button>
 
           {/* Temperature bar — always visible */}
           <div style={{ padding: '8px 14px', borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.01)' }}>
@@ -229,22 +251,22 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
             </div>
           </div>
 
-          {/* Manual mode: coaching toggle + input */}
-          {mode === 'manual' && (
-            <div style={{ padding: '8px 14px', borderTop: `1px solid ${C.border}` }}>
-              <div onClick={() => setCoachEnabled(!coachEnabled)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: coachEnabled ? 'rgba(167,139,250,0.08)' : 'rgba(255,255,255,0.02)', border: `1px solid ${coachEnabled ? 'rgba(167,139,250,0.2)' : 'rgba(255,255,255,0.06)'}`, borderRadius: '8px', marginBottom: '8px', cursor: 'pointer' }}>
-                <div style={{ width: '32px', height: '18px', borderRadius: '9px', background: coachEnabled ? '#a855f7' : 'rgba(255,255,255,0.1)', position: 'relative', transition: 'all 0.2s', flexShrink: 0 }}>
-                  <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: coachEnabled ? '#fff' : 'rgba(255,255,255,0.4)', position: 'absolute', top: '2px', left: coachEnabled ? '16px' : '2px', transition: 'all 0.2s' }} />
-                </div>
-                <span style={{ fontSize: '10px', fontWeight: 600, color: coachEnabled ? '#a855f7' : C.textMuted }}>Coaching IA {coachLoading ? '(analizando...)' : ''}</span>
+          {/* Coaching toggle (visible in ALL modes) + Agent input (manual only) */}
+          <div style={{ padding: '8px 14px', borderTop: `1px solid ${C.border}` }}>
+            <div onClick={() => setCoachEnabled(!coachEnabled)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 10px', background: coachEnabled ? 'rgba(167,139,250,0.08)' : 'rgba(255,255,255,0.02)', border: `1px solid ${coachEnabled ? 'rgba(167,139,250,0.2)' : 'rgba(255,255,255,0.06)'}`, borderRadius: '8px', marginBottom: mode === 'manual' ? '8px' : '0', cursor: 'pointer' }}>
+              <div style={{ width: '30px', height: '16px', borderRadius: '8px', background: coachEnabled ? '#a855f7' : 'rgba(255,255,255,0.1)', position: 'relative', transition: 'all 0.2s', flexShrink: 0 }}>
+                <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: coachEnabled ? '#fff' : 'rgba(255,255,255,0.4)', position: 'absolute', top: '2px', left: coachEnabled ? '16px' : '2px', transition: 'all 0.2s' }} />
               </div>
+              <span style={{ fontSize: '10px', fontWeight: 600, color: coachEnabled ? '#a855f7' : C.textMuted }}>Coaching IA {coachLoading ? '(analizando...)' : ''}</span>
+            </div>
+            {mode === 'manual' && (
               <div style={{ display: 'flex', gap: '6px' }}>
                 <input value={msgInput} onChange={e => setMsgInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendAgentMessage()}
                   placeholder="Escribe un mensaje..." style={{ flex: 1, padding: '8px 11px', borderRadius: '8px', fontSize: '12px', background: C.surface2, border: `1px solid ${C.border}`, color: C.text, outline: 'none', fontFamily: C.font }} />
                 <button onClick={sendAgentMessage} disabled={sending} style={{ padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, fontFamily: C.font, cursor: 'pointer', background: '#60a5fa', color: '#07080A', border: 'none', opacity: sending ? 0.5 : 1 }}>{sending ? '...' : '→'}</button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Coaching sidebar */}

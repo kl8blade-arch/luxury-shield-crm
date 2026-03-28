@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     })
     const result = await res.json()
 
-    // Save to conversations
+    // Save to conversations with sender='agent' to distinguish from Sophia
     await supabase.from('conversations').insert({
       lead_id,
       lead_name: lead.name,
