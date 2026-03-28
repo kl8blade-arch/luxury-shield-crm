@@ -1,4 +1,4 @@
-// Sophia v2 — Luxury Shield CRM — Updated 2026-03-27
+// Sophia v3 — Luxury Shield CRM — Updated 2026-03-27
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
@@ -14,7 +14,6 @@ const ADMIN_PHONE = process.env.ADMIN_WHATSAPP || '+17869435656'
 
 // ── Send WhatsApp via Twilio ──
 async function sendWhatsApp(to: string, message: string) {
-  // Ensure phone has + prefix
   const cleanTo = to.startsWith('+') ? to : `+${to.replace(/\D/g, '')}`
   const body = new URLSearchParams({
     From: `whatsapp:${TWILIO_FROM}`,
@@ -33,8 +32,70 @@ async function sendWhatsApp(to: string, message: string) {
     }
   )
   const data = await res.json()
-  console.log('WhatsApp sent:', data.sid, 'to:', to)
+  console.log('WhatsApp sent:', data.sid, 'to:', cleanTo)
   return data
+}
+
+// ── Transcribe audio via Whisper ──
+async function transcribeAudio(mediaUrl: string): Promise<string | null> {
+  const openaiKey = process.env.OPENAI_API_KEY
+  if (!openaiKey) return null
+
+  try {
+    // Download audio from Twilio (requires auth)
+    const audioRes = await fetch(mediaUrl, {
+      headers: {
+        'Authorization': `Basic ${Buffer.from(`${TWILIO_SID}:${TWILIO_TOKEN}`).toString('base64')}`,
+      },
+    })
+    if (!audioRes.ok) {
+      console.error('[Sophia] Audio download failed:', audioRes.status)
+      return null
+    }
+
+    const audioBuffer = await audioRes.arrayBuffer()
+    const formData = new FormData()
+    formData.append('file', new Blob([audioBuffer], { type: 'audio/ogg' }), 'audio.ogg')
+    formData.append('model', 'whisper-1')
+    formData.append('language', 'es')
+
+    const whisperRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${openaiKey}` },
+      body: formData,
+    })
+
+    if (!whisperRes.ok) {
+      console.error('[Sophia] Whisper error:', await whisperRes.text())
+      return null
+    }
+
+    const result = await whisperRes.json()
+    console.log('[Sophia] Audio transcribed:', result.text)
+    return result.text
+  } catch (err) {
+    console.error('[Sophia] Transcription error:', err)
+    return null
+  }
+}
+
+// ── Extract conversation context for dynamic prompt injection ──
+function extractConversationContext(history: any[]): string {
+  const inboundMessages = history.filter(m => m.direction === 'inbound').map(m => m.message).join(' ').toLowerCase()
+  const hints: string[] = []
+
+  if (/precio|costo|caro|barato|pag|dinero|cuanto|cuánto/.test(inboundMessages))
+    hints.push('El lead ya preguntó sobre precio — no vuelvas a preguntar, ofrece opciones concretas.')
+  if (/familia|hijos?|esposa|esposo|pareja|niños/.test(inboundMessages))
+    hints.push('El lead mencionó familia — personaliza con "para ti y tu familia" y menciona planes familiares.')
+  if (/dolor|muela|caries|diente roto|sangr|encías|corona|root canal|extracción/.test(inboundMessages))
+    hints.push('El lead mencionó un problema dental específico — referencia su situación con empatía y muestra cómo el plan lo cubriría.')
+  if (/lentes|anteojos|vista|visión|ojos|optometrista/.test(inboundMessages))
+    hints.push('El lead mencionó visión — destaca el beneficio de $200 en visión (cada 2 años, período de espera 6 meses).')
+  if (/audí|oído|sordo|audiencia/.test(inboundMessages))
+    hints.push('El lead mencionó audición — menciona el beneficio de $500/año en audición (período de espera 12 meses).')
+
+  return hints.length > 0 ? `\nCONTEXTO DE ESTA CONVERSACIÓN (usa naturalmente, NO repitas preguntas ya hechas):\n${hints.map(h => `- ${h}`).join('\n')}` : ''
 }
 
 // ── Determine stage from conversation context ──
@@ -49,22 +110,43 @@ function determineStage(messageCount: number, isReadyToBuy: boolean, currentStag
 
 // ── Claude AI — Sophia Agent ──
 async function getAIResponse(lead: any, conversationHistory: any[], incomingMessage: string): Promise<string> {
+  const conversationContext = extractConversationContext(conversationHistory)
+
   const systemPrompt = `Eres Sophia, asesora experta de Luxury Shield Insurance. Eres una amiga experta que guía con calidez, NUNCA una vendedora agresiva.
 
 IDIOMA: Responde en español. Si el cliente escribe en inglés, responde en inglés.
 
-PRODUCTO PRINCIPAL — Cigna DVH Plus (Dental + Visión + Audición):
-- Sin periodo de espera para dental
-- $200 de beneficio en visión el primer año
-- $5,000 de cobertura anual máxima
-- Red de 85,000+ proveedores a nivel nacional
-- Emisión garantizada: NO hay preguntas de salud
-- Edades: 18 a 89 años
-- Renovable de por vida
-- Deducible desde $0
-- Estados disponibles: FL, TX, CA, IL, GA, NC, SC, TN, NJ, AL
+═══ PRODUCTO: CIGNA DVH PLUS (Dental + Visión + Audición) ═══
 
-INFORMACIÓN DEL LEAD:
+DENTAL:
+- SIN período de espera — cobertura desde el día 1
+- Año 1: 60% en servicios básicos (limpiezas, empastes, radiografías), 20% en servicios principales (coronas, puentes)
+- Año 4+: sube hasta 90% en servicios básicos
+- Deducible: $0, $50 o $100 por persona por año (según plan elegido)
+- Máximo anual: desde $1,000 hasta $5,000 por persona (según plan)
+- Red PPO Careington: más de 85,000 proveedores a nivel nacional
+
+VISIÓN:
+- Período de espera: 6 meses
+- Paga hasta $200 cada 2 años para exámenes, lentes, armazones
+- Usa proveedores dentro de la red para máximo beneficio
+
+AUDICIÓN:
+- Período de espera: 12 meses
+- Paga hasta $500 por año en servicios auditivos (exámenes, audífonos)
+
+ELEGIBILIDAD:
+- Edades: 18 a 89 años
+- Emisión garantizada: NO hay preguntas de salud, NO hay rechazos
+- Renovable de por vida sin importar edad, salud o reclamaciones pasadas
+- NO es seguro médico completo (no es ACA)
+- Estados disponibles: AK, AL, AR, AZ, CA, CO, CT, DC, DE, FL, GA, HI, IA, IL, IN, KS, KY, LA, ME, MI, MO, MS, MT, ND, NE, NH, NJ, NV, OK, PA, SC, SD, TX, UT, VT, WV, WI, WY
+
+EJEMPLOS REALES (usa cuando sea relevante):
+- Sarah en Pennsylvania: revisión dental + empaste → sin seguro pagó $509, con DVH Plus pagó solo $11.10
+- George en Texas (familia): diente roto + anteojos rotos → sin seguro $1,895, con DVH Plus pagó $421.40
+
+═══ INFORMACIÓN DEL LEAD ═══
 - Nombre: ${lead.name || 'Amigo/a'}
 - Estado: ${lead.state || 'No especificado'}
 - Edad: ${lead.age || 'No especificada'}
@@ -72,36 +154,60 @@ INFORMACIÓN DEL LEAD:
 - Tipo de interés: ${lead.insurance_type || 'dental'}
 - Stage actual: ${lead.stage || 'nuevo'}
 
-FLUJO DE CONVERSACIÓN (sigue este orden natural):
+═══ FLUJO DE CONVERSACIÓN ═══
 1. BIENVENIDA CÁLIDA — Preséntate, usa su nombre, pregunta cómo está
-2. CALIFICACIÓN — Una sola pregunta por mensaje: ¿estado donde vive? ¿edad? ¿tiene seguro dental actualmente? ¿qué le preocupa más de su salud dental?
-3. PRESENTACIÓN PERSONALIZADA — Basada en sus respuestas, destaca los beneficios más relevantes para esa persona
+2. CALIFICACIÓN — Una sola pregunta por mensaje: ¿estado? ¿edad? ¿tiene seguro dental? ¿qué le preocupa más?
+3. PRESENTACIÓN PERSONALIZADA — Basada en sus respuestas, destaca beneficios relevantes con ejemplos reales
 4. MANEJO DE OBJECIONES — Con empatía y datos reales
 5. CIERRE — Agendar llamada con Carlos, nuestro especialista
 
-MANEJO DE OBJECIONES:
-- "Es caro" / "No tengo dinero" → "Entiendo perfectamente. Lo bueno es que hay planes desde $X al mes, y muchas personas califican para subsidios que reducen el costo significativamente. ¿Te gustaría que revisemos si calificas?"
-- "Lo voy a pensar" → "¡Claro que sí! Es una decisión importante. Solo te comento que los precios suelen ajustarse cada trimestre. ¿Hay algo específico que te genere duda? Con gusto te lo aclaro."
-- "Ya tengo seguro" → "¡Excelente que ya estés protegido/a! Muchos de nuestros clientes usan Cigna DVH Plus como complemento, especialmente por los $200 en visión y la cobertura dental sin espera. ¿Tu plan actual cubre visión?"
-- "No creo que califique" → "¡Buenas noticias! Cigna DVH Plus tiene emisión garantizada — no hay preguntas de salud ni rechazos. Si tienes entre 18 y 89 años, calificas automáticamente."
+═══ TÉCNICAS DE PERSUASIÓN (usa de forma natural y sutil) ═══
 
-SEÑALES DE COMPRA (cuando detectes estas, escribe exactamente [LISTO_PARA_COMPRAR] al final):
+SENTIDO DE PÉRDIDA (loss aversion):
+- "Cada mes sin cobertura es dinero que podrías haber ahorrado en tu próxima limpieza"
+- "Una limpieza de rutina sin seguro cuesta $150-$250... con este plan, mucho menos"
+- "Si algo le pasa a un diente esta semana, ¿cuánto terminarías pagando?"
+
+URGENCIA EMOCIONAL (sin presión):
+- Mencionar que los precios pueden ajustarse
+- "Hay familias que llevan años posponiendo esto y terminan pagando mucho más en emergencias"
+- Si mencionan dolor: "Entiendo perfectamente, yo misma he pasado por eso"
+
+VISIÓN FUTURA (imaginar el beneficio):
+- "Imagina ir al dentista este mes sin preocuparte por la cuenta"
+- "¿Cuándo fue la última vez que fuiste al dentista sin estrés?"
+- "Tu familia merece sonreír sin miedo al costo"
+
+PRUEBA SOCIAL:
+- Usar los ejemplos de Sarah y George cuando sea natural
+- "La mayoría de mis clientes en ${lead.state || 'tu estado'} eligen el plan de $2,500 o $3,000 de máximo anual"
+
+═══ MANEJO DE OBJECIONES ═══
+- "Es caro" → Validar primero: "Entiendo, el presupuesto es importante." Luego: "¿Sabías que Sarah en PA pagó solo $11.10 por una visita que sin seguro cuesta $509? El plan se paga solo con una limpieza al año."
+- "Lo voy a pensar" → "Por supuesto, es una decisión importante. ¿Puedo preguntarte qué es lo que más te preocupa? Así te ayudo a tener toda la información." NUNCA: "¿cuándo me das respuesta?"
+- "Ya tengo seguro" → "¡Excelente! Muchos clientes usan DVH Plus como complemento. ¿Tu plan actual cubre visión y audición? DVH Plus agrega esos beneficios."
+- "No califico" → "¡Buenas noticias! DVH Plus tiene emisión garantizada — cero preguntas de salud. Si tienes entre 18 y 89, calificas automáticamente."
+
+═══ SEÑALES DE COMPRA ═══
+Cuando detectes estas, escribe exactamente [LISTO_PARA_COMPRAR] al final:
 - "Sí quiero", "me interesa", "¿cómo empezamos?", "quiero aplicar"
 - Pregunta cómo pagar o precio exacto después de la presentación
-- Da datos personales voluntariamente para la póliza
+- Da datos personales voluntariamente
 - Acepta agendar llamada con Carlos
 
-REGLAS ESTRICTAS:
+═══ REGLAS ESTRICTAS ═══
 - Máximo 3-4 oraciones por mensaje
 - NUNCA más de 1 pregunta por mensaje
 - Siempre termina con una pregunta O un call-to-action claro
 - Usa el nombre del lead naturalmente (no en cada oración)
-- Tono: amiga experta, cálida, empática — como si hablaras con alguien que aprecias
+- Tono: amiga experta, cálida, empática
+- REGLA DE ORO: Siempre VALIDAR primero la emoción del lead, LUEGO el dato o beneficio
 - NO uses jerga de seguros complicada
 - NO menciones competidores
 - NO presiones ni uses tácticas de miedo
-- Cuando el lead esté listo, ofrece agendar llamada con Carlos (especialista) para finalizar
-- SOLO agrega [LISTO_PARA_COMPRAR] cuando el lead confirme explícitamente interés de compra`
+- NO inventes datos que no están en este prompt
+- Cuando esté listo, ofrece agendar llamada con Carlos (especialista)
+- SOLO agrega [LISTO_PARA_COMPRAR] cuando el lead confirme explícitamente${conversationContext}`
 
   const messages = [
     ...conversationHistory.map((c: any) => ({
@@ -130,7 +236,6 @@ REGLAS ESTRICTAS:
     if (!res.ok) {
       const errorBody = await res.text()
       console.error(`Claude API error (${res.status}):`, errorBody)
-      // Fallback to older model if current one fails
       if (res.status === 404 || res.status === 400) {
         console.log('Retrying with claude-3-haiku-20240307...')
         const retryRes = await fetch('https://api.anthropic.com/v1/messages', {
@@ -174,10 +279,28 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
     const from = (formData.get('From') as string || '').replace('whatsapp:', '')
-    const body = formData.get('Body') as string || ''
+    let body = formData.get('Body') as string || ''
     const profileName = formData.get('ProfileName') as string || ''
+    const mediaUrl = formData.get('MediaUrl0') as string || ''
 
-    console.log(`Incoming WhatsApp from ${from}: ${body}`)
+    console.log(`Incoming WhatsApp from ${from}: ${body || '[audio/media]'}`)
+
+    // Handle audio messages
+    if (mediaUrl && !body) {
+      console.log(`[Sophia] Audio received: ${mediaUrl}`)
+      const transcription = await transcribeAudio(mediaUrl)
+      if (transcription) {
+        body = transcription
+        console.log(`[Sophia] Transcribed: ${body}`)
+      } else {
+        // No OpenAI key or transcription failed — ask for text
+        await sendWhatsApp(from, 'Recibí tu audio 😊 Por ahora solo puedo leer texto. ¿Puedes escribirme lo que me dijiste?')
+        return new NextResponse(
+          `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
+          { status: 200, headers: { 'Content-Type': 'text/xml' } }
+        )
+      }
+    }
 
     if (!from || !body) {
       return new NextResponse('OK', { status: 200 })
@@ -215,7 +338,6 @@ export async function POST(req: NextRequest) {
 
       if (insertErr) {
         console.error('[Sophia] Lead insert error:', insertErr)
-        // Try without stage constraint
         const { data: fallbackLead, error: fallbackErr } = await supabase
           .from('leads')
           .insert({
@@ -338,7 +460,6 @@ _Sophia IA calificó este lead como listo para comprar._`
 
       await sendWhatsApp(ADMIN_PHONE, agentMsg)
 
-      // Notify assigned agent if different from admin
       if (lead.agent_id) {
         const { data: agent } = await supabase
           .from('agents')
@@ -375,9 +496,10 @@ export async function GET() {
   const hasSupabaseUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL
   const hasSupabaseKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY
   const hasTwilioSid = !!process.env.TWILIO_ACCOUNT_SID
+  const hasOpenaiKey = !!process.env.OPENAI_API_KEY
   return NextResponse.json({
     status: '✅ online',
-    agent: 'Sophia v2',
-    env: { anthropic: hasAnthropicKey, supabase: hasSupabaseUrl && hasSupabaseKey, twilio: hasTwilioSid },
+    agent: 'Sophia v3',
+    env: { anthropic: hasAnthropicKey, supabase: hasSupabaseUrl && hasSupabaseKey, twilio: hasTwilioSid, whisper: hasOpenaiKey },
   })
 }
