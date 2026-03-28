@@ -14,9 +14,11 @@ const ADMIN_PHONE = process.env.ADMIN_WHATSAPP || '+17869435656'
 
 // ── Send WhatsApp via Twilio ──
 async function sendWhatsApp(to: string, message: string) {
+  // Ensure phone has + prefix
+  const cleanTo = to.startsWith('+') ? to : `+${to.replace(/\D/g, '')}`
   const body = new URLSearchParams({
     From: `whatsapp:${TWILIO_FROM}`,
-    To: `whatsapp:${to}`,
+    To: `whatsapp:${cleanTo}`,
     Body: message,
   })
   const res = await fetch(
@@ -109,23 +111,62 @@ REGLAS ESTRICTAS:
     { role: 'user' as const, content: incomingMessage }
   ]
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY!,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 400,
-      system: systemPrompt,
-      messages,
-    }),
-  })
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY!,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 400,
+        system: systemPrompt,
+        messages,
+      }),
+    })
 
-  const data = await res.json()
-  return data.content?.[0]?.text || 'Hola, soy Sophia de Luxury Shield 😊 ¿En qué puedo ayudarte hoy?'
+    if (!res.ok) {
+      const errorBody = await res.text()
+      console.error(`Claude API error (${res.status}):`, errorBody)
+      // Fallback to older model if current one fails
+      if (res.status === 404 || res.status === 400) {
+        console.log('Retrying with claude-3-5-sonnet-20241022...')
+        const retryRes = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': process.env.ANTHROPIC_API_KEY!,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: 'claude-3-5-sonnet-20241022',
+            max_tokens: 400,
+            system: systemPrompt,
+            messages,
+          }),
+        })
+        if (retryRes.ok) {
+          const retryData = await retryRes.json()
+          return retryData.content?.[0]?.text || 'Hola, soy Sophia de Luxury Shield 😊 ¿En qué puedo ayudarte hoy?'
+        }
+        const retryError = await retryRes.text()
+        console.error(`Claude API retry also failed (${retryRes.status}):`, retryError)
+      }
+      return 'Hola, soy Sophia de Luxury Shield 😊 ¿En qué puedo ayudarte hoy?'
+    }
+
+    const data = await res.json()
+    const text = data.content?.[0]?.text
+    if (!text) {
+      console.error('Claude API returned empty content:', JSON.stringify(data))
+    }
+    return text || 'Hola, soy Sophia de Luxury Shield 😊 ¿En qué puedo ayudarte hoy?'
+  } catch (err) {
+    console.error('Claude API fetch error:', err)
+    return 'Hola, soy Sophia de Luxury Shield 😊 ¿En qué puedo ayudarte hoy?'
+  }
 }
 
 // ── POST: Twilio Webhook — incoming WhatsApp messages ──
