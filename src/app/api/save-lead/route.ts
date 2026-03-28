@@ -97,6 +97,51 @@ export async function POST(req: NextRequest) {
       message: body.mensaje || body.message,
     })
 
+    // Check if lead already exists with this phone number
+    const last10 = phone.slice(-10)
+    const { data: existingLeads } = await supabase
+      .from('leads')
+      .select('id')
+      .or(`phone.eq.${phone},phone.eq.${last10},phone.eq.+1${phone},phone.eq.+${phone}`)
+      .limit(1)
+
+    if (existingLeads && existingLeads.length > 0) {
+      // Update existing lead instead of creating duplicate
+      const { data: lead, error: leadError } = await supabase
+        .from('leads')
+        .update({
+          name, state, email: body.email || undefined,
+          age: body.edad || body.age || undefined,
+          has_insurance: body.tiene_seguro_actual ?? body.has_insurance ?? false,
+          message: body.mensaje || body.message || undefined,
+          favorite_color: body.color_favorito || body.favorite_color || undefined,
+          insurance_type: insuranceType,
+          score, score_recommendation: recommendation,
+          quiz_dentist_last_visit: body.quiz_dentist_last_visit || undefined,
+          quiz_coverage_type: body.quiz_coverage_type || undefined,
+          quiz_has_insurance: body.quiz_has_insurance || undefined,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingLeads[0].id)
+        .select().single()
+
+      if (leadError) throw leadError
+      console.log(`[save-lead] Updated existing lead ${lead.id} for phone ${phone}`)
+
+      // Still do assignment + trigger AI contact
+      const assigned = await assignLeadToAgent(supabase)
+      let assignedTo = 'SeguriSSimo'
+      if (assigned) {
+        await supabase.from('leads').update({ agent_id: assigned.agentId, assigned_to: assigned.agentName, stage: 'contact' }).eq('id', lead.id)
+        assignedTo = assigned.agentName
+      }
+
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://luxury-shield-crm.vercel.app'
+      fetch(`${appUrl}/api/ai-contact`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lead_id: lead.id }) }).catch(e => console.error('AI contact error:', e))
+
+      return NextResponse.json({ success: true, lead_id: lead.id, score, assigned_to: assignedTo, message: 'Lead actualizado', updated: true })
+    }
+
     const { data: lead, error: leadError } = await supabase
       .from('leads')
       .insert({

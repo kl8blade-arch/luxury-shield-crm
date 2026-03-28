@@ -693,12 +693,12 @@ export async function POST(req: NextRequest) {
 
     // ── SYSTEM 1: Detect if message is from an AGENT ──
     const cleanFromPhone = from.replace(/\D/g, '')
-    const { data: senderAgent } = await supabase
+    const { data: agentMatches } = await supabase
       .from('agents')
       .select('*')
       .or(`whatsapp_number.eq.${from},whatsapp_number.eq.+${cleanFromPhone},phone.eq.${cleanFromPhone},phone.eq.+${cleanFromPhone}`)
       .limit(1)
-      .single()
+    const senderAgent = agentMatches?.[0] || null
 
     if (senderAgent) {
       console.log(`[Agent Parser] Message from agent: ${senderAgent.name} — "${body}"`)
@@ -714,18 +714,37 @@ export async function POST(req: NextRequest) {
 
     console.log(`[Sophia] Looking up lead: digits=${digitsOnly} last10=${last10} withPlus=${withPlus}`)
 
-    const { data: leads, error: leadErr } = await supabase
+    const { data: allLeads, error: leadErr } = await supabase
       .from('leads')
       .select('*')
       .or(`phone.eq.${digitsOnly},phone.eq.${last10},phone.eq.${withPlus},phone.eq.+${digitsOnly},phone.eq.${from},phone.eq.${with1}`)
       .order('created_at', { ascending: false })
-      .limit(1)
 
     if (leadErr) console.error('[Sophia] Lead lookup error:', leadErr)
+    console.log(`[SOPHIA] leads encontrados para este número: ${allLeads?.length || 0}`)
 
-    let lead = leads?.[0]
+    // Select the lead with the most conversations (the "primary" one)
+    let lead: any = null
+    if (allLeads && allLeads.length > 0) {
+      if (allLeads.length === 1) {
+        lead = allLeads[0]
+      } else {
+        let maxMsgs = -1
+        for (const candidate of allLeads) {
+          const { count } = await supabase
+            .from('conversations')
+            .select('id', { count: 'exact', head: true })
+            .eq('lead_id', candidate.id)
+          const c = count || 0
+          if (c > maxMsgs) { maxMsgs = c; lead = candidate }
+        }
+        // If none have conversations, use most recent
+        if (!lead || maxMsgs === 0) lead = allLeads[0]
+        console.log(`[SOPHIA] lead seleccionado (${allLeads.length} candidatos): ${lead.id} — ${lead.name} (${maxMsgs} msgs)`)
+      }
+    }
 
-    // Create lead if not found
+    // Create lead ONLY if none found
     if (!lead) {
       console.log(`[Sophia] Creating new lead for ${from}`)
       const { data: newLead, error: insertErr } = await supabase
