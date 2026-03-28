@@ -783,6 +783,7 @@ export async function POST(req: NextRequest) {
           source: 'whatsapp_inbound',
           score: 40,
           ia_active: true,
+          conversation_mode: 'sophia',
         })
         .select()
         .single()
@@ -796,6 +797,7 @@ export async function POST(req: NextRequest) {
             phone: from,
             source: 'whatsapp_inbound',
             score: 40,
+            conversation_mode: 'sophia',
           })
           .select()
           .single()
@@ -816,19 +818,37 @@ export async function POST(req: NextRequest) {
 
     console.log(`[Sophia] Lead found: ${lead.id} — ${lead.name} — stage: ${lead.stage} — mode: ${lead.conversation_mode || 'sophia'}`)
 
+    // Refrescar el lead desde Supabase para tener el modo más reciente
+    // Esto evita que un duplicado con conversation_mode=null pase el check
+    const { data: freshLead } = await supabase
+      .from('leads')
+      .select('conversation_mode, sophia_processing, score, stage, color_favorito, favorite_color, state, name, phone, id, quiz_coverage_type, quiz_dentist_last_visit, quiz_has_insurance, dependents, product_opportunities, updated_at, manual_ended_at, has_insurance, age, insurance_type, preferred_language, total_messages, last_message_at')
+      .eq('id', lead.id)
+      .single()
+
+    if (freshLead) {
+      Object.assign(lead, freshLead)
+    }
+
+    console.log(`[Sophia] Fresh mode check: ${lead.conversation_mode} for ${lead.name}`)
+
     // ══════════════════════════════════════════════
-    // BUG FIX 1: BLOCK SOPHIA IF MODE IS MANUAL/COACHING
+    // BLOCK SOPHIA IF MODE IS MANUAL/COACHING
     // This MUST be before any Claude call
     // ══════════════════════════════════════════════
-    if (lead.conversation_mode === 'manual' || lead.conversation_mode === 'coaching') {
-      // Save inbound message but don't generate AI response
+    const isManualMode = lead.conversation_mode === 'manual' || lead.conversation_mode === 'coaching'
+
+    if (isManualMode) {
       await supabase.from('conversations').insert({
         lead_id: lead.id, lead_name: lead.name, lead_phone: from,
         channel: 'whatsapp', direction: 'inbound', message: body,
+        created_at: new Date().toISOString(),
       })
-      await supabase.from('leads').update({ last_contact: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', lead.id)
+      await supabase.from('leads').update({
+        last_contact: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq('id', lead.id)
 
-      // If coaching mode, trigger coaching API (non-blocking)
       if (lead.conversation_mode === 'coaching') {
         const { data: hist } = await supabase.from('conversations').select('direction, message').eq('lead_id', lead.id).order('created_at', { ascending: true }).limit(20)
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://luxury-shield-crm.vercel.app'
@@ -838,12 +858,12 @@ export async function POST(req: NextRequest) {
           body: JSON.stringify({
             lead_id: lead.id, last_message: body,
             conversation_history: hist || [],
-            lead_context: { name: lead.name, state: lead.state, family: lead.quiz_coverage_type, insurance: lead.has_insurance, color: lead.favorite_color || lead.color_favorito, score: lead.score },
+            lead_context: { name: lead.name, state: lead.state, family: lead.quiz_coverage_type, color: lead.color_favorito, score: lead.score },
           }),
         }).catch(() => {})
       }
 
-      console.log(`[Sophia] Mode ${lead.conversation_mode} — saved msg, no auto-response`)
+      console.log(`[Sophia] BLOCKED — mode: ${lead.conversation_mode} for ${lead.name}`)
       return new NextResponse(
         `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
         { status: 200, headers: { 'Content-Type': 'text/xml' } }
