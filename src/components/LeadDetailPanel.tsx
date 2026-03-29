@@ -139,6 +139,7 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
 
   const [transitionMsg, setTransitionMsg] = useState('')
   const [showTransitionModal, setShowTransitionModal] = useState(false)
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
 
   async function changeMode(newMode: Mode) {
     const prevMode = mode
@@ -174,6 +175,11 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
       setTimeout(loadMessages, 500)
     } catch {}
     setSending(false)
+  }
+
+  function parseCoachResponse(content: string): { analysis: string; suggestions: { label: string; message: string }[]; tip: string } {
+    try { const p = JSON.parse(content.replace(/```json\n?|\n?```/g, '').trim()); if (p.analysis !== undefined) return p } catch {}
+    return { analysis: content, suggestions: [], tip: '' }
   }
 
   function extractSuggested(coachText: string): string {
@@ -429,24 +435,39 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
 
               <div ref={coachChatRef} style={{ maxHeight: '220px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
                 {coachMessages.map((msg, i) => (
-                  <div key={i} style={{ display: 'flex', gap: '6px', flexDirection: msg.role === 'user' ? 'row-reverse' : 'row', alignItems: 'flex-start' }}>
-                    {msg.role === 'assistant' && (
-                      <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '7px', fontWeight: 700, color: '#a78bfa', flexShrink: 0 }}>IA</div>
-                    )}
-                    <div style={{
-                      maxWidth: '88%', padding: '6px 9px', fontSize: '10px', lineHeight: 1.5, whiteSpace: 'pre-wrap',
-                      borderRadius: msg.role === 'user' ? '9px 3px 9px 9px' : '3px 9px 9px 9px',
-                      background: msg.role === 'user' ? 'rgba(59,130,246,0.1)' : 'rgba(167,139,250,0.08)',
-                      border: `1px solid ${msg.role === 'user' ? 'rgba(59,130,246,0.15)' : 'rgba(167,139,250,0.15)'}`,
-                      color: '#e5e7eb',
-                    }}>
-                      {msg.content}
-                      {msg.role === 'assistant' && msg.content.includes('"') && (
-                        <button onClick={(e) => { copyToInput(extractSuggested(msg.content)); const b = e.currentTarget; b.textContent = '✓ Copiado'; b.style.color = '#4ade80'; b.style.borderColor = 'rgba(34,197,94,0.3)'; setTimeout(() => { b.textContent = 'Copiar mensaje →'; b.style.color = ''; b.style.borderColor = '' }, 2000) }} style={{ display: 'block', marginTop: '4px', padding: '3px 8px', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: '5px', fontSize: '8px', fontWeight: 600, color: '#a78bfa', cursor: 'pointer', width: '100%', textAlign: 'center' }}>
-                          Copiar mensaje →
-                        </button>
-                      )}
-                    </div>
+                  <div key={i}>
+                    {msg.role === 'user' ? (
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '4px' }}>
+                        <div style={{ maxWidth: '88%', padding: '6px 9px', fontSize: '10px', lineHeight: 1.5, borderRadius: '9px 3px 9px 9px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.15)', color: '#e5e7eb' }}>{msg.content}</div>
+                      </div>
+                    ) : (() => {
+                      const parsed = parseCoachResponse(msg.content)
+                      return (
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start', marginBottom: '4px' }}>
+                          <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '7px', fontWeight: 700, color: '#a78bfa', flexShrink: 0 }}>IA</div>
+                          <div style={{ flex: 1 }}>
+                            {parsed.analysis && (
+                              <div style={{ fontSize: '10px', color: '#d1d5db', lineHeight: 1.5, padding: '7px 10px', background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.15)', borderRadius: '3px 10px 10px 10px', marginBottom: parsed.suggestions?.length ? '6px' : '0', whiteSpace: 'pre-wrap' }}>{parsed.analysis}</div>
+                            )}
+                            {parsed.suggestions?.length > 0 && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                {parsed.suggestions.map((s: any, idx: number) => (
+                                  <div key={idx} onClick={() => { copyToInput(s.message); setCopiedIdx(idx); setTimeout(() => setCopiedIdx(null), 2000) }}
+                                    style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${copiedIdx === idx ? 'rgba(52,211,153,0.3)' : 'rgba(255,255,255,0.08)'}`, borderRadius: '8px', padding: '8px 10px', cursor: 'pointer', transition: 'all 0.15s' }}
+                                    onMouseEnter={e => { if (copiedIdx !== idx) { (e.currentTarget as HTMLDivElement).style.background = 'rgba(201,168,76,0.08)'; (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(201,168,76,0.25)' } }}
+                                    onMouseLeave={e => { if (copiedIdx !== idx) { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)'; (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.08)' } }}>
+                                    <div style={{ fontSize: '8px', fontWeight: 700, color: C.gold, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>{idx + 1}. {s.label}</div>
+                                    <div style={{ fontSize: '10px', color: '#e5e7eb', lineHeight: 1.5 }}>{s.message}</div>
+                                    <div style={{ marginTop: '5px', fontSize: '9px', fontWeight: 600, color: copiedIdx === idx ? '#4ade80' : '#a78bfa' }}>{copiedIdx === idx ? '✓ Copiado al input' : '↓ Tap para usar'}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {parsed.tip && <div style={{ marginTop: '6px', fontSize: '9px', color: '#6b7280', fontStyle: 'italic', padding: '3px 8px', borderLeft: '2px solid rgba(201,168,76,0.3)' }}>{parsed.tip}</div>}
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </div>
                 ))}
                 {coachChatLoading && (
@@ -464,7 +485,7 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
               </div>
 
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                {['¿Qué le digo?', '¿Cómo manejo el precio?', '¿Es momento de cerrar?'].map(q => (
+                {['¿Qué le digo ahora?', 'No ha contestado', '¿Cómo cierro?', 'Dice que es caro'].map(q => (
                   <button key={q} onClick={() => askCoach(q)} style={{ fontSize: '8px', padding: '3px 7px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', color: '#9ca3af', cursor: 'pointer', whiteSpace: 'nowrap' }}>{q}</button>
                 ))}
               </div>

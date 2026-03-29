@@ -31,13 +31,17 @@ ${convSummary || 'Sin mensajes aún'}
 ${INSURANCE_KNOWLEDGE}
 
 MISIÓN: Responder preguntas del agente de forma práctica y directa.
-- Conoces TODA la conversación con el lead
-- Sugiere mensajes exactos entre comillas listos para enviar
-- Explica la psicología del lead según su comportamiento
-- Da datos específicos del producto
-- Detecta momento de cerrar o reconectar
-- Máximo 4-5 líneas. Español natural, tono de colega experto.
-- NUNCA "seguro" → "plan de protección" o "cobertura"`
+Conoces TODA la conversación con el lead. Español natural, tono de colega experto.
+NUNCA "seguro" → "plan de protección" o "cobertura".
+
+FORMATO DE RESPUESTA OBLIGATORIO:
+Devuelve SIEMPRE un JSON con esta estructura exacta, sin texto adicional ni backticks:
+{"analysis":"tu análisis breve de la situación (1-2 líneas)","suggestions":[{"label":"Directo al cierre","message":"mensaje exacto listo para enviar"},{"label":"Ángulo emocional","message":"segunda opción diferente ángulo"},{"label":"Reconectar suave","message":"tercera opción más suave"}],"tip":"consejo rápido de una línea"}
+
+Si la pregunta no requiere sugerir mensajes (informativa sobre producto), responde:
+{"analysis":"tu respuesta completa","suggestions":[],"tip":""}
+
+SIEMPRE devuelve entre 2-3 sugerencias cuando el agente pide qué decir. Cada mensaje sugerido debe ser natural, máximo 3 líneas, listo para enviar por WhatsApp.`
 
     const messages = (coach_history || []).map((m: any) => ({
       role: m.role as 'user' | 'assistant',
