@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, Kanban, Bell,
   MessageSquare, Settings, Shield,
-  UserCheck, Package, ChevronRight, BarChart3,
+  UserCheck, Package, ChevronRight, BarChart3, Brain,
 } from 'lucide-react'
 
 const NAV = [
@@ -16,6 +16,7 @@ const NAV = [
   { href: '/templates',  icon: MessageSquare,   label: 'Plantillas',      badge: null },
   { href: '/agents',     icon: UserCheck,       label: 'Agentes',         badge: null },
   { href: '/packages',   icon: Package,         label: 'Paquetes',        badge: null },
+  { href: '/training',   icon: Brain,           label: 'SophiaModel',     badge: null },
   { href: '/settings',   icon: Settings,        label: 'Configuración',   badge: null },
 ]
 

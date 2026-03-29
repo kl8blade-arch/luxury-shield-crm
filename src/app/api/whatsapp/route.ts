@@ -627,6 +627,8 @@ Ejemplos:
       try {
         const { learnFromClosedDeal } = await import('@/lib/sophia-learning')
         learnFromClosedDeal(supabase, lead.id, process.env.ANTHROPIC_API_KEY!).catch(() => {})
+        const { extractTrainingData } = await import('@/lib/training-pipeline')
+        extractTrainingData(supabase, lead.id).catch(() => {})
       } catch {}
     }
 
@@ -1083,10 +1085,12 @@ export async function POST(req: NextRequest) {
         await supabase.from('leads').update({ product_opportunities: opps }).eq('id', lead.id)
       } catch {}
 
-      // Module 1: Trigger learning from this conversation
+      // Module 1: Trigger learning + training data extraction
       try {
         const { learnFromClosedDeal } = await import('@/lib/sophia-learning')
         learnFromClosedDeal(supabase, lead.id, process.env.ANTHROPIC_API_KEY!).catch(() => {})
+        const { extractTrainingData } = await import('@/lib/training-pipeline')
+        extractTrainingData(supabase, lead.id).catch(() => {})
       } catch {}
 
       // Generate battle card with Claude
