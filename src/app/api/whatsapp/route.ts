@@ -820,27 +820,26 @@ export async function POST(req: NextRequest) {
 
     console.log(`[Sophia] Lead found: ${lead.id} — ${lead.name} — stage: ${lead.stage} — mode: ${lead.conversation_mode || 'sophia'}`)
 
-    // Refrescar el lead desde Supabase para tener el modo más reciente
-    // Esto evita que un duplicado con conversation_mode=null pase el check
-    const { data: freshLead } = await supabase
+    // ══════════════════════════════════════════════
+    // FRESH MODE CHECK — query DB directly, not stale lead object
+    // ══════════════════════════════════════════════
+    const { data: freshMode } = await supabase
       .from('leads')
-      .select('conversation_mode, sophia_processing, score, stage, color_favorito, favorite_color, state, name, phone, id, quiz_coverage_type, quiz_dentist_last_visit, quiz_has_insurance, dependents, product_opportunities, updated_at, manual_ended_at, has_insurance, age, insurance_type, preferred_language, total_messages, last_message_at')
+      .select('conversation_mode, sophia_processing')
       .eq('id', lead.id)
       .single()
 
-    if (freshLead) {
-      Object.assign(lead, freshLead)
-    }
+    const currentMode = freshMode?.conversation_mode || 'sophia'
+    console.log(`[MODE CHECK] Lead: ${lead.name} | DB mode: ${currentMode} | Object mode: ${lead.conversation_mode}`)
 
-    console.log(`[Sophia] Fresh mode check: ${lead.conversation_mode} for ${lead.name}`)
+    // Update lead object with fresh data
+    lead.conversation_mode = currentMode
+    lead.sophia_processing = freshMode?.sophia_processing || false
 
-    // ══════════════════════════════════════════════
     // BLOCK SOPHIA IF MODE IS MANUAL/COACHING
-    // This MUST be before any Claude call
-    // ══════════════════════════════════════════════
-    const isManualMode = lead.conversation_mode === 'manual' || lead.conversation_mode === 'coaching'
+    if (currentMode === 'manual' || currentMode === 'coaching') {
+      console.log(`[SOPHIA BLOCKED] ${lead.name} en modo ${currentMode}`)
 
-    if (isManualMode) {
       await supabase.from('conversations').insert({
         lead_id: lead.id, lead_name: lead.name, lead_phone: from,
         channel: 'whatsapp', direction: 'inbound', message: body,
@@ -849,9 +848,10 @@ export async function POST(req: NextRequest) {
       await supabase.from('leads').update({
         last_contact: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        last_message_at: new Date().toISOString(),
       }).eq('id', lead.id)
 
-      if (lead.conversation_mode === 'coaching') {
+      if (currentMode === 'coaching') {
         const { data: hist } = await supabase.from('conversations').select('direction, message').eq('lead_id', lead.id).order('created_at', { ascending: true }).limit(20)
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://luxury-shield-crm.vercel.app'
         fetch(`${appUrl}/api/coaching`, {
@@ -865,12 +865,13 @@ export async function POST(req: NextRequest) {
         }).catch(() => {})
       }
 
-      console.log(`[Sophia] BLOCKED — mode: ${lead.conversation_mode} for ${lead.name}`)
       return new NextResponse(
         `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
         { status: 200, headers: { 'Content-Type': 'text/xml' } }
       )
     }
+
+    console.log(`[SOPHIA ACTIVE] Processing response for ${lead.name}`)
 
     // ══════════════════════════════════════════════
     // BUG FIX 5: Processing lock + rate limit

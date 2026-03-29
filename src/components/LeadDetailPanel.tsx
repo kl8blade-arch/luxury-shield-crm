@@ -137,21 +137,29 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
     setCoachLoading(false)
   }
 
+  const [transitionMsg, setTransitionMsg] = useState('')
+  const [showTransitionModal, setShowTransitionModal] = useState(false)
+
   async function changeMode(newMode: Mode) {
     const prevMode = mode
+
+    // Update DB FIRST
+    const { error } = await supabase.from('leads').update({
+      conversation_mode: newMode,
+      updated_at: new Date().toISOString(),
+      ...(prevMode === 'manual' && newMode === 'sophia' ? { manual_ended_at: new Date().toISOString() } : {}),
+    }).eq('id', lead.id)
+
+    if (error) { console.error('[MODE CHANGE] Error:', error); return }
+
+    console.log(`[MODE CHANGE] ${lead.name}: ${prevMode} → ${newMode}`)
     setMode(newMode)
 
+    // Sophia → Manual: show transition modal (DON'T auto-send)
     if (prevMode === 'sophia' && newMode === 'manual') {
-      // Sophia → Manual: send transition message
       const name = lead.name?.split(' ')[0] || ''
-      const transMsg = `${name}, ahora te atiende directamente nuestro especialista. Está aquí para ayudarte 😊`
-      await fetch('/api/agent-send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lead_id: lead.id, message: transMsg }) })
-      await supabase.from('leads').update({ conversation_mode: 'manual' }).eq('id', lead.id)
-    } else if (prevMode === 'manual' && newMode === 'sophia') {
-      // Manual → Sophia: record timestamp so Sophia reconnects naturally
-      await supabase.from('leads').update({ conversation_mode: 'sophia', manual_ended_at: new Date().toISOString() }).eq('id', lead.id)
-    } else {
-      await supabase.from('leads').update({ conversation_mode: newMode }).eq('id', lead.id)
+      setTransitionMsg(`${name}, ahora te atiende directamente nuestro especialista. Está aquí para ayudarte 😊`)
+      setShowTransitionModal(true)
     }
 
     setTimeout(loadMessages, 500)
@@ -464,6 +472,23 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
           </div>
         )}
       </div>
+
+      {/* Transition modal */}
+      {showTransitionModal && (
+        <div style={{ padding: '12px 16px', background: '#1a1a2e', border: '1px solid rgba(201,168,76,0.3)', borderRadius: '0', borderLeft: 'none', borderRight: 'none' }}>
+          <p style={{ fontSize: '10px', fontWeight: 700, color: C.gold, textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 8px' }}>Mensaje sugerido de transición</p>
+          <textarea value={transitionMsg} onChange={e => setTransitionMsg(e.target.value)} rows={3}
+            style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '8px 10px', fontSize: '12px', color: '#f3f4f6', resize: 'none', outline: 'none', fontFamily: C.font, boxSizing: 'border-box' as const }} />
+          <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+            <button onClick={async () => { if (transitionMsg.trim()) { await fetch('/api/agent-send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lead_id: lead.id, message: transitionMsg }) }); setTimeout(loadMessages, 500) }; setShowTransitionModal(false); setTransitionMsg('') }}
+              style={{ flex: 1, padding: '7px', background: C.gold, border: 'none', borderRadius: '8px', fontSize: '11px', fontWeight: 600, color: '#0a0a0f', cursor: 'pointer', fontFamily: C.font }}>Enviar este</button>
+            <button onClick={() => { setShowTransitionModal(false); setTransitionMsg(''); setTimeout(() => document.getElementById('agent-msg-input')?.focus(), 100) }}
+              style={{ flex: 1, padding: '7px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '11px', color: '#d1d5db', cursor: 'pointer', fontFamily: C.font }}>Escribir el mío</button>
+            <button onClick={() => { setShowTransitionModal(false); setTransitionMsg('') }}
+              style={{ padding: '7px 12px', background: 'transparent', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', fontSize: '11px', color: '#6b7280', cursor: 'pointer', fontFamily: C.font }}>Sin mensaje</button>
+          </div>
+        </div>
+      )}
 
       {/* Action bar */}
       <div style={{ padding: '10px 14px', borderTop: `1px solid ${C.border}`, display: 'flex', gap: '5px', flexShrink: 0 }}>
