@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "src/app/api/whatsapp/route.ts": {
+      "maxDuration": 60
+    }
+  },
   "crons": [
     {
       "path": "/api/send-scheduled",

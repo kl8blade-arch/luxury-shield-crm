@@ -708,54 +708,52 @@ export async function POST(req: NextRequest) {
       console.log(`[AUDIO] Detected — URL: ${mediaUrl} | Type: ${mediaType}`)
 
       try {
+        // Download audio from Twilio
         const twilioAuth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')
         const audioRes = await fetch(mediaUrl, { headers: { 'Authorization': `Basic ${twilioAuth}` } })
 
         if (!audioRes.ok) {
-          console.error(`[AUDIO] Download failed: ${audioRes.status}`)
-          throw new Error(`Download failed: ${audioRes.status}`)
+          console.error(`[AUDIO] Download failed: ${audioRes.status} ${await audioRes.text()}`)
+          throw new Error('Download failed')
         }
 
-        const audioBuffer = await audioRes.arrayBuffer()
-        console.log(`[AUDIO] Downloaded: ${audioBuffer.byteLength} bytes`)
+        const audioBuffer = Buffer.from(await audioRes.arrayBuffer())
+        console.log(`[AUDIO] Downloaded: ${audioBuffer.length} bytes | type: ${mediaType}`)
+
+        if (audioBuffer.length < 100) {
+          console.error('[AUDIO] Buffer too small:', audioBuffer.length)
+          throw new Error('Audio too small')
+        }
 
         const openaiKey = process.env.OPENAI_API_KEY
-        if (!openaiKey || openaiKey === 'pendiente') {
-          console.log('[AUDIO] No OpenAI key — fallback to text request')
-          throw new Error('No OpenAI key')
-        }
+        if (!openaiKey || openaiKey === 'pendiente') throw new Error('No OpenAI key')
 
-        const audioBlob = new Blob([audioBuffer], { type: mediaType || 'audio/ogg' })
-        const whisperForm = new FormData()
-        whisperForm.append('file', audioBlob, 'audio.ogg')
-        whisperForm.append('model', 'whisper-1')
-        whisperForm.append('language', 'es')
-        whisperForm.append('response_format', 'text')
+        // Use OpenAI SDK for Whisper
+        const { default: OpenAI } = await import('openai')
+        const openai = new OpenAI({ apiKey: openaiKey })
 
-        const whisperRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${openaiKey}` },
-          body: whisperForm,
+        const audioFile = new File([audioBuffer], 'audio.ogg', { type: mediaType || 'audio/ogg; codecs=opus' })
+
+        console.log('[WHISPER] Sending to Whisper...')
+        const transcriptionResult = await openai.audio.transcriptions.create({
+          file: audioFile,
+          model: 'whisper-1',
+          language: 'es',
         })
 
-        if (!whisperRes.ok) {
-          const errText = await whisperRes.text()
-          console.error(`[WHISPER] Error ${whisperRes.status}: ${errText}`)
-          throw new Error(`Whisper failed: ${errText}`)
-        }
-
-        const transcription = await whisperRes.text()
-        console.log(`[WHISPER] Transcription: "${transcription}"`)
+        const transcription = typeof transcriptionResult === 'string' ? transcriptionResult : transcriptionResult.text || ''
+        console.log(`[WHISPER] Result: "${transcription}"`)
 
         if (transcription.trim()) {
           body = transcription.trim()
+          console.log(`[AUDIO] body updated: "${body}"`)
         } else {
           throw new Error('Empty transcription')
         }
       } catch (audioErr: any) {
         console.error('[AUDIO] Error:', audioErr.message)
         if (!body) {
-          await sendWhatsApp(from, 'Recibí tu audio 😊 Por ahora solo puedo leer texto. ¿Puedes escribirme lo que me dijiste?')
+          await sendWhatsApp(from, 'Recibí tu audio 😊 ¿Puedes escribirme lo que dijiste? Así te ayudo mejor.')
           return new NextResponse(
             `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
             { status: 200, headers: { 'Content-Type': 'text/xml' } }
