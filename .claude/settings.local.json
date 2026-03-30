@@ -15,7 +15,8 @@
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f\"\"Updated: {d.get\\(''''key'''',''''''''\\)} | Target: {d.get\\(''''target'''',[]\\)}\"\"\\)\")",
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f\"\"Created: {d.get\\(''''key'''',''''''''\\)} | ID: {d.get\\(''''id'''',''''error''''\\)}\"\"\\)\")",
       "mcp__claude_ai_Supabase__execute_sql",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(npx:*)"
     ]
   }
 }
