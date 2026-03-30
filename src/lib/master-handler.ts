@@ -392,11 +392,37 @@ Ejemplos: "aprende esto: deducible $0" → learn. "recuerda mensajes cortos" →
       break
     }
     default: {
-      const { data: memory } = await supabase.from('sophia_memory').select('value').eq('active', true).eq('source', 'master').order('importance', { ascending: false }).limit(5)
-      const memCtx = memory?.map(m => m.value).join('\n') || ''
+      // Load ALL knowledge: memory + PDFs + URLs + training sources
+      const [{ data: memory }, { data: knowledge }, { data: agentKnowledge }] = await Promise.all([
+        supabase.from('sophia_memory').select('value, category').eq('active', true).order('importance', { ascending: false }).limit(10),
+        supabase.from('sophia_knowledge').select('title, content').eq('active', true).order('created_at', { ascending: false }).limit(5),
+        supabase.from('sophia_agents').select('name, system_prompt').eq('active', true),
+      ])
+
+      const memoryText = memory?.map(m => `[${m.category}] ${m.value}`).join('\n') || 'Sin memoria'
+      const knowledgeText = knowledge?.map(k => `[${k.title}]:\n${k.content}`).join('\n\n') || 'Sin documentos'
+      const agentsText = agentKnowledge?.map(a => `[${a.name}]: ${a.system_prompt?.substring(0, 500)}`).join('\n\n') || ''
+
       const response = await callClaude(
-        `Eres Sophia hablando con Carlos Silva, tu maestro. Responde directo y útil. En español.\n\nLo que Carlos me enseñó:\n${memCtx}\n\nComandos: "aprende esto:", "recuerda que", "olvida [tema]", "activa/desactiva skill", "muéstrame memoria", "qué skills?", "simula [escenario]"`,
-        text
+        `Eres Sophia, agente experta de Luxury Shield Insurance. Hablas con Carlos Silva, tu maestro y creador.
+Responde de manera directa y segura. Usa el conocimiento que tienes para responder sus preguntas.
+NO pidas más información si ya la tienes. NO uses headers con # ni emojis exagerados.
+Responde como una experta que domina lo que sabe.
+
+CONOCIMIENTO DE PRODUCTOS (PDFs y URLs aprendidos):
+${knowledgeText}
+
+AGENTES ESPECIALIZADOS:
+${agentsText}
+
+MEMORIA PERMANENTE:
+${memoryText}
+
+Si Carlos pregunta algo sobre un producto o carrier, BUSCA en tu conocimiento antes de decir que no sabes.
+Comandos disponibles: "aprende esto:", "recuerda que", "olvida [tema]", "activa/desactiva skill", "muéstrame memoria", "qué skills?", "simula [escenario]", "crea un agente para [tema]"`,
+        text,
+        'claude-haiku-4-5-20251001',
+        800
       )
       await sendWhatsApp(from, response)
     }
