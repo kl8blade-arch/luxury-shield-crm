@@ -743,29 +743,56 @@ export async function POST(req: NextRequest) {
     const MASTER_NUM = '17869435656'
     const fromDigits = from.replace(/\D/g, '')
     if (fromDigits === MASTER_NUM || fromDigits.endsWith(MASTER_NUM.slice(-10))) {
-      console.log('[MASTER] Message from master — training mode')
+      console.log(`[MASTER] Message from master — body: "${body}" | media: ${mediaUrl ? 'yes' : 'no'} | type: ${mediaType} | numMedia: ${numMedia}`)
 
       // Transcribe audio if needed
       let masterBody = body
-      if (!masterBody && mediaUrl && (mediaType.includes('audio') || mediaType.includes('ogg'))) {
+      const isAudioMsg = numMedia > 0 && (mediaType.includes('audio') || mediaType.includes('ogg') || mediaType.includes('mpeg') || mediaType.includes('mp4') || (!mediaType && mediaUrl))
+
+      if ((!masterBody || masterBody.trim() === '') && mediaUrl && isAudioMsg) {
+        console.log('[MASTER] Audio detected, transcribing...')
         try {
           const twilioAuth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')
           const rRes = await fetch(mediaUrl, { headers: { 'Authorization': `Basic ${twilioAuth}` }, redirect: 'manual' })
-          const audioUrl = rRes.status === 307 ? rRes.headers.get('location') || mediaUrl : mediaUrl
-          const aRes = await fetch(audioUrl)
+          const audioFinalUrl = rRes.status === 307 || rRes.status === 302 ? rRes.headers.get('location') || mediaUrl : mediaUrl
+          console.log(`[MASTER] Audio redirect: ${audioFinalUrl.substring(0, 80)}`)
+          const aRes = await fetch(audioFinalUrl)
           const aBuf = Buffer.from(await aRes.arrayBuffer())
-          const wForm = new FormData()
-          wForm.append('file', new Blob([aBuf], { type: 'audio/ogg' }), 'audio.ogg')
-          wForm.append('model', 'whisper-1')
-          wForm.append('language', 'es')
-          const wRes = await fetch('https://api.openai.com/v1/audio/transcriptions', { method: 'POST', headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` }, body: wForm })
-          if (wRes.ok) { const r = await wRes.json(); masterBody = r.text || '' }
-        } catch (e) { console.error('[MASTER] Audio transcription error:', e) }
+          console.log(`[MASTER] Audio downloaded: ${aBuf.length} bytes`)
+
+          if (aBuf.length > 100) {
+            const wForm = new FormData()
+            wForm.append('file', new Blob([aBuf], { type: mediaType || 'audio/ogg' }), 'audio.ogg')
+            wForm.append('model', 'whisper-1')
+            wForm.append('language', 'es')
+            const wRes = await fetch('https://api.openai.com/v1/audio/transcriptions', { method: 'POST', headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` }, body: wForm })
+            if (wRes.ok) {
+              const r = await wRes.json()
+              masterBody = r.text || ''
+              console.log(`[MASTER] Transcribed: "${masterBody}"`)
+            } else {
+              const err = await wRes.text()
+              console.error(`[MASTER] Whisper error ${wRes.status}: ${err}`)
+            }
+          }
+        } catch (e: any) { console.error('[MASTER] Audio transcription error:', e.message) }
       }
 
-      if (masterBody || mediaUrl) {
-        const { handleMasterMessage } = await import('@/lib/master-handler')
-        await handleMasterMessage(from, masterBody || '', mediaUrl || undefined, mediaType || undefined)
+      // Always respond — even if transcription failed
+      const { handleMasterMessage } = await import('@/lib/master-handler')
+      if (masterBody && masterBody.trim()) {
+        await handleMasterMessage(from, masterBody, mediaUrl || undefined, mediaType || undefined)
+      } else if (mediaUrl) {
+        // Media without text (PDF, image, or failed audio)
+        await handleMasterMessage(from, '', mediaUrl, mediaType || undefined)
+      } else {
+        // Edge case: no body AND no media — send help
+        const sendWA = (await import('@/lib/master-handler')).isMaster
+        await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`, {
+          method: 'POST',
+          headers: { 'Authorization': `Basic ${Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ From: `whatsapp:${process.env.TWILIO_WHATSAPP_FROM}`, To: `whatsapp:${from}`, Body: 'No pude procesar tu mensaje. Intenta escribir texto o enviar un audio más largo.' }).toString(),
+        })
       }
 
       return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
