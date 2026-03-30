@@ -51,7 +51,7 @@ export default function SophiaOSPage() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', background: C.surface, borderRadius: '10px', padding: '3px', border: `1px solid ${C.border}` }}>
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', background: C.surface, borderRadius: '10px', padding: '3px', border: `1px solid ${C.border}`, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             flex: 1, padding: '8px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: tab === t.key ? 700 : 400,

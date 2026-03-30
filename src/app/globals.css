@@ -15,3 +15,30 @@ select option { background: #0f1115; color: #F0ECE3; }
 a { text-decoration: none; }
 button { font-family: inherit; }
 input, select, textarea { font-family: inherit; }
+
+/* ── MOBILE RESPONSIVE ── */
+@media (max-width: 768px) {
+  /* Make all tables horizontally scrollable */
+  table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Compact padding on pages */
+  .page-padding { padding: 20px 14px !important; }
+
+  /* Stack grid columns */
+  [style*="gridTemplateColumns: '2fr"] { grid-template-columns: 1fr !important; }
+
+  /* Prevent overflow */
+  body { overflow-x: hidden; }
+  main { overflow-x: hidden; max-width: 100vw; }
+
+  /* Fix modals */
+  [style*="width: '440px'"], [style*="width: '520px'"], [style*="width: '500px'"] {
+    width: 95vw !important;
+    max-width: 95vw !important;
+  }
+}
+
+/* iOS safe areas */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+}

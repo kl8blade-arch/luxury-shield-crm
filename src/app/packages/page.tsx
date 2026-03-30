@@ -165,7 +165,7 @@ function PackagesPage() {
       {loading ? (
         <div style={{ padding: '48px', textAlign: 'center', color: C.textMuted, fontSize: '14px' }}>Cargando paquetes...</div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '36px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '36px' }}>
           {packages.map(pkg => {
             const badge = pkg.badge ? badgeColors[pkg.badge] : null
             return (
@@ -219,7 +219,8 @@ function PackagesPage() {
             <p style={{ color: C.textMuted, fontSize: '13px' }}>Aún no has comprado paquetes.</p>
           </div>
         ) : (
-          <div>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ minWidth: '500px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', padding: '10px 24px', borderBottom: `1px solid ${C.border}` }}>
               {['Paquete', 'Leads', 'Monto', 'Status', 'Fecha'].map(h => (
                 <p key={h} style={{ color: C.textMuted, fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', margin: 0 }}>{h}</p>
@@ -244,6 +245,7 @@ function PackagesPage() {
                 </p>
               </div>
             ))}
+            </div>
           </div>
         )}
       </div>

@@ -154,7 +154,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '4px', marginBottom: '28px', background: C.surface, borderRadius: '12px', padding: '4px', border: `1px solid ${C.border}` }}>
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '28px', background: C.surface, borderRadius: '12px', padding: '4px', border: `1px solid ${C.border}`, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             flex: 1, padding: '10px 16px', borderRadius: '10px', cursor: 'pointer',

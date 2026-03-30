@@ -99,7 +99,7 @@ export default function PipelinePage() {
       </div>
 
       {/* Board */}
-      <div style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden', padding: '20px 20px' }}>
+      <div style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden', padding: '20px 12px', WebkitOverflowScrolling: 'touch' }}>
         <div style={{ display: 'flex', gap: '12px', height: '100%', minWidth: `${COLS.length * 228}px` }}>
           {COLS.map(([key, meta]) => {
             const stageLeads = byStage(key)

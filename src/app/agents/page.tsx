@@ -97,7 +97,7 @@ export default function AgentsPage() {
       </div>
 
       {/* Stats row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '28px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '28px' }}>
         {[
           { label: 'Total agentes', value: agents.length, color: '#60a5fa', icon: '👥' },
           { label: 'Activos', value: agents.filter(a => a.status === 'active').length, color: '#34d399', icon: '✅' },
@@ -132,7 +132,8 @@ export default function AgentsPage() {
             <p style={{ color: C.textMuted, fontSize: '13px' }}>Agrega tu primer agente para comenzar.</p>
           </div>
         ) : (
-          <div>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ minWidth: '700px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr', padding: '10px 24px', borderBottom: `1px solid ${C.border}` }}>
               {['Nombre', 'Email', 'Teléfono', 'Plan', 'Status', 'Leads', 'Ventas'].map(h => (
                 <p key={h} style={{ color: C.textMuted, fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', margin: 0 }}>{h}</p>
@@ -174,6 +175,7 @@ export default function AgentsPage() {
                 <p style={{ color: '#34d399', fontSize: '14px', fontWeight: 700, margin: 0 }}>{agentStats[agent.id]?.won || 0}</p>
               </div>
             ))}
+            </div>
           </div>
         )}
       </div>

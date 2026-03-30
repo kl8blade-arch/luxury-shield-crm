@@ -47,7 +47,7 @@ export default function TemplatesPage() {
       </div>
 
       {/* Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '14px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '14px' }}>
         {loading ? (
           <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '60px', color: C.textMuted }}>Cargando plantillas...</div>
         ) : filtered.length === 0 ? (
