@@ -711,15 +711,26 @@ export async function POST(req: NextRequest) {
         const openaiKey = process.env.OPENAI_API_KEY
         if (!openaiKey || openaiKey === 'pendiente') throw new Error('No OpenAI key')
 
-        // Download audio from Twilio with 4s timeout
+        // Download audio from Twilio — handle 307 redirect
         const twilioAuth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')
-        const dlController = new AbortController()
-        const dlTimeout = setTimeout(() => dlController.abort(), 4000)
 
-        const audioRes = await fetch(mediaUrl, {
+        // Step 1: Get redirect URL (Twilio returns 307)
+        const redirectRes = await fetch(mediaUrl, {
           headers: { 'Authorization': `Basic ${twilioAuth}` },
-          signal: dlController.signal,
+          redirect: 'manual',
         })
+
+        let audioUrl = mediaUrl
+        if (redirectRes.status === 307 || redirectRes.status === 302 || redirectRes.status === 301) {
+          audioUrl = redirectRes.headers.get('location') || mediaUrl
+          console.log(`[AUDIO] Redirect to: ${audioUrl.substring(0, 80)}...`)
+        }
+
+        // Step 2: Download from final URL (no auth needed after redirect)
+        const dlController = new AbortController()
+        const dlTimeout = setTimeout(() => dlController.abort(), 5000)
+
+        const audioRes = await fetch(audioUrl, { signal: dlController.signal })
         clearTimeout(dlTimeout)
 
         if (!audioRes.ok) throw new Error(`Download ${audioRes.status}`)
