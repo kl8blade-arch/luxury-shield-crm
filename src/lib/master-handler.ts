@@ -32,8 +32,119 @@ async function sendWhatsApp(to: string, message: string) {
 export async function handleMasterMessage(from: string, body: string, mediaUrl?: string, mediaType?: string) {
   console.log('[MASTER] Processing:', body?.substring(0, 60) || '[media]')
 
+  // Handle PDF uploads — extract knowledge and auto-route to expert agent
+  if (mediaUrl && (mediaType?.includes('pdf') || mediaType?.includes('application'))) {
+    console.log('[MASTER] PDF detected, processing...')
+    await sendWhatsApp(from, '📄 Recibí tu PDF. Extrayendo conocimiento y asignando al agente experto...')
+
+    try {
+      // Download PDF from Twilio (handle redirect)
+      const twilioAuth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')
+      const redirectRes = await fetch(mediaUrl, { headers: { 'Authorization': `Basic ${twilioAuth}` }, redirect: 'manual' })
+      const finalUrl = redirectRes.status === 307 ? redirectRes.headers.get('location') || mediaUrl : mediaUrl
+      const pdfRes = await fetch(finalUrl)
+      const pdfBuffer = Buffer.from(await pdfRes.arrayBuffer())
+      const pdfBase64 = pdfBuffer.toString('base64')
+
+      console.log(`[MASTER] PDF downloaded: ${pdfBuffer.length} bytes`)
+
+      // Extract knowledge with Claude (using document type)
+      const extractRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001', max_tokens: 3000,
+          messages: [{ role: 'user', content: [
+            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 } },
+            { type: 'text', text: `Analiza este documento de seguros. Devuelve SOLO JSON:
+{"category":"dental"|"aca"|"vida"|"iul"|"medicare"|"suplementario"|"otro","carrier":"nombre del carrier/aseguradora","product_name":"nombre del producto","knowledge":"resumen completo de 500 palabras con: coberturas, precios, estados, elegibilidad, periodos de espera, redes, deducibles, beneficios clave, objeciones comunes y respuestas","keywords":["lista","de","keywords","relevantes"]}` }
+          ] }],
+        }),
+      })
+
+      if (!extractRes.ok) throw new Error(`Claude error: ${extractRes.status}`)
+
+      const extractData = await extractRes.json()
+      const rawText = extractData.content?.[0]?.text || ''
+      let parsed: any
+      try { parsed = JSON.parse(rawText.replace(/```json\n?|\n?```/g, '').trim()) } catch { parsed = { category: 'otro', knowledge: rawText, keywords: [] } }
+
+      console.log(`[MASTER] PDF parsed: category=${parsed.category}, carrier=${parsed.carrier}`)
+
+      // Find the best matching expert agent
+      const { data: agents } = await supabase.from('sophia_agents').select('*').eq('active', true)
+      let bestAgent: any = null
+      let bestScore = 0
+
+      for (const agent of agents || []) {
+        let score = 0
+        const keywords = agent.trigger_keywords || []
+        for (const kw of keywords) {
+          if (parsed.category?.toLowerCase().includes(kw) || parsed.carrier?.toLowerCase().includes(kw) || parsed.product_name?.toLowerCase().includes(kw)) score += 2
+          if (parsed.keywords?.some((pk: string) => pk.toLowerCase().includes(kw))) score += 1
+        }
+        if (score > bestScore) { bestScore = score; bestAgent = agent }
+      }
+
+      // Save knowledge to sophia_knowledge
+      await supabase.from('sophia_knowledge').insert({
+        title: `${parsed.carrier || 'Documento'} — ${parsed.product_name || parsed.category}`,
+        content: parsed.knowledge,
+        source_type: 'pdf',
+        source_name: mediaUrl.split('/').pop() || 'documento.pdf',
+        embedding_summary: parsed.knowledge?.substring(0, 300),
+        tags: [parsed.category, parsed.carrier, ...(parsed.keywords || [])].filter(Boolean),
+        active: true,
+      })
+
+      // Save training source linked to the expert agent
+      await supabase.from('sophia_training_sources').insert({
+        title: `${parsed.carrier || 'PDF'} — ${parsed.product_name || parsed.category}`,
+        source_type: 'pdf',
+        content: parsed.knowledge,
+        extracted_knowledge: parsed.knowledge,
+        agent_id: bestAgent?.id || null,
+        processed: true,
+        uploaded_by: 'master',
+      })
+
+      // If agent found, update its prompt with the new knowledge
+      if (bestAgent) {
+        const updatedPrompt = bestAgent.system_prompt + `\n\nCONOCIMIENTO DE ${(parsed.carrier || '').toUpperCase()} — ${(parsed.product_name || '').toUpperCase()}:\n${parsed.knowledge}`
+        await supabase.from('sophia_agents').update({
+          system_prompt: updatedPrompt,
+          knowledge_sources: [...(bestAgent.knowledge_sources || []), { carrier: parsed.carrier, product: parsed.product_name, date: new Date().toISOString() }],
+        }).eq('id', bestAgent.id)
+
+        await sendWhatsApp(from,
+          `✅ PDF procesado y asignado!\n\n` +
+          `📚 Carrier: ${parsed.carrier || '—'}\n` +
+          `📦 Producto: ${parsed.product_name || '—'}\n` +
+          `🤖 Agente experto: *${bestAgent.name}*\n` +
+          `🏷️ Categoría: ${parsed.category}\n\n` +
+          `${bestAgent.name} ya tiene este conocimiento y lo usará en sus conversaciones.`
+        )
+      } else {
+        // No matching agent — offer to create one
+        await sendWhatsApp(from,
+          `✅ PDF procesado!\n\n` +
+          `📚 Carrier: ${parsed.carrier || '—'}\n` +
+          `📦 Producto: ${parsed.product_name || '—'}\n` +
+          `🏷️ Categoría: ${parsed.category}\n\n` +
+          `⚠️ No encontré un agente experto para esta categoría.\n` +
+          `Sophia usará este conocimiento directamente.\n\n` +
+          `¿Quieres que cree un agente experto? Escribe:\n` +
+          `"crea un agente para ${parsed.category}"`
+        )
+      }
+    } catch (err: any) {
+      console.error('[MASTER] PDF error:', err.message)
+      await sendWhatsApp(from, `⚠️ Error procesando el PDF: ${err.message}\nIntenta enviarlo de nuevo.`)
+    }
+    return
+  }
+
   let text = body
-  // Audio transcription would happen before this call
 
   // Detect intent
   const intentText = await callClaude(
