@@ -821,20 +821,21 @@ export async function POST(req: NextRequest) {
     console.log(`[Sophia] Lead found: ${lead.id} — ${lead.name} — stage: ${lead.stage} — mode: ${lead.conversation_mode || 'sophia'}`)
 
     // ══════════════════════════════════════════════
-    // FRESH MODE CHECK — query DB directly, not stale lead object
+    // FRESH MODE CHECK — check ALL leads with this phone for manual mode
+    // This handles duplicates: if ANY lead with this phone is manual, block
     // ══════════════════════════════════════════════
-    const { data: freshMode } = await supabase
+    const { data: allModes } = await supabase
       .from('leads')
-      .select('conversation_mode, sophia_processing')
-      .eq('id', lead.id)
-      .single()
+      .select('conversation_mode')
+      .or(`phone.eq.${digitsOnly},phone.eq.${last10},phone.eq.${withPlus},phone.eq.+${digitsOnly},phone.eq.${from}`)
 
-    const currentMode = freshMode?.conversation_mode || 'sophia'
-    console.log(`[MODE CHECK] Lead: ${lead.name} | DB mode: ${currentMode} | Object mode: ${lead.conversation_mode}`)
+    const anyManual = (allModes || []).some((m: any) => m.conversation_mode === 'manual' || m.conversation_mode === 'coaching')
+    const currentMode = anyManual ? (allModes || []).find((m: any) => m.conversation_mode === 'manual')?.conversation_mode || 'coaching' : 'sophia'
 
-    // Update lead object with fresh data
+    console.log(`[MODE CHECK] ${lead.name} | phone matches: ${allModes?.length || 0} | modes: ${(allModes || []).map((m: any) => m.conversation_mode).join(',')} | effective: ${currentMode}`)
+
+    // Update lead object with fresh mode
     lead.conversation_mode = currentMode
-    lead.sophia_processing = freshMode?.sophia_processing || false
 
     // BLOCK SOPHIA IF MODE IS MANUAL/COACHING
     if (currentMode === 'manual' || currentMode === 'coaching') {

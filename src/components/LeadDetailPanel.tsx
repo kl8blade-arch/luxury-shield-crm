@@ -144,12 +144,20 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
   async function changeMode(newMode: Mode) {
     const prevMode = mode
 
-    // Update DB FIRST
-    const { error } = await supabase.from('leads').update({
+    // Update ALL leads with this phone number (handles duplicates)
+    const phone = lead.phone?.replace(/\D/g, '')
+    const last10 = phone?.slice(-10)
+    const updatePayload = {
       conversation_mode: newMode,
       updated_at: new Date().toISOString(),
       ...(prevMode === 'manual' && newMode === 'sophia' ? { manual_ended_at: new Date().toISOString() } : {}),
-    }).eq('id', lead.id)
+    }
+    // Update by ID first
+    const { error } = await supabase.from('leads').update(updatePayload).eq('id', lead.id)
+    // Also update ALL duplicates with same phone
+    if (last10) {
+      await supabase.from('leads').update(updatePayload).or(`phone.eq.${last10},phone.eq.+1${last10},phone.eq.${phone}`)
+    }
 
     if (error) { console.error('[MODE CHANGE] Error:', error); return }
 
