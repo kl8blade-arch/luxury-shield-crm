@@ -425,7 +425,19 @@ Si algún dato dice 'desconocido', puedes preguntarlo. Si ya está, NUNCA volver
     }
   } catch {}
 
-  const fullSystemPrompt = contextSummary + '\n' + systemPrompt + dynamicLayers + expertLayer
+  // Campaign-specific prompt override
+  let campaignLayer = ''
+  try {
+    if (lead.utm_campaign) {
+      const { data: campaign } = await supabase.from('campaigns').select('sophia_prompt_override, name').eq('utm_campaign', lead.utm_campaign).single()
+      if (campaign?.sophia_prompt_override) {
+        campaignLayer = `\n═══ CAMPAÑA: ${campaign.name} ═══\n${campaign.sophia_prompt_override}\n═══════════════════════════════`
+        console.log(`[CAMPAIGN] Lead from campaign: ${campaign.name}`)
+      }
+    }
+  } catch {}
+
+  const fullSystemPrompt = contextSummary + '\n' + systemPrompt + dynamicLayers + expertLayer + campaignLayer
 
   // Build message history for Claude API
   const rawMessages: { role: 'user' | 'assistant'; content: string }[] = []

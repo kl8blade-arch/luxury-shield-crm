@@ -17,6 +17,7 @@ const NAV = [
   { href: '/templates',  icon: MessageSquare,   label: 'Plantillas',      badge: null, admin: false },
   { href: '/agents',     icon: UserCheck,       label: 'Agentes',         badge: null, admin: false },
   { href: '/packages',   icon: Package,         label: 'Paquetes',        badge: null, admin: false },
+  { href: '/campaigns',   icon: BarChart3,       label: 'Campañas',        badge: null, admin: false },
   { href: '/marketplace', icon: Package,         label: 'Marketplace',     badge: null, admin: false },
   { href: '/tools',      icon: Settings,        label: 'Herramientas',    badge: null, admin: false },
   { href: '/training',   icon: Brain,           label: 'SophiaModel',     badge: null, admin: true },
