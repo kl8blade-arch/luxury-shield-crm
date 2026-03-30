@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  LayoutDashboard, Users, Kanban, Bell,
+  LayoutDashboard, Users, Kanban, Bell, Calendar,
   MessageSquare, Settings, Shield,
   UserCheck, Package, ChevronRight, BarChart3, Brain,
 } from 'lucide-react'
@@ -12,6 +12,7 @@ const NAV = [
   { href: '/analytics',  icon: BarChart3,       label: 'Analytics',      badge: null },
   { href: '/leads',      icon: Users,           label: 'Mis Leads',       badge: null },
   { href: '/pipeline',   icon: Kanban,          label: 'Pipeline',        badge: null },
+  { href: '/calendar',   icon: Calendar,        label: 'Agenda',          badge: null },
   { href: '/reminders',  icon: Bell,            label: 'Recordatorios',   badge: null },
   { href: '/templates',  icon: MessageSquare,   label: 'Plantillas',      badge: null },
   { href: '/agents',     icon: UserCheck,       label: 'Agentes',         badge: null },
