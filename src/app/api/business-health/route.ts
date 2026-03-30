@@ -91,8 +91,9 @@ export async function GET(req: NextRequest) {
       top_argument: topArgText,
     }
 
-    // If Monday — send weekly summary to Carlos
-    if (now.getUTCDay() === 1) {
+    // Only send WhatsApp summary when called from cron (has authorization header), not from browser
+    const isCronCall = !!req.headers.get('authorization')
+    if (isCronCall && now.getUTCDay() === 1) {
       const comisiones = (closedWon || 0) * 45
       const emoji = score >= 80 ? '🟢' : score >= 60 ? '🟡' : '🔴'
       await sendWhatsApp(ADMIN_PHONE, `Buenos días Carlos! Resumen semanal Luxury Shield:\n\n${emoji} Score de salud: ${score}/100\n💰 Pólizas cerradas: ${closedWon || 0} ($${comisiones} en comisiones)\n🔥 Leads calientes activos: ${readyToBuy || 0}\n⚠️ ${actions[0] || 'Todo en orden'}\n💡 Argumento top: "${topArgText}"`)
