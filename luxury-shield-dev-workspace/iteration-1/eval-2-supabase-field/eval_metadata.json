@@ -1,0 +1,10 @@
+{
+  "eval_id": 2,
+  "eval_name": "supabase-field-addition",
+  "prompt": "Necesito agregar un nuevo campo 'referral_source' a la tabla leads en Supabase y mostrarlo en el panel de detalle del lead",
+  "assertions": [
+    {"text": "Uses Supabase MCP with project_id phdfmwzannemcdaotzlu", "type": "tool_usage"},
+    {"text": "Modifies LeadDetailPanel.tsx", "type": "file_modification"},
+    {"text": "Pushes to master branch (not main)", "type": "git_branch"}
+  ]
+}

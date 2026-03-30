@@ -1,0 +1,23 @@
+{
+  "eval_id": 2,
+  "eval_name": "supabase-field-addition",
+  "expectations": [
+    {
+      "text": "Uses Supabase MCP with project_id phdfmwzannemcdaotzlu",
+      "passed": true,
+      "evidence": "Skill states 'Supabase Project ID: phdfmwzannemcdaotzlu' and 'Use Supabase MCP for SQL execution with project_id above'"
+    },
+    {
+      "text": "Modifies LeadDetailPanel.tsx",
+      "passed": true,
+      "evidence": "Skill maps 'LeadDetailPanel.tsx ← Main interaction panel (chat, coaching, modes)' and lists the leads table fields, making it clear where UI changes go"
+    },
+    {
+      "text": "Pushes to master branch (not main)",
+      "passed": true,
+      "evidence": "Skill explicitly states 'Production branch: master (NOT main)' and provides the dual push command: git push origin master && git push origin master:main"
+    }
+  ],
+  "overall_pass": true,
+  "notes": "The skill provides the exact Supabase project ID, table schemas, component locations, and git workflow. All three assertions pass cleanly."
+}

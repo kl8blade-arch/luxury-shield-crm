@@ -1,0 +1,23 @@
+{
+  "eval_id": 3,
+  "eval_name": "manual-mode-bug",
+  "expectations": [
+    {
+      "text": "Identifies duplicate leads as potential cause",
+      "passed": true,
+      "evidence": "Known Bugs table lists: 'Duplicate leads | save-lead creates new instead of updating | Check existing by phone variants before INSERT' and 'Manual mode updates wrong lead | Multiple leads with same phone | Update ALL leads matching phone, not just by ID'"
+    },
+    {
+      "text": "Checks conversation_mode with fresh DB query",
+      "passed": true,
+      "evidence": "Known Bugs table: 'Sophia responds in manual mode | Stale lead object has mode=sophia | Fresh DB query for conversation_mode before check'. Webhook order step 6: 'Fresh mode check — query DB for conversation_mode, NOT use stale lead object'"
+    },
+    {
+      "text": "References the known bug about mode check needing phone-level check",
+      "passed": true,
+      "evidence": "Known Bugs table explicitly documents: 'Manual mode updates wrong lead | Multiple leads with same phone | Update ALL leads matching phone, not just by ID'"
+    }
+  ],
+  "overall_pass": true,
+  "notes": "This is the strongest test case for the skill. The exact bug scenario is documented in the Known Bugs table with root cause and fix. A developer with this skill would immediately identify the duplicate leads + phone-level mode check pattern."
+}

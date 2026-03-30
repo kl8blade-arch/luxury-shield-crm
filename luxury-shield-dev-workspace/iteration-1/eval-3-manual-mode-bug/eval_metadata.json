@@ -1,0 +1,10 @@
+{
+  "eval_id": 3,
+  "eval_name": "manual-mode-bug",
+  "prompt": "El modo manual no está bloqueando a Sophia. Un lead que Carlos puso en manual sigue recibiendo respuestas automáticas.",
+  "assertions": [
+    {"text": "Identifies duplicate leads as potential cause", "type": "diagnosis"},
+    {"text": "Checks conversation_mode with fresh DB query", "type": "pattern_check"},
+    {"text": "References the known bug about mode check needing phone-level check", "type": "known_bug"}
+  ]
+}

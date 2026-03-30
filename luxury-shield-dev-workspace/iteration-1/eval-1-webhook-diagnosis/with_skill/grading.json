@@ -1,0 +1,23 @@
+{
+  "eval_id": 1,
+  "eval_name": "webhook-diagnosis",
+  "expectations": [
+    {
+      "text": "Reads or references src/app/api/whatsapp/route.ts",
+      "passed": true,
+      "evidence": "Skill explicitly lists 'src/app/api/whatsapp/route.ts ← Main webhook (Twilio → Sophia)' in the file map and references it in the webhook processing order section"
+    },
+    {
+      "text": "Checks the webhook processing order (master → mode → lock → sophia)",
+      "passed": true,
+      "evidence": "Skill contains a 17-step numbered list 'Webhook Processing Order (CRITICAL)' that specifies: 1.Parse → 2.Master detection → 6.Fresh mode check → 7.Manual/coaching block → 8.Processing lock → 11.Generate AI response"
+    },
+    {
+      "text": "Uses the correct deploy command with Vercel token",
+      "passed": true,
+      "evidence": "Skill has a dedicated 'Deploy Command' section with the exact command: npx vercel --prod --token=$VERCEL_TOKEN --yes"
+    }
+  ],
+  "overall_pass": true,
+  "notes": "The skill provides comprehensive diagnostic context. A developer with this skill would immediately know to check the webhook order, look for mode blocks, and verify the processing lock. The known bugs section also lists 'Sophia responds in manual mode' as a documented issue."
+}

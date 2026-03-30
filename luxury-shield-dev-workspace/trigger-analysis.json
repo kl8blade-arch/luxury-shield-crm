@@ -1,0 +1,28 @@
+{
+  "current_description_analysis": {
+    "strengths": [
+      "Mentions Sophia, WhatsApp, Supabase, Vercel, leads, agents, dental, Cigna DVH Plus",
+      "Lists specific subsystems: pipeline, calendar, coaching, training data",
+      "Explicitly says 'without asking for information already documented'"
+    ],
+    "weaknesses": [
+      "Missing: audio/Whisper, master system, mode manual, drag&drop, mobile/responsive",
+      "Missing: deploy command context, bug fixing, webhook debugging",
+      "Missing: Twilio, Carlos, SeguriSSimo, SophiaOS, battle card",
+      "Doesn't mention Spanish language context or Latino market",
+      "Too generic — 'any feature of this insurance CRM' could undertrigger on specific bugs"
+    ],
+    "false_positive_risk": [
+      "query 19 (next.js hydration) could false-trigger because description mentions Next.js",
+      "query 20 (stripe webhook) shares 'webhook' keyword"
+    ]
+  },
+  "trigger_test_results": {
+    "should_trigger_correct": 10,
+    "should_trigger_missed": 0,
+    "should_not_trigger_correct": 8,
+    "should_not_trigger_false_positive": 2,
+    "accuracy": 0.90,
+    "notes": "Queries 19 and 20 are edge cases — they mention technologies used in this project but in unrelated contexts"
+  }
+}

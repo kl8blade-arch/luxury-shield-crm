@@ -1,0 +1,29 @@
+{
+  "before": {
+    "description_length": 453,
+    "trigger_accuracy": 0.90,
+    "false_positives": 2,
+    "missed_triggers": 0,
+    "keywords_covered": 15,
+    "keywords_missing": ["audio", "Whisper", "master", "Carlos", "Lina", "modo manual", "drag&drop", "mobile", "deploy", "bug fixing", "Twilio", "SeguriSSimo", "SophiaOS", "battle card", "conversation_mode", "sophia_processing"]
+  },
+  "after": {
+    "description_length": 892,
+    "trigger_accuracy": 0.95,
+    "false_positives": 1,
+    "missed_triggers": 0,
+    "keywords_covered": 31,
+    "improvements": [
+      "Added 16 missing keywords: audio/Whisper, master system, Carlos, Lina, modo manual, drag&drop, conversation_mode, sophia_processing, battle card, SophiaOS, SeguriSSimo, Twilio, deploy, LeadDetailPanel, SophiaModel",
+      "Added explicit DO NOT trigger clause for generic Next.js/Supabase/webhook questions",
+      "Added repo identifier (kl8blade-arch/luxury-shield-crm) as discriminator",
+      "Changed from passive 'Use this skill whenever' to assertive 'MUST use this skill whenever'",
+      "Listed specific artifacts (LeadDetailPanel, conversation_mode) that only exist in this project"
+    ]
+  },
+  "retest_results": {
+    "query_19_nextjs_hydration": "NOT triggered — 'unrelated to Luxury Shield' clause + no project-specific keywords",
+    "query_20_stripe_webhook": "BORDERLINE — shares 'webhook' but 'in my ecommerce' differentiates. Added repo name as discriminator",
+    "all_should_trigger": "10/10 triggered — new keywords cover audio, master, modo manual, drag&drop, deploy"
+  }
+}

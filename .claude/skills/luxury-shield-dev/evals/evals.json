@@ -1,0 +1,35 @@
+{
+  "skill_name": "luxury-shield-dev",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Sophia no está respondiendo a los leads. Necesito que diagnostiques el problema en el webhook de WhatsApp y lo arregles.",
+      "expected_output": "Should check /api/whatsapp/route.ts, verify master detection order, mode check, processing lock, Claude API key, and deploy fix",
+      "assertions": [
+        {"text": "Reads or references src/app/api/whatsapp/route.ts", "type": "file_reference"},
+        {"text": "Checks the webhook processing order (master → mode → lock → sophia)", "type": "pattern_check"},
+        {"text": "Uses the correct deploy command with Vercel token", "type": "deploy_command"}
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Necesito agregar un nuevo campo 'referral_source' a la tabla leads en Supabase y mostrarlo en el panel de detalle del lead",
+      "expected_output": "Should use Supabase MCP to run ALTER TABLE, then modify LeadDetailPanel.tsx",
+      "assertions": [
+        {"text": "Uses Supabase MCP with project_id phdfmwzannemcdaotzlu", "type": "tool_usage"},
+        {"text": "Modifies LeadDetailPanel.tsx", "type": "file_modification"},
+        {"text": "Pushes to master branch (not main)", "type": "git_branch"}
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "El modo manual no está bloqueando a Sophia. Un lead que Carlos puso en manual sigue recibiendo respuestas automáticas.",
+      "expected_output": "Should identify the duplicate leads issue, fresh mode check, and update ALL leads with same phone",
+      "assertions": [
+        {"text": "Identifies duplicate leads as potential cause", "type": "diagnosis"},
+        {"text": "Checks conversation_mode with fresh DB query", "type": "pattern_check"},
+        {"text": "References the known bug about mode check needing phone-level check", "type": "known_bug"}
+      ]
+    }
+  ]
+}

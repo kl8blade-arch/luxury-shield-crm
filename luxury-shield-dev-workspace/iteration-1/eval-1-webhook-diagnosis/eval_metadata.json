@@ -1,0 +1,10 @@
+{
+  "eval_id": 1,
+  "eval_name": "webhook-diagnosis",
+  "prompt": "Sophia no está respondiendo a los leads. Necesito que diagnostiques el problema en el webhook de WhatsApp y lo arregles.",
+  "assertions": [
+    {"text": "Reads or references src/app/api/whatsapp/route.ts", "type": "file_reference"},
+    {"text": "Checks the webhook processing order (master → mode → lock → sophia)", "type": "pattern_check"},
+    {"text": "Uses the correct deploy command with Vercel token", "type": "deploy_command"}
+  ]
+}
