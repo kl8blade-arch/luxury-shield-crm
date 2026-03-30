@@ -708,45 +708,56 @@ export async function POST(req: NextRequest) {
       console.log(`[AUDIO] Detected — URL: ${mediaUrl} | Type: ${mediaType}`)
 
       try {
-        // Download audio from Twilio
-        const twilioAuth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')
-        const audioRes = await fetch(mediaUrl, { headers: { 'Authorization': `Basic ${twilioAuth}` } })
-
-        if (!audioRes.ok) {
-          console.error(`[AUDIO] Download failed: ${audioRes.status} ${await audioRes.text()}`)
-          throw new Error('Download failed')
-        }
-
-        const audioBuffer = Buffer.from(await audioRes.arrayBuffer())
-        console.log(`[AUDIO] Downloaded: ${audioBuffer.length} bytes | type: ${mediaType}`)
-
-        if (audioBuffer.length < 100) {
-          console.error('[AUDIO] Buffer too small:', audioBuffer.length)
-          throw new Error('Audio too small')
-        }
-
         const openaiKey = process.env.OPENAI_API_KEY
         if (!openaiKey || openaiKey === 'pendiente') throw new Error('No OpenAI key')
 
-        // Use OpenAI SDK for Whisper
-        const { default: OpenAI } = await import('openai')
-        const openai = new OpenAI({ apiKey: openaiKey })
+        // Download audio from Twilio with 4s timeout
+        const twilioAuth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')
+        const dlController = new AbortController()
+        const dlTimeout = setTimeout(() => dlController.abort(), 4000)
 
-        const audioFile = new File([audioBuffer], 'audio.ogg', { type: mediaType || 'audio/ogg; codecs=opus' })
-
-        console.log('[WHISPER] Sending to Whisper...')
-        const transcriptionResult = await openai.audio.transcriptions.create({
-          file: audioFile,
-          model: 'whisper-1',
-          language: 'es',
+        const audioRes = await fetch(mediaUrl, {
+          headers: { 'Authorization': `Basic ${twilioAuth}` },
+          signal: dlController.signal,
         })
+        clearTimeout(dlTimeout)
 
-        const transcription = typeof transcriptionResult === 'string' ? transcriptionResult : transcriptionResult.text || ''
+        if (!audioRes.ok) throw new Error(`Download ${audioRes.status}`)
+
+        const audioBuffer = Buffer.from(await audioRes.arrayBuffer())
+        console.log(`[AUDIO] Downloaded: ${audioBuffer.length} bytes`)
+
+        if (audioBuffer.length < 100) throw new Error('Audio too small')
+
+        // Whisper transcription with 5s timeout
+        const whisperController = new AbortController()
+        const whisperTimeout = setTimeout(() => whisperController.abort(), 5000)
+
+        const whisperForm = new FormData()
+        whisperForm.append('file', new Blob([audioBuffer], { type: mediaType || 'audio/ogg' }), 'audio.ogg')
+        whisperForm.append('model', 'whisper-1')
+        whisperForm.append('language', 'es')
+
+        const whisperRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${openaiKey}` },
+          body: whisperForm,
+          signal: whisperController.signal,
+        })
+        clearTimeout(whisperTimeout)
+
+        if (!whisperRes.ok) {
+          const err = await whisperRes.text()
+          console.error(`[WHISPER] Error ${whisperRes.status}: ${err}`)
+          throw new Error(`Whisper ${whisperRes.status}`)
+        }
+
+        const result = await whisperRes.json()
+        const transcription = result.text || ''
         console.log(`[WHISPER] Result: "${transcription}"`)
 
         if (transcription.trim()) {
           body = transcription.trim()
-          console.log(`[AUDIO] body updated: "${body}"`)
         } else {
           throw new Error('Empty transcription')
         }
