@@ -22,6 +22,10 @@ export default function CalendarPage() {
   const [showModal, setShowModal] = useState(false)
   const [editEvent, setEditEvent] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [isMobile, setIsMobile] = useState(false)
+  const [showSheet, setShowSheet] = useState(false)
+
+  useEffect(() => { const c = () => setIsMobile(window.innerWidth < 768); c(); window.addEventListener('resize', c); return () => window.removeEventListener('resize', c) }, [])
 
   const year = current.getFullYear()
   const month = current.getMonth()
@@ -89,7 +93,7 @@ export default function CalendarPage() {
         ))}
       </div>
 
-      <div style={{ display: 'flex', gap: '20px' }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '12px' : '20px' }}>
         {/* Calendar grid */}
         <div style={{ flex: 1 }}>
           {/* Day headers */}
@@ -107,9 +111,9 @@ export default function CalendarPage() {
               const dayEvents = eventsForDay(day)
 
               return (
-                <div key={i} onClick={() => setSelectedDate(ds)}
+                <div key={i} onClick={() => { setSelectedDate(ds); if (isMobile && dayEvents.length > 0) setShowSheet(true) }}
                   style={{
-                    minHeight: '90px', padding: '6px', borderRadius: '10px', cursor: 'pointer',
+                    minHeight: isMobile ? '48px' : '90px', padding: isMobile ? '3px' : '6px', borderRadius: isMobile ? '8px' : '10px', cursor: 'pointer',
                     background: 'linear-gradient(145deg, #141420, #0e0e1a)',
                     border: isToday ? '1px solid rgba(201,168,76,0.4)' : isSelected ? '1px solid rgba(201,168,76,0.2)' : '1px solid rgba(255,255,255,0.05)',
                     boxShadow: isToday ? '0 0 12px rgba(201,168,76,0.15)' : 'none',
@@ -117,12 +121,17 @@ export default function CalendarPage() {
                   }}
                   onMouseEnter={e => { if (!isToday) (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-1px)' }}
                   onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)' }}>
-                  <div style={{ fontSize: '12px', fontWeight: isToday ? 800 : 500, color: isToday ? C.gold : C.text, marginBottom: '4px' }}>{day}</div>
-                  {dayEvents.slice(0, 2).map((ev, j) => {
-                    const col = COLORS[ev.event_type] || COLORS.work
-                    return <div key={j} style={{ fontSize: '9px', padding: '2px 5px', borderRadius: '4px', background: col.bg, color: col.text, marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', borderLeft: `2px solid ${col.border}` }}>{ev.title}</div>
-                  })}
-                  {dayEvents.length > 2 && <div style={{ fontSize: '8px', color: C.textMuted }}>+{dayEvents.length - 2} más</div>}
+                  <div style={{ fontSize: isMobile ? '11px' : '12px', fontWeight: isToday ? 800 : 500, color: isToday ? C.gold : C.text, marginBottom: isMobile ? '2px' : '4px' }}>{day}</div>
+                  {isMobile ? (
+                    dayEvents.length > 0 && <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                      {dayEvents.slice(0, 3).map((ev, j) => { const col = COLORS[ev.event_type] || COLORS.work; return <div key={j} style={{ width: 6, height: 6, borderRadius: '50%', background: col.border }} /> })}
+                    </div>
+                  ) : (
+                    <>
+                      {dayEvents.slice(0, 2).map((ev, j) => { const col = COLORS[ev.event_type] || COLORS.work; return <div key={j} style={{ fontSize: '9px', padding: '2px 5px', borderRadius: '4px', background: col.bg, color: col.text, marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', borderLeft: `2px solid ${col.border}` }}>{ev.title}</div> })}
+                      {dayEvents.length > 2 && <div style={{ fontSize: '8px', color: C.textMuted }}>+{dayEvents.length - 2} más</div>}
+                    </>
+                  )}
                 </div>
               )
             })}
@@ -130,7 +139,7 @@ export default function CalendarPage() {
         </div>
 
         {/* Side panel — events for selected day */}
-        <div style={{ width: '300px', flexShrink: 0 }}>
+        <div style={{ width: isMobile ? '100%' : '300px', flexShrink: 0, display: isMobile ? 'none' : 'block' }}>
           <div style={{ background: 'linear-gradient(145deg, #141420, #0e0e1a)', border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
             <h3 style={{ color: C.text, fontSize: '14px', fontWeight: 700, margin: '0 0 12px' }}>
               {selectedDate ? new Date(selectedDate + 'T12:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }) : 'Hoy'}
@@ -190,6 +199,40 @@ export default function CalendarPage() {
           </div>
         </div>
       </div>
+
+      {/* Mobile bottom sheet */}
+      {isMobile && showSheet && selectedDate && (
+        <>
+          <div onClick={() => setShowSheet(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 49 }} />
+          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#141420', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '20px 20px 0 0', padding: '20px', zIndex: 50, maxHeight: '60vh', overflowY: 'auto', boxShadow: '0 -8px 40px rgba(0,0,0,0.6)' }}>
+            <div style={{ width: 40, height: 4, background: 'rgba(255,255,255,0.2)', borderRadius: 2, margin: '0 auto 16px' }} />
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 12 }}>{new Date(selectedDate + 'T12:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+            {selectedDayEvents.length === 0 ? <p style={{ color: C.textMuted, fontSize: 12, textAlign: 'center' }}>Sin eventos</p> : selectedDayEvents.map(ev => {
+              const col = COLORS[ev.event_type] || COLORS.work
+              const time = new Date(ev.start_time).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+              return (
+                <div key={ev.id} style={{ padding: '12px', borderRadius: '10px', marginBottom: '8px', background: 'rgba(255,255,255,0.03)', border: `1px solid rgba(255,255,255,0.06)`, borderLeft: `3px solid ${col.border}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{ev.title}</span>
+                    <span style={{ fontSize: 11, color: col.text, fontWeight: 600 }}>{time}</span>
+                  </div>
+                  {ev.lead_name && <span style={{ fontSize: 11, color: '#34d399' }}>👤 {ev.lead_name}</span>}
+                  {ev.lead_phone && (
+                    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                      <a href={`https://wa.me/${ev.lead_phone.replace(/\D/g, '')}`} target="_blank" style={{ flex: 1, padding: 7, borderRadius: 6, fontSize: 11, fontWeight: 600, textAlign: 'center', textDecoration: 'none', background: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.25)', color: '#25D366' }}>WhatsApp</a>
+                      <a href={`tel:+${ev.lead_phone.replace(/\D/g, '')}`} style={{ flex: 1, padding: 7, borderRadius: 6, fontSize: 11, fontWeight: 600, textAlign: 'center', textDecoration: 'none', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.25)', color: '#a78bfa' }}>Llamar</a>
+                    </div>
+                  )}
+                  {ev.location && (
+                    <button onClick={() => openMaps('google', ev.location)} style={{ width: '100%', marginTop: 6, padding: 7, borderRadius: 6, fontSize: 11, fontWeight: 600, fontFamily: C.font, cursor: 'pointer', background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.border}`, color: C.textDim }}>📍 {ev.location}</button>
+                  )}
+                </div>
+              )
+            })}
+            <button onClick={() => setShowSheet(false)} style={{ width: '100%', marginTop: 8, padding: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#9ca3af', fontSize: 12, cursor: 'pointer', fontFamily: C.font }}>Cerrar</button>
+          </div>
+        </>
+      )}
 
       {showModal && <EventModal date={selectedDate || undefined} event={editEvent} onClose={() => { setShowModal(false); setEditEvent(null) }} onSaved={loadEvents} />}
     </div>
