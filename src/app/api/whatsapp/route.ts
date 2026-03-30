@@ -696,23 +696,71 @@ export async function POST(req: NextRequest) {
     let body = formData.get('Body') as string || ''
     const profileName = formData.get('ProfileName') as string || ''
     const mediaUrl = formData.get('MediaUrl0') as string || ''
+    const numMedia = parseInt(formData.get('NumMedia') as string || '0')
+    const mediaType = formData.get('MediaContentType0') as string || ''
 
-    console.log(`Incoming WhatsApp from ${from}: ${body || '[audio/media]'}`)
+    console.log(`[TWILIO RAW] From: ${from} | Body: "${body}" | MediaUrl: ${mediaUrl ? 'yes' : 'no'} | NumMedia: ${numMedia} | Type: ${mediaType}`)
 
-    // Handle audio messages
-    if (mediaUrl && !body) {
-      console.log(`[Sophia] Audio received: ${mediaUrl}`)
-      const transcription = await transcribeAudio(mediaUrl)
-      if (transcription) {
-        body = transcription
-        console.log(`[Sophia] Transcribed: ${body}`)
-      } else {
-        // No OpenAI key or transcription failed — ask for text
-        await sendWhatsApp(from, 'Recibí tu audio 😊 Por ahora solo puedo leer texto. ¿Puedes escribirme lo que me dijiste?')
-        return new NextResponse(
-          `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
-          { status: 200, headers: { 'Content-Type': 'text/xml' } }
-        )
+    // Handle audio/media messages
+    const isAudio = numMedia > 0 && (mediaType.includes('audio') || mediaType.includes('ogg') || mediaType.includes('mpeg') || mediaType.includes('mp4') || mediaUrl.includes('audio'))
+
+    if (isAudio || (mediaUrl && !body)) {
+      console.log(`[AUDIO] Detected — URL: ${mediaUrl} | Type: ${mediaType}`)
+
+      try {
+        const twilioAuth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')
+        const audioRes = await fetch(mediaUrl, { headers: { 'Authorization': `Basic ${twilioAuth}` } })
+
+        if (!audioRes.ok) {
+          console.error(`[AUDIO] Download failed: ${audioRes.status}`)
+          throw new Error(`Download failed: ${audioRes.status}`)
+        }
+
+        const audioBuffer = await audioRes.arrayBuffer()
+        console.log(`[AUDIO] Downloaded: ${audioBuffer.byteLength} bytes`)
+
+        const openaiKey = process.env.OPENAI_API_KEY
+        if (!openaiKey || openaiKey === 'pendiente') {
+          console.log('[AUDIO] No OpenAI key — fallback to text request')
+          throw new Error('No OpenAI key')
+        }
+
+        const audioBlob = new Blob([audioBuffer], { type: mediaType || 'audio/ogg' })
+        const whisperForm = new FormData()
+        whisperForm.append('file', audioBlob, 'audio.ogg')
+        whisperForm.append('model', 'whisper-1')
+        whisperForm.append('language', 'es')
+        whisperForm.append('response_format', 'text')
+
+        const whisperRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${openaiKey}` },
+          body: whisperForm,
+        })
+
+        if (!whisperRes.ok) {
+          const errText = await whisperRes.text()
+          console.error(`[WHISPER] Error ${whisperRes.status}: ${errText}`)
+          throw new Error(`Whisper failed: ${errText}`)
+        }
+
+        const transcription = await whisperRes.text()
+        console.log(`[WHISPER] Transcription: "${transcription}"`)
+
+        if (transcription.trim()) {
+          body = transcription.trim()
+        } else {
+          throw new Error('Empty transcription')
+        }
+      } catch (audioErr: any) {
+        console.error('[AUDIO] Error:', audioErr.message)
+        if (!body) {
+          await sendWhatsApp(from, 'Recibí tu audio 😊 Por ahora solo puedo leer texto. ¿Puedes escribirme lo que me dijiste?')
+          return new NextResponse(
+            `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
+            { status: 200, headers: { 'Content-Type': 'text/xml' } }
+          )
+        }
       }
     }
 
