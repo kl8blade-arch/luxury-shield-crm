@@ -144,6 +144,191 @@ export async function handleMasterMessage(from: string, body: string, mediaUrl?:
     return
   }
 
+  // Handle URL — Sophia crawls, learns, and auto-routes to expert
+  const urlMatch = (body || '').match(/https?:\/\/[^\s]+/i)
+  if (urlMatch && !mediaUrl) {
+    const url = urlMatch[0]
+    console.log('[MASTER] URL detected:', url)
+    await sendWhatsApp(from, `🌐 Analizando: ${url}\nExtrayendo conocimiento, documentos y reglas...`)
+
+    try {
+      // Step 1: Fetch the page content
+      const pageRes = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SophiaBot/1.0)' }, redirect: 'follow' })
+      if (!pageRes.ok) throw new Error(`Page fetch failed: ${pageRes.status}`)
+      const html = await pageRes.text()
+
+      // Step 2: Extract text content (strip HTML tags)
+      const textContent = html
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .substring(0, 15000) // Limit for Claude context
+
+      // Step 3: Find PDF links on the page
+      const pdfLinks: string[] = []
+      const pdfMatches = html.match(/href=["']([^"']*\.pdf[^"']*)/gi) || []
+      for (const match of pdfMatches.slice(0, 5)) {
+        let pdfUrl = match.replace(/href=["']/i, '')
+        if (pdfUrl.startsWith('/')) {
+          const base = new URL(url)
+          pdfUrl = `${base.origin}${pdfUrl}`
+        } else if (!pdfUrl.startsWith('http')) {
+          pdfUrl = new URL(pdfUrl, url).href
+        }
+        pdfLinks.push(pdfUrl)
+      }
+
+      console.log(`[MASTER] Page text: ${textContent.length} chars, PDFs found: ${pdfLinks.length}`)
+
+      // Step 4: Claude analyzes the page content
+      const analysisRes = await callClaude(
+        `Eres un analista experto en seguros. Analiza esta página web y extrae TODO el conocimiento relevante. Devuelve SOLO JSON:
+{"category":"dental"|"aca"|"vida"|"iul"|"medicare"|"suplementario"|"otro","carrier":"nombre del carrier","product_name":"nombre del producto si aplica","knowledge":"resumen COMPLETO de 800 palabras: coberturas, precios, estados, elegibilidad, periodos de espera, redes de proveedores, deducibles, copagos, máximos, exclusiones, reglas, lo que se puede y no se puede hacer, beneficios clave, comparación con competencia","rules":"lista de reglas y restricciones importantes separadas por |","exclusions":"lista de exclusiones separadas por |","keywords":["lista","de","keywords"],"skill_suggestion":"si este conocimiento justifica crear o mejorar un skill, describe qué skill en 1 línea, sino null","pdfs_found":${pdfLinks.length}}`,
+        `URL: ${url}\n\nContenido de la página:\n${textContent}`
+      )
+
+      let parsed: any
+      try { parsed = JSON.parse(analysisRes.replace(/```json\n?|\n?```/g, '').trim()) } catch { parsed = { category: 'otro', knowledge: analysisRes, keywords: [] } }
+
+      // Step 5: Find matching expert agent
+      const { data: agents } = await supabase.from('sophia_agents').select('*').eq('active', true)
+      let bestAgent: any = null
+      let bestScore = 0
+      for (const agent of agents || []) {
+        let score = 0
+        for (const kw of (agent.trigger_keywords || [])) {
+          if (parsed.category?.toLowerCase().includes(kw)) score += 2
+          if (parsed.carrier?.toLowerCase().includes(kw)) score += 2
+          if (parsed.keywords?.some((pk: string) => pk.toLowerCase().includes(kw))) score += 1
+        }
+        if (score > bestScore) { bestScore = score; bestAgent = agent }
+      }
+
+      // Step 6: Save knowledge
+      await supabase.from('sophia_knowledge').insert({
+        title: `${parsed.carrier || 'Web'} — ${parsed.product_name || parsed.category} (URL)`,
+        content: parsed.knowledge + (parsed.rules ? `\n\nREGLAS:\n${parsed.rules.replace(/\|/g, '\n• ')}` : '') + (parsed.exclusions ? `\n\nEXCLUSIONES:\n${parsed.exclusions.replace(/\|/g, '\n• ')}` : ''),
+        source_type: 'url',
+        source_name: url,
+        embedding_summary: parsed.knowledge?.substring(0, 300),
+        tags: [parsed.category, parsed.carrier, 'url', ...(parsed.keywords || [])].filter(Boolean),
+        active: true,
+      })
+
+      // Step 7: Save training source linked to agent
+      await supabase.from('sophia_training_sources').insert({
+        title: `URL: ${parsed.carrier || 'Web'} — ${parsed.product_name || url.substring(0, 50)}`,
+        source_type: 'url', url,
+        content: parsed.knowledge,
+        extracted_knowledge: parsed.knowledge,
+        agent_id: bestAgent?.id || null,
+        processed: true,
+      })
+
+      // Step 8: Update expert agent if found
+      if (bestAgent) {
+        const newKnowledge = `\n\nDE ${url}:\n${parsed.knowledge}${parsed.rules ? '\nREGLAS: ' + parsed.rules : ''}${parsed.exclusions ? '\nEXCLUSIONES: ' + parsed.exclusions : ''}`
+        await supabase.from('sophia_agents').update({
+          system_prompt: bestAgent.system_prompt + newKnowledge,
+          knowledge_sources: [...(bestAgent.knowledge_sources || []), { type: 'url', url, carrier: parsed.carrier, date: new Date().toISOString() }],
+        }).eq('id', bestAgent.id)
+      }
+
+      // Step 9: Save rules to memory for permanent access
+      if (parsed.rules) {
+        await supabase.from('sophia_memory').insert({
+          category: 'rules', key: `rules_${parsed.carrier || 'web'}_${Date.now()}`,
+          value: `REGLAS de ${parsed.carrier || 'este producto'}: ${parsed.rules}`,
+          source: 'url', importance: 9,
+        })
+      }
+      if (parsed.exclusions) {
+        await supabase.from('sophia_memory').insert({
+          category: 'rules', key: `exclusions_${parsed.carrier || 'web'}_${Date.now()}`,
+          value: `EXCLUSIONES de ${parsed.carrier || 'este producto'}: ${parsed.exclusions}`,
+          source: 'url', importance: 9,
+        })
+      }
+
+      // Step 10: Auto-create or suggest skill if needed
+      if (parsed.skill_suggestion) {
+        await supabase.from('sophia_memory').insert({
+          category: 'instruction', key: `skill_suggestion_${Date.now()}`,
+          value: `Sugerencia de skill: ${parsed.skill_suggestion} (de ${url})`,
+          source: 'url', importance: 7,
+        })
+      }
+
+      // Step 11: Try to download PDFs found on the page
+      let pdfProcessed = 0
+      for (const pdfUrl of pdfLinks.slice(0, 3)) {
+        try {
+          const pdfRes = await fetch(pdfUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, redirect: 'follow' })
+          if (!pdfRes.ok) continue
+          const contentType = pdfRes.headers.get('content-type') || ''
+          if (!contentType.includes('pdf') && !pdfUrl.endsWith('.pdf')) continue
+
+          const pdfBuf = Buffer.from(await pdfRes.arrayBuffer())
+          if (pdfBuf.length < 1000 || pdfBuf.length > 10000000) continue
+
+          const pdfB64 = pdfBuf.toString('base64')
+          const pdfExtract = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01' },
+            body: JSON.stringify({
+              model: 'claude-haiku-4-5-20251001', max_tokens: 2000,
+              messages: [{ role: 'user', content: [
+                { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdfB64 } },
+                { type: 'text', text: 'Extrae todo el conocimiento de este documento de seguros en máximo 500 palabras. Incluye coberturas, precios, reglas, exclusiones, estados, elegibilidad.' }
+              ] }],
+            }),
+          })
+
+          if (pdfExtract.ok) {
+            const pdfData = await pdfExtract.json()
+            const pdfKnowledge = pdfData.content?.[0]?.text || ''
+            if (pdfKnowledge.length > 50) {
+              await supabase.from('sophia_training_sources').insert({
+                title: `PDF de ${url}: ${pdfUrl.split('/').pop()}`,
+                source_type: 'pdf', url: pdfUrl,
+                content: pdfKnowledge, extracted_knowledge: pdfKnowledge,
+                agent_id: bestAgent?.id || null, processed: true,
+              })
+              if (bestAgent) {
+                await supabase.from('sophia_agents').update({
+                  system_prompt: bestAgent.system_prompt + `\n\nPDF (${pdfUrl.split('/').pop()}):\n${pdfKnowledge}`,
+                }).eq('id', bestAgent.id)
+              }
+              pdfProcessed++
+            }
+          }
+        } catch (e) { console.log(`[MASTER] PDF download failed: ${pdfUrl}`) }
+      }
+
+      // Final confirmation
+      const agentInfo = bestAgent ? `🤖 Agente: *${bestAgent.name}*` : '⚠️ Sin agente asignado (Sophia usará el conocimiento directamente)'
+      await sendWhatsApp(from,
+        `✅ URL procesada completamente!\n\n` +
+        `📚 Carrier: ${parsed.carrier || '—'}\n` +
+        `📦 Producto: ${parsed.product_name || '—'}\n` +
+        `🏷️ Categoría: ${parsed.category}\n` +
+        `${agentInfo}\n\n` +
+        `📝 Conocimiento: ${parsed.knowledge?.substring(0, 100)}...\n` +
+        `${parsed.rules ? `📋 Reglas: ${parsed.rules.split('|').length} reglas guardadas\n` : ''}` +
+        `${parsed.exclusions ? `🚫 Exclusiones: ${parsed.exclusions.split('|').length} exclusiones guardadas\n` : ''}` +
+        `${pdfProcessed > 0 ? `📄 PDFs descargados: ${pdfProcessed} documentos procesados\n` : ''}` +
+        `${pdfLinks.length > 0 && pdfProcessed === 0 ? `📄 PDFs encontrados: ${pdfLinks.length} (no descargables)\n` : ''}` +
+        `${parsed.skill_suggestion ? `\n💡 Sugerencia: ${parsed.skill_suggestion}` : ''}`
+      )
+    } catch (err: any) {
+      console.error('[MASTER] URL error:', err.message)
+      await sendWhatsApp(from, `⚠️ Error procesando la URL: ${err.message}`)
+    }
+    return
+  }
+
   let text = body
 
   // Detect intent
