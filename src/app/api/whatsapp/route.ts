@@ -285,9 +285,15 @@ async function getAIResponse(lead: any, conversationHistory: any[], incomingMess
   // Module 2: Speed detection
   const speedContext = getSpeedContext(conversationHistory)
 
-  // Module 3: Language detection
+  // Module 3: Multi-language (EN/ES/ZH/HT)
   const lang = lead.preferred_language || 'es'
-  const langNote = lang === 'en' ? 'IMPORTANT: This lead speaks ENGLISH. Respond entirely in English.' : ''
+  const langNotes: Record<string, string> = {
+    en: 'IMPORTANT: This lead speaks ENGLISH. Respond entirely in English. Use American insurance terminology.',
+    zh: 'IMPORTANT: 这位客户说中文。用简体中文回复。Use Chinese (Simplified) for all responses. Be respectful and formal.',
+    ht: 'IMPORTANT: Kliyan sa a pale Kreyòl Ayisyen. Reponn an Kreyòl Ayisyen. Respond in Haitian Creole. Be warm and community-oriented.',
+    es: '',
+  }
+  const langNote = langNotes[lang] || ''
 
   const systemPrompt = `══ REGLA #0 — DETECCIÓN DE CIERRE — MÁXIMA PRIORIDAD ══
 Si el lead dice "ya mismo", "ahora mismo", "quiero que me llamen", "consígueme el plan", "quiero empezar", "dónde firmo", "cómo activo", "ok me interesa", "sí quiero", confirma un número de teléfono, o CUALQUIER frase que indique que quiere proceder:
@@ -1068,13 +1074,21 @@ export async function POST(req: NextRequest) {
     })
     if (saveErr) console.error('[Sophia] Save message error:', saveErr)
 
-    // Module 3: Language detection
-    if (!lead.preferred_language || lead.preferred_language === 'es') {
-      const enWords = body.match(/\b(the|is|are|want|have|how|much|need|yes|no|please|thank|what|when|where|can|do|my|your)\b/gi)
-      if (enWords && enWords.length >= 3) {
-        await supabase.from('leads').update({ preferred_language: 'en' }).eq('id', lead.id)
-        lead.preferred_language = 'en'
-      }
+    // Module 3: Multi-language detection (EN/ES/ZH/HT)
+    const detectLang = (text: string): string => {
+      const t = text.toLowerCase()
+      const en = t.match(/\b(the|is|are|want|have|how|much|need|yes|no|please|thank|what|when|where|can|do|my|your|would|could|about|with)\b/gi)
+      const zh = t.match(/[\u4e00-\u9fff]/g)
+      const ht = t.match(/\b(mwen|ou|ki|pou|nan|pa|gen|yo|sa|ak|fe|tanpri|bondye|kontan|anpil|kijan)\b/gi)
+      if (zh && zh.length >= 2) return 'zh'
+      if (ht && ht.length >= 2) return 'ht'
+      if (en && en.length >= 3) return 'en'
+      return 'es'
+    }
+    const detectedLang = detectLang(body)
+    if (detectedLang !== (lead.preferred_language || 'es')) {
+      await supabase.from('leads').update({ preferred_language: detectedLang, detected_language: detectedLang }).eq('id', lead.id)
+      lead.preferred_language = detectedLang
     }
 
     // Update message tracking
