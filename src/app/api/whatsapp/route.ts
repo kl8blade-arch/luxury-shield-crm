@@ -408,7 +408,18 @@ Si algún dato dice 'desconocido', puedes preguntarlo. Si ya está, NUNCA volver
     dynamicLayers = await buildDynamicPromptLayers()
   } catch {}
 
-  const fullSystemPrompt = contextSummary + '\n' + systemPrompt + dynamicLayers
+  // Sophia Orchestrator — route to expert agent if needed
+  let expertLayer = ''
+  try {
+    const { routeToExpert, buildOrchestratedPrompt } = await import('@/lib/sophia-orchestrator')
+    const expert = await routeToExpert(incomingMessage, lead)
+    if (expert) {
+      expertLayer = `\n═══ ESPECIALISTA: ${expert.name} ═══\n${expert.system_prompt}\n═══════════════════════════════════`
+      console.log(`[ORCHESTRATOR] Routed to ${expert.name} for "${incomingMessage.substring(0, 40)}"`)
+    }
+  } catch {}
+
+  const fullSystemPrompt = contextSummary + '\n' + systemPrompt + dynamicLayers + expertLayer
 
   // Build message history for Claude API
   const rawMessages: { role: 'user' | 'assistant'; content: string }[] = []

@@ -8,20 +8,23 @@ import {
 } from 'lucide-react'
 
 const NAV = [
-  { href: '/dashboard',  icon: LayoutDashboard, label: 'Dashboard',      badge: null },
-  { href: '/analytics',  icon: BarChart3,       label: 'Analytics',      badge: null },
-  { href: '/leads',      icon: Users,           label: 'Mis Leads',       badge: null },
-  { href: '/pipeline',   icon: Kanban,          label: 'Pipeline',        badge: null },
-  { href: '/calendar',   icon: Calendar,        label: 'Agenda',          badge: null },
-  { href: '/reminders',  icon: Bell,            label: 'Recordatorios',   badge: null },
-  { href: '/templates',  icon: MessageSquare,   label: 'Plantillas',      badge: null },
-  { href: '/agents',     icon: UserCheck,       label: 'Agentes',         badge: null },
-  { href: '/packages',   icon: Package,         label: 'Paquetes',        badge: null },
-  { href: '/training',   icon: Brain,           label: 'SophiaModel',     badge: null },
-  { href: '/accounts',   icon: Building2,       label: 'Mi Cuenta',       badge: null },
-  { href: '/sophia-os',  icon: Shield,          label: 'Sophia OS',       badge: null },
-  { href: '/settings',   icon: Settings,        label: 'Configuración',   badge: null },
+  { href: '/dashboard',  icon: LayoutDashboard, label: 'Dashboard',      badge: null, admin: false },
+  { href: '/analytics',  icon: BarChart3,       label: 'Analytics',      badge: null, admin: false },
+  { href: '/leads',      icon: Users,           label: 'Mis Leads',       badge: null, admin: false },
+  { href: '/pipeline',   icon: Kanban,          label: 'Pipeline',        badge: null, admin: false },
+  { href: '/calendar',   icon: Calendar,        label: 'Agenda',          badge: null, admin: false },
+  { href: '/reminders',  icon: Bell,            label: 'Recordatorios',   badge: null, admin: false },
+  { href: '/templates',  icon: MessageSquare,   label: 'Plantillas',      badge: null, admin: false },
+  { href: '/agents',     icon: UserCheck,       label: 'Agentes',         badge: null, admin: false },
+  { href: '/packages',   icon: Package,         label: 'Paquetes',        badge: null, admin: false },
+  { href: '/training',   icon: Brain,           label: 'SophiaModel',     badge: null, admin: true },
+  { href: '/accounts',   icon: Building2,       label: 'Mi Cuenta',       badge: null, admin: false },
+  { href: '/sophia-os',  icon: Shield,          label: 'Sophia OS',       badge: null, admin: true },
+  { href: '/settings',   icon: Settings,        label: 'Configuración',   badge: null, admin: false },
 ]
+
+// Only Carlos (admin) sees admin-only pages
+const IS_ADMIN = true // TODO: replace with auth check
 
 export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const pathname = usePathname()
@@ -65,7 +68,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
 
       {/* ── NAV ITEMS ── */}
       <nav style={{ flex: 1, padding: '0 12px', display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
-        {NAV.map(({ href, icon: Icon, label, badge }) => {
+        {NAV.filter(n => !n.admin || IS_ADMIN).map(({ href, icon: Icon, label, badge }) => {
           const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
           return (
             <Link key={href} href={href} onClick={onNavigate} style={{ textDecoration: 'none' }}>
