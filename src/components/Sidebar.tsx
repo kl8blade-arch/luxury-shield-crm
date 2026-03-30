@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, Kanban, Bell, Calendar,
-  MessageSquare, Settings, Shield,
+  MessageSquare, Settings, Shield, Building2,
   UserCheck, Package, ChevronRight, BarChart3, Brain,
 } from 'lucide-react'
 
@@ -18,6 +18,7 @@ const NAV = [
   { href: '/agents',     icon: UserCheck,       label: 'Agentes',         badge: null },
   { href: '/packages',   icon: Package,         label: 'Paquetes',        badge: null },
   { href: '/training',   icon: Brain,           label: 'SophiaModel',     badge: null },
+  { href: '/accounts',   icon: Building2,       label: 'Mi Cuenta',       badge: null },
   { href: '/sophia-os',  icon: Shield,          label: 'Sophia OS',       badge: null },
   { href: '/settings',   icon: Settings,        label: 'Configuración',   badge: null },
 ]
