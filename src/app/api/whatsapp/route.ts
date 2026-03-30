@@ -401,7 +401,14 @@ CONTEXTO YA RECOPILADO (NO PREGUNTAR DE NUEVO):
 Si algún dato dice 'desconocido', puedes preguntarlo. Si ya está, NUNCA volver a preguntarlo.
 `
 
-  const fullSystemPrompt = contextSummary + '\n' + systemPrompt
+  // Inject dynamic layers from Sophia OS (memory + skills + knowledge)
+  let dynamicLayers = ''
+  try {
+    const { buildDynamicPromptLayers } = await import('@/lib/build-sophia-prompt')
+    dynamicLayers = await buildDynamicPromptLayers()
+  } catch {}
+
+  const fullSystemPrompt = contextSummary + '\n' + systemPrompt + dynamicLayers
 
   // Build message history for Claude API
   const rawMessages: { role: 'user' | 'assistant'; content: string }[] = []
@@ -700,6 +707,40 @@ export async function POST(req: NextRequest) {
     const mediaType = formData.get('MediaContentType0') as string || ''
 
     console.log(`[TWILIO RAW] From: ${from} | Body: "${body}" | MediaUrl: ${mediaUrl ? 'yes' : 'no'} | NumMedia: ${numMedia} | Type: ${mediaType}`)
+
+    // ══════════════════════════════════════════════
+    // MASTER DETECTION — Carlos trains Sophia via WhatsApp
+    // ══════════════════════════════════════════════
+    const MASTER_NUM = '17869435656'
+    const fromDigits = from.replace(/\D/g, '')
+    if (fromDigits === MASTER_NUM || fromDigits.endsWith(MASTER_NUM.slice(-10))) {
+      console.log('[MASTER] Message from master — training mode')
+
+      // Transcribe audio if needed
+      let masterBody = body
+      if (!masterBody && mediaUrl && (mediaType.includes('audio') || mediaType.includes('ogg'))) {
+        try {
+          const twilioAuth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')
+          const rRes = await fetch(mediaUrl, { headers: { 'Authorization': `Basic ${twilioAuth}` }, redirect: 'manual' })
+          const audioUrl = rRes.status === 307 ? rRes.headers.get('location') || mediaUrl : mediaUrl
+          const aRes = await fetch(audioUrl)
+          const aBuf = Buffer.from(await aRes.arrayBuffer())
+          const wForm = new FormData()
+          wForm.append('file', new Blob([aBuf], { type: 'audio/ogg' }), 'audio.ogg')
+          wForm.append('model', 'whisper-1')
+          wForm.append('language', 'es')
+          const wRes = await fetch('https://api.openai.com/v1/audio/transcriptions', { method: 'POST', headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` }, body: wForm })
+          if (wRes.ok) { const r = await wRes.json(); masterBody = r.text || '' }
+        } catch (e) { console.error('[MASTER] Audio transcription error:', e) }
+      }
+
+      if (masterBody || mediaUrl) {
+        const { handleMasterMessage } = await import('@/lib/master-handler')
+        await handleMasterMessage(from, masterBody || '', mediaUrl || undefined, mediaType || undefined)
+      }
+
+      return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
+    }
 
     // Handle audio/media messages
     const isAudio = numMedia > 0 && (mediaType.includes('audio') || mediaType.includes('ogg') || mediaType.includes('mpeg') || mediaType.includes('mp4') || mediaUrl.includes('audio'))

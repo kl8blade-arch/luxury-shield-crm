@@ -18,6 +18,7 @@ const NAV = [
   { href: '/agents',     icon: UserCheck,       label: 'Agentes',         badge: null },
   { href: '/packages',   icon: Package,         label: 'Paquetes',        badge: null },
   { href: '/training',   icon: Brain,           label: 'SophiaModel',     badge: null },
+  { href: '/sophia-os',  icon: Shield,          label: 'Sophia OS',       badge: null },
   { href: '/settings',   icon: Settings,        label: 'Configuración',   badge: null },
 ]
 
