@@ -12,27 +12,19 @@ const TWILIO_TOKEN = process.env.TWILIO_AUTH_TOKEN!
 const TWILIO_FROM = process.env.TWILIO_WHATSAPP_FROM!
 const ADMIN_PHONE = process.env.ADMIN_WHATSAPP || '+17869435656'
 
-// ── Send WhatsApp via Twilio ──
+// ── Send WhatsApp via Twilio (auto-splits messages > 1500 chars) ──
 async function sendWhatsApp(to: string, message: string) {
   const cleanTo = to.startsWith('+') ? to : `+${to.replace(/\D/g, '')}`
-  const body = new URLSearchParams({
-    From: `whatsapp:${TWILIO_FROM}`,
-    To: `whatsapp:${cleanTo}`,
-    Body: message,
-  })
-  const res = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${Buffer.from(`${TWILIO_SID}:${TWILIO_TOKEN}`).toString('base64')}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: body.toString(),
-    }
-  )
+  const auth = `Basic ${Buffer.from(`${TWILIO_SID}:${TWILIO_TOKEN}`).toString('base64')}`
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`
+
+  // WhatsApp limit is 1600 chars — split if needed
+  const msg = message.length > 1500 ? message.substring(0, 1497) + '...' : message
+
+  const body = new URLSearchParams({ From: `whatsapp:${TWILIO_FROM}`, To: `whatsapp:${cleanTo}`, Body: msg })
+  const res = await fetch(url, { method: 'POST', headers: { 'Authorization': auth, 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() })
   const data = await res.json()
-  console.log('WhatsApp sent:', data.sid, 'to:', cleanTo)
+  console.log('WhatsApp sent:', data.sid, 'to:', cleanTo, data.error_code ? `ERROR: ${data.error_code}` : '')
   return data
 }
 

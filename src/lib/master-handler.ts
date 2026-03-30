@@ -21,12 +21,32 @@ async function callClaude(system: string, user: string, model = 'claude-haiku-4-
 
 async function sendWhatsApp(to: string, message: string) {
   const cleanTo = to.startsWith('+') ? to : `+${to.replace(/\D/g, '')}`
-  const body = new URLSearchParams({ From: `whatsapp:${process.env.TWILIO_WHATSAPP_FROM}`, To: `whatsapp:${cleanTo}`, Body: message })
-  await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`, {
-    method: 'POST',
-    headers: { 'Authorization': `Basic ${Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-  })
+  const auth = `Basic ${Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')}`
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`
+
+  // WhatsApp limit is 1600 chars — split long messages
+  const chunks: string[] = []
+  if (message.length <= 1500) {
+    chunks.push(message)
+  } else {
+    const parts = message.split('\n\n')
+    let current = ''
+    for (const part of parts) {
+      if ((current + '\n\n' + part).length > 1500 && current) {
+        chunks.push(current.trim())
+        current = part
+      } else {
+        current = current ? current + '\n\n' + part : part
+      }
+    }
+    if (current.trim()) chunks.push(current.trim())
+  }
+
+  for (const chunk of chunks) {
+    const body = new URLSearchParams({ From: `whatsapp:${process.env.TWILIO_WHATSAPP_FROM}`, To: `whatsapp:${cleanTo}`, Body: chunk })
+    await fetch(url, { method: 'POST', headers: { 'Authorization': auth, 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() })
+    if (chunks.length > 1) await new Promise(r => setTimeout(r, 500))
+  }
 }
 
 export async function handleMasterMessage(from: string, body: string, mediaUrl?: string, mediaType?: string) {
