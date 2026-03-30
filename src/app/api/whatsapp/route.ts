@@ -774,9 +774,17 @@ export async function POST(req: NextRequest) {
       const { handleMasterMessage } = await import('@/lib/master-handler')
       if (masterBody && masterBody.trim()) {
         await handleMasterMessage(from, masterBody, mediaUrl || undefined, mediaType || undefined)
-      } else if (mediaUrl) {
-        // Media without text (PDF, image, or failed audio)
+      } else if (mediaUrl && !isAudioMsg) {
+        // Non-audio media (PDF, image) — pass to handler
         await handleMasterMessage(from, '', mediaUrl, mediaType || undefined)
+      } else if (mediaUrl && isAudioMsg) {
+        // Audio transcription FAILED — tell the user clearly
+        console.log('[MASTER] Audio transcription failed — sending retry message')
+        await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`, {
+          method: 'POST',
+          headers: { 'Authorization': `Basic ${Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ From: `whatsapp:${process.env.TWILIO_WHATSAPP_FROM}`, To: `whatsapp:${from}`, Body: '🎤 No pude transcribir tu audio. Puede ser muy corto o hubo un error con Whisper. Intenta:\n\n1. Enviar un audio más largo (5+ segundos)\n2. Escribir tu mensaje como texto\n3. Enviar de nuevo' }).toString(),
+        })
       } else {
         // Edge case: no body AND no media — send help
         const sendWA = (await import('@/lib/master-handler')).isMaster
