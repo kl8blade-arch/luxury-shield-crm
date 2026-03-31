@@ -5,7 +5,7 @@ import { C } from '@/lib/design'
 import { useAuth } from '@/contexts/AuthContext'
 import FileUpload from '@/components/FileUpload'
 
-type Tab = 'perfil' | 'seguridad' | 'licencias' | 'redes' | 'pipeline' | 'subcuentas' | 'ia' | 'notificaciones' | 'integraciones'
+type Tab = 'perfil' | 'seguridad' | 'licencias' | 'redes' | 'pipeline' | 'subcuentas' | 'vinculadas' | 'ia' | 'notificaciones' | 'integraciones'
 
 const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC','PR']
 
@@ -47,6 +47,14 @@ export default function SettingsPage() {
   const [subAccounts, setSubAccounts] = useState<any[]>([])
   const [deletingSubId, setDeletingSubId] = useState<string | null>(null)
   const [archiveLeads, setArchiveLeads] = useState(true)
+
+  // Linked accounts
+  const [linkedData, setLinkedData] = useState<{ managing: any[]; managedBy: any[]; pending: any[] }>({ managing: [], managedBy: [], pending: [] })
+  const [connectKey, setConnectKey] = useState('')
+  const [generatedKey, setGeneratedKey] = useState('')
+  const [newLabel, setNewLabel] = useState('')
+  const [linkLoading, setLinkLoading] = useState(false)
+  const [linkMsg, setLinkMsg] = useState('')
 
   // Pipeline stage names
   const [pipelineStages, setPipelineStages] = useState<Record<string, string>>({
@@ -90,6 +98,11 @@ export default function SettingsPage() {
     // Check Stripe
     const stripeOk = await fetch('/api/stripe/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(r => r.status !== 503).catch(() => false)
     setIntegrations({ twilio: true, supabase: true, anthropic: true, stripe: stripeOk })
+
+    // Load linked accounts
+    if (user?.account_id) {
+      fetch(`/api/linked-accounts?account_id=${user.account_id}`).then(r => r.json()).then(d => setLinkedData(d)).catch(() => {})
+    }
 
     // Load sub-accounts if admin
     if (user?.role === 'admin') {
@@ -167,6 +180,7 @@ export default function SettingsPage() {
     { key: 'redes', label: 'Redes', icon: '🔗' },
     { key: 'pipeline', label: 'Pipeline', icon: '📊' },
     { key: 'subcuentas', label: 'Sub-cuentas', icon: '🏢' },
+    { key: 'vinculadas', label: 'Vinculadas', icon: '🔗' },
     { key: 'ia', label: 'Sophia IA', icon: '🤖' },
     { key: 'notificaciones', label: 'Alertas', icon: '🔔' },
     { key: 'integraciones', label: 'APIs', icon: '🔌' },
@@ -484,6 +498,95 @@ export default function SettingsPage() {
                         </div>
                       )
                     })()}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ═══ CUENTAS VINCULADAS ═══ */}
+            {tab === 'vinculadas' && (
+              <div style={{ maxWidth: '560px' }}>
+                <h3 style={{ fontFamily: '"DM Serif Display",serif', fontSize: '20px', color: '#F0ECE3', margin: '0 0 6px' }}>Cuentas Vinculadas</h3>
+                <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)', marginBottom: '20px' }}>Delega acceso a tu CRM sin compartir tu contrasena</p>
+
+                {/* Generate key */}
+                <div style={{ padding: '18px', borderRadius: '14px', background: 'rgba(201,168,76,0.04)', border: '1px solid rgba(201,168,76,0.12)', marginBottom: '16px' }}>
+                  <p style={{ fontSize: '13px', fontWeight: 700, color: '#C9A84C', margin: '0 0 10px' }}>Generar clave de conexion</p>
+                  <input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="Nombre (ej: Mi asistente Maria)" style={{ ...inp, marginBottom: '8px' }} />
+                  <button onClick={async () => {
+                    setLinkLoading(true)
+                    const res = await fetch('/api/linked-accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'generate', accountId: user?.account_id, label: newLabel }) })
+                    const data = await res.json()
+                    setGeneratedKey(data.key || '')
+                    setLinkLoading(false); setNewLabel('')
+                  }} disabled={linkLoading} style={{ padding: '10px 20px', borderRadius: '10px', background: 'linear-gradient(135deg, #C9A84C, #A8893A)', color: '#06070B', fontSize: '12px', fontWeight: 700, border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    {linkLoading ? 'Generando...' : 'Generar clave'}
+                  </button>
+
+                  {generatedKey && (
+                    <div style={{ marginTop: '12px', padding: '14px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', textAlign: 'center' }}>
+                      <p style={{ fontFamily: 'monospace', fontSize: '22px', fontWeight: 800, color: '#C9A84C', letterSpacing: '0.1em', margin: '0 0 8px' }}>{generatedKey}</p>
+                      <button onClick={() => { navigator.clipboard.writeText(generatedKey); setLinkMsg('Copiada!') }} style={{ padding: '6px 16px', borderRadius: '8px', background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.2)', color: '#C9A84C', fontSize: '11px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Copiar clave</button>
+                      <p style={{ fontSize: '10px', color: 'rgba(240,236,227,0.3)', margin: '8px 0 0' }}>Comparte esta clave. Solo funciona una vez.</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Connect with key */}
+                <div style={{ padding: '18px', borderRadius: '14px', background: 'rgba(52,211,153,0.04)', border: '1px solid rgba(52,211,153,0.12)', marginBottom: '20px' }}>
+                  <p style={{ fontSize: '13px', fontWeight: 700, color: '#34d399', margin: '0 0 10px' }}>Conectar cuenta</p>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input value={connectKey} onChange={e => setConnectKey(e.target.value.toUpperCase())} placeholder="LSK-XXXX-XXXX" style={{ ...inp, flex: 1, fontFamily: 'monospace', letterSpacing: '0.05em' }} />
+                    <button onClick={async () => {
+                      setLinkLoading(true); setLinkMsg('')
+                      const res = await fetch('/api/linked-accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'connect', accountId: user?.account_id, connectionKey: connectKey }) })
+                      const data = await res.json()
+                      if (data.connected) { setLinkMsg(`Conectado a ${data.account?.name || 'cuenta'}!`); setConnectKey(''); loadAll() }
+                      else setLinkMsg(data.error || 'Error')
+                      setLinkLoading(false)
+                    }} disabled={linkLoading || connectKey.length < 12} style={{ padding: '10px 20px', borderRadius: '10px', background: connectKey.length >= 12 ? 'linear-gradient(135deg, #34d399, #059669)' : 'rgba(52,211,153,0.15)', color: '#06070B', fontSize: '12px', fontWeight: 700, border: 'none', cursor: connectKey.length >= 12 ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>Conectar</button>
+                  </div>
+                  {linkMsg && <p style={{ fontSize: '12px', color: linkMsg.includes('Error') || linkMsg.includes('invalid') ? '#fca5a5' : '#34d399', marginTop: '8px' }}>{linkMsg}</p>}
+                </div>
+
+                {/* Managing (I have access to) */}
+                {linkedData.managing.length > 0 && (
+                  <div style={{ marginBottom: '16px' }}>
+                    <p style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(240,236,227,0.3)', letterSpacing: '0.1em', marginBottom: '8px' }}>CUENTAS QUE ADMINISTRO</p>
+                    {linkedData.managing.map((la: any) => (
+                      <div key={la.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '10px', background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)', marginBottom: '6px' }}>
+                        <span style={{ fontSize: '14px' }}>🔗</span>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: '13px', fontWeight: 600, color: '#F0ECE3', margin: 0 }}>{la.owner?.name || 'Cuenta'}</p>
+                          <p style={{ fontSize: '10px', color: 'rgba(240,236,227,0.3)', margin: 0 }}>Conectada {la.connected_at ? new Date(la.connected_at).toLocaleDateString('es') : ''}</p>
+                        </div>
+                        <button onClick={async () => {
+                          await fetch('/api/linked-accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'revoke', accountId: user?.account_id, linkId: la.id }) })
+                          loadAll()
+                        }} style={{ padding: '4px 12px', borderRadius: '6px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)', color: '#f87171', fontSize: '10px', cursor: 'pointer', fontFamily: 'inherit' }}>Desconectar</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Managed by (they have access to me) */}
+                {linkedData.managedBy.length > 0 && (
+                  <div>
+                    <p style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(240,236,227,0.3)', letterSpacing: '0.1em', marginBottom: '8px' }}>ACCESO A MI CUENTA</p>
+                    {linkedData.managedBy.map((la: any) => (
+                      <div key={la.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '10px', background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)', marginBottom: '6px' }}>
+                        <span style={{ fontSize: '12px', padding: '3px 8px', borderRadius: '6px', background: la.status === 'active' ? 'rgba(52,211,153,0.1)' : la.status === 'pending' ? 'rgba(251,191,36,0.1)' : 'rgba(239,68,68,0.1)', color: la.status === 'active' ? '#34d399' : la.status === 'pending' ? '#fbbf24' : '#f87171', fontWeight: 600 }}>{la.status === 'active' ? 'Activo' : la.status === 'pending' ? 'Pendiente' : 'Revocado'}</span>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: '13px', color: '#F0ECE3', margin: 0 }}>{la.label || la.linked?.name || la.connection_key}</p>
+                        </div>
+                        {la.status !== 'revoked' && (
+                          <button onClick={async () => {
+                            await fetch('/api/linked-accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'revoke', accountId: user?.account_id, linkId: la.id }) })
+                            loadAll()
+                          }} style={{ padding: '4px 12px', borderRadius: '6px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)', color: '#f87171', fontSize: '10px', cursor: 'pointer', fontFamily: 'inherit' }}>Revocar</button>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

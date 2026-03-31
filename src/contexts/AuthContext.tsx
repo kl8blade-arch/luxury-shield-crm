@@ -22,6 +22,8 @@ interface ActiveAccount {
   slug: string
   industry: string
   logo_url?: string | null
+  isLinked?: boolean
+  permissions?: any
 }
 
 interface AuthContextType {

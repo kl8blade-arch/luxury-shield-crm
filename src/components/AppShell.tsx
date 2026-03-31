@@ -10,7 +10,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const pathname = usePathname()
-  const { user, loading, trialDaysLeft, isTrialExpired } = useAuth()
+  const { user, loading, trialDaysLeft, isTrialExpired, activeAccount, switchAccount } = useAuth()
 
   const isPublicPage = pathname === '/' || PUBLIC_ROUTES.some(r => pathname.startsWith(r))
 
@@ -66,6 +66,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         minHeight: '100vh', overflow: 'hidden',
         width: isMobile ? '100%' : undefined,
       }}>
+        {/* Linked account banner */}
+        {activeAccount?.isLinked && (
+          <div style={{
+            padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            background: 'linear-gradient(90deg, #92400e, #78350f)', fontSize: '13px', fontFamily: '"Outfit",sans-serif',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>🔗</span>
+              <span style={{ color: '#fde68a', fontWeight: 600 }}>Viendo: {activeAccount.name}</span>
+              <span style={{ color: 'rgba(253,230,138,0.5)', fontSize: '11px' }}>Cuenta vinculada</span>
+            </div>
+            <button onClick={() => switchAccount(null)} style={{ padding: '4px 12px', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fde68a', fontSize: '11px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Salir</button>
+          </div>
+        )}
+
         {/* Trial banner */}
         {trialDaysLeft !== null && !user?.paid && user?.role !== 'admin' && (
           <div style={{

@@ -463,54 +463,22 @@ Si algún dato dice 'desconocido', puedes preguntarlo. Si ya está, NUNCA volver
   console.log(`[SOPHIA] estructura: ${messages.map(m => m.role).join(' → ')}`)
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY!,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 400,
-        system: fullSystemPrompt,
-        messages,
-      }),
+    // Use centralized token tracker for the main AI call
+    const { callAI } = await import('@/lib/token-tracker')
+    const aiResult = await callAI({
+      agentId: lead?.agent_id || null,
+      accountId: lead?.account_id || null,
+      feature: 'sophia_whatsapp',
+      model: 'claude-haiku-4-5-20251001',
+      messages,
+      system: fullSystemPrompt,
+      maxTokens: 400,
+      leadId: lead?.id || null,
     })
 
-    if (!res.ok) {
-      const errorBody = await res.text()
-      console.error(`Claude API error (${res.status}):`, errorBody)
-      if (res.status === 404 || res.status === 400) {
-        console.log('Retrying with claude-3-haiku-20240307...')
-        const retryRes = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': process.env.ANTHROPIC_API_KEY!,
-            'anthropic-version': '2023-06-01',
-          },
-          body: JSON.stringify({
-            model: 'claude-3-haiku-20240307',
-            max_tokens: 400,
-            system: fullSystemPrompt,
-            messages,
-          }),
-        })
-        if (retryRes.ok) {
-          const retryData = await retryRes.json()
-          return retryData.content?.[0]?.text || 'Hola, soy Sophia de Luxury Shield 😊 ¿En qué puedo ayudarte hoy?'
-        }
-        const retryError = await retryRes.text()
-        console.error(`Claude API retry also failed (${retryRes.status}):`, retryError)
-      }
-      return 'Hola, soy Sophia de Luxury Shield 😊 ¿En qué puedo ayudarte hoy?'
-    }
-
-    const data = await res.json()
-    const text = data.content?.[0]?.text
+    const text = aiResult.text
     if (!text) {
-      console.error('Claude API returned empty content:', JSON.stringify(data))
+      console.error('Claude API returned empty content')
     }
     return text || 'Hola, soy Sophia de Luxury Shield 😊 ¿En qué puedo ayudarte hoy?'
   } catch (err) {
@@ -1324,11 +1292,7 @@ Escribe el comando o dime que necesitas 👇`
       ai_summary: isReadyToBuy ? 'LISTO PARA COMPRAR' : null,
     })
 
-    // Consume token after successful AI response
-    try {
-      const { consumeToken } = await import('@/lib/token-guard')
-      if (lead?.agent_id) await consumeToken(lead.agent_id, lead.id, from, 2500, 150, lead.account_id)
-    } catch {}
+    // Token consumption already handled by callAI() in token-tracker
 
     // Human-like typing delay before sending
     const len = cleanResponse.length

@@ -40,6 +40,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
   const [accountName, setAccountName] = useState<string | null>(null)
   const [parentAccount, setParentAccount] = useState<any>(null)
   const [subAccounts, setSubAccounts] = useState<any[]>([])
+  const [linkedAccounts, setLinkedAccounts] = useState<any[]>([])
   const [accountsOpen, setAccountsOpen] = useState(false)
 
   useEffect(() => {
@@ -66,6 +67,13 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
             }
           }
         })
+    }
+    // Load linked accounts
+    if (user?.account_id) {
+      fetch(`/api/linked-accounts?account_id=${user.account_id}`)
+        .then(r => r.json())
+        .then(data => setLinkedAccounts(data.managing || []))
+        .catch(() => {})
     }
   }, [user?.account_id, isAdmin])
 
@@ -188,6 +196,32 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
           </div>
         )}
       </div>
+
+      {/* ── LINKED ACCOUNTS ── */}
+      {linkedAccounts.length > 0 && (
+        <div style={{ padding: '6px 16px 8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+          <p style={{ fontSize: '8px', fontWeight: 700, letterSpacing: '0.15em', color: 'rgba(240,236,227,0.18)', marginBottom: '6px' }}>CUENTAS VINCULADAS</p>
+          {linkedAccounts.map((la: any) => {
+            const acc = la.owner
+            const isActive = activeAccount?.id === acc?.id && activeAccount?.isLinked
+            return acc ? (
+              <div key={la.id} onClick={() => { switchAccount({ id: acc.id, name: acc.name, slug: acc.slug, industry: acc.industry || '', logo_url: acc.logo_url, isLinked: true, permissions: la.permissions }); onNavigate?.() }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 8px', borderRadius: '6px',
+                  cursor: 'pointer', marginBottom: '2px', transition: 'all 0.12s',
+                  background: isActive ? 'rgba(251,191,36,0.06)' : 'transparent',
+                  border: isActive ? '1px solid rgba(251,191,36,0.15)' : '1px solid transparent',
+                }}
+                onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)' }}
+                onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
+              >
+                <span style={{ fontSize: '10px' }}>🔗</span>
+                <span style={{ fontSize: '11px', color: isActive ? '#fbbf24' : 'rgba(240,236,227,0.4)', fontWeight: isActive ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acc.name}</span>
+              </div>
+            ) : null
+          })}
+        </div>
+      )}
 
       {/* ── NAV LABEL ── */}
       <div style={{ padding: '14px 20px 6px' }}>
