@@ -1,212 +1,241 @@
 ---
 name: luxury-shield-dev
-description: Complete development context for Luxury Shield Insurance CRM — the SeguriSSimo agency platform with Sophia AI agent. MUST use this skill whenever the user mentions ANY of these: Sophia, leads, pipeline, WhatsApp webhook, Twilio, modo manual, coaching IA, calendar/agenda, analytics dashboard, SophiaOS, master system, Carlos, Lina, audio/Whisper transcription, Cigna DVH Plus, dental insurance, training data, SophiaModel, battle card, drag & drop, LeadDetailPanel, conversation_mode, sophia_processing, deploy to Vercel, Supabase tables, or any bug/feature in this CRM. Also trigger when the user asks to fix webhook issues, deploy changes, run SQL on Supabase, modify the system prompt, handle leads, or work on any Next.js/Supabase/Twilio integration in this specific project (kl8blade-arch/luxury-shield-crm). Contains deploy commands, database schemas, known bugs with fixes, webhook processing order, phone numbers, API keys location, and all critical code patterns. Do NOT trigger for generic Next.js, Supabase, or webhook questions unrelated to Luxury Shield.
+description: Complete development context for Luxury Shield Insurance CRM — SophiaOS multi-tenant SaaS platform with AI agents across 7 industries. Trigger on ANY mention of: Sophia, leads, pipeline, WhatsApp, Twilio, CRM, tokens, sub-accounts, agents, skills, knowledge, training, packages, Stripe, social intelligence, import, vault, marketplace, settings, or any bug/feature in this project.
 ---
 
-# Luxury Shield Insurance CRM — Developer Skill
+# Luxury Shield CRM — SophiaOS Developer Skill
 
 ## Project Overview
 
-**Product**: CRM with AI agent (Sophia) for selling Cigna DVH Plus dental insurance to the Latino market in USA.
-**Agency**: SeguriSSimo | **Owner**: Carlos Silva — Admin/Elite
+**Product**: Multi-tenant AI-powered CRM (SaaS) that sells via WhatsApp with AI agents per industry.
+**Agency**: SeguriSSimo / Implement IA | **Owner**: Carlos Silva — Admin/Elite
+**Industries**: Seguros, Realtor, Dropshipping, Infoproductos, Inversiones, Autos, Multinivel
 
 ## Stack
 
 | Technology | Purpose |
 |---|---|
 | Next.js 16 (App Router) | Frontend + API routes |
-| Supabase | Postgres + Realtime + Storage |
-| Twilio | WhatsApp + SMS |
-| Claude API (Anthropic) | Sophia AI agent |
+| Supabase (PostgreSQL) | Database + Realtime |
+| Twilio | WhatsApp + SMS + Voice |
+| Anthropic Claude (Haiku 4.5) | Sophia AI + coaching + orchestrator |
 | OpenAI Whisper | Audio transcription |
-| Vercel | Hosting + Cron jobs |
+| Stripe | Subscriptions + token purchases |
+| Vercel | Hosting + Serverless |
 
 ## Repository & URLs
 
 - **GitHub**: `kl8blade-arch/luxury-shield-crm`
-- **Production branch**: `master` (NOT main)
-- **CRM URL**: https://luxury-shield-crm.vercel.app
-- **Vercel Project ID**: `prj_7BzX8ENbQctWC8KAkAqa3BPUWRpi`
+- **Branch**: `master`
+- **Production**: https://luxury-shield-crm.vercel.app
+- **Supabase ID**: `phdfmwzannemcdaotzlu`
 
-## Deploy Command (ALWAYS use this exact command)
+## Deploy
 
 ```bash
-npx vercel --prod --token=$VERCEL_TOKEN --yes
+npx next build && git add [files] && git commit -m "msg" && git push origin master && npx vercel --prod --yes
 ```
 
-After every commit, push to BOTH branches:
-```bash
-git push origin master && git push origin master:main
-```
+## Key Numbers
 
-View logs:
-```bash
-npx vercel logs luxury-shield-crm.vercel.app --token=$VERCEL_TOKEN
-```
+| Who | Number |
+|---|---|
+| Sophia WhatsApp | +17722772510 |
+| Carlos (Master) | +17869435656 |
+| Stripe Account | Implement IA (US) |
 
-## Key Phone Numbers
+## Architecture
 
-| Who | Number | Role |
-|---|---|---|
-| WhatsApp Business | +17722772510 | Sophia's number |
-| Carlos Silva (Master) | +17869435656 | Admin, trains Sophia |
-| Lina Rodríguez | +17722771333 | Agent |
+### Auth System (Custom — NOT Supabase Auth)
+- Login: `/api/auth/login` — validates via `verify_agent_login()` pgcrypto function
+- Register: `/api/auth/register` — creates pending account → phone verification → Stripe checkout → activate
+- Google OAuth: `/api/auth/google` — via `upsert_google_agent()` function
+- 2FA: TOTP via `/api/auth/setup-totp` and `/api/auth/verify-totp`
+- Session: localStorage `ls_auth` + server validation via `/api/auth/validate`
+- Password: min 8 chars, uppercase, lowercase, number, special character
+- Phone verification: 6-digit code via WhatsApp before account creation
 
-## AI Models
+### Account & Multi-Tenancy
+- `accounts` table: parent account (luxury-shield) + sub-accounts
+- `agents` table: users with role (admin/agent), plan, tokens, API keys
+- Account switcher: `activeAccount` in AuthContext, stored in sessionStorage
+- Data scoping: `scopeQuery()` in `src/lib/use-scoped-query.ts` filters by agent_id or account_id
+- Sub-accounts: full CRM isolation, own agents/skills/knowledge/memory
+- Industries: seguros, realtor, dropshipping, infoproductos, inversiones, autos, multinivel
 
-- **Sophia (leads)**: `claude-haiku-4-5-20251001`
-- **Master/agents**: `claude-opus-4-6`
-- **Audio transcription**: OpenAI `whisper-1`
+### Token System
+- `tokens_used`, `tokens_limit`, `tokens_extra` on agents table
+- 1 token = 1 Sophia auto-response to a lead
+- Plan limits: Starter=300, Professional=1000, Agency=3000, Admin=unlimited
+- Token gate in WhatsApp webhook: blocks AI response when exhausted
+- Token packages: 100/$15, 500/$59, 1000/$99, 3000/$249
+- Monthly reset (first of month)
+- Token usage logged in `token_usage` table with cost tracking
 
-## Supabase
+### Stripe Integration
+- Live key configured, webhook at `/api/stripe/webhook`
+- Subscription mode with 7-day trial (card collected upfront)
+- Events: checkout.session.completed, subscription.created/updated/deleted
+- Token purchases handled via same webhook (packageId starts with 'tokens_')
+- Plans: Starter $47, Professional $97, Agency $197, Enterprise custom
 
-- **Project ID**: `phdfmwzannemcdaotzlu`
-- **URL**: https://phdfmwzannemcdaotzlu.supabase.co
-- **Realtime**: Enabled on `conversations` and `leads` tables
-- **Use Supabase MCP** for SQL execution with project_id above
-
-## Critical File Map
+## File Map
 
 ```
 src/app/api/
-  whatsapp/route.ts      ← Main webhook (Twilio → Sophia)
-  coaching/route.ts      ← Real-time coaching (4 parallel AI agents)
-  coach-chat/route.ts    ← Direct chat with coach IA
-  agent-send/route.ts    ← Agent sends message from CRM
-  save-lead/route.ts     ← Landing form → create lead
-  ai-contact/route.ts    ← First message to new lead
-  calendar-notifications/route.ts
-  generate-training-data/route.ts
-  export-training/route.ts
-  cleanup-locks/route.ts
-  stage-change/route.ts
-  business-health/route.ts
+  whatsapp/route.ts          ← Main webhook (~1400 lines, critical order)
+  auth/login/route.ts        ← Email/password login
+  auth/register/route.ts     ← Registration with phone verification
+  auth/google/route.ts       ← Google OAuth
+  auth/validate/route.ts     ← Server-side session validation
+  auth/forgot-password/      ← Password reset flow
+  auth/reset-password/       ← Code verification + new password
+  auth/setup-totp/           ← 2FA setup
+  auth/verify-totp/          ← 2FA verification
+  stripe/checkout/route.ts   ← Creates Stripe sessions (payment + subscription)
+  stripe/webhook/route.ts    ← Handles payment confirmation
+  coaching/route.ts          ← 4 parallel coaching agents
+  social/connect/route.ts    ← OAuth for social platforms
+  social/callback/route.ts   ← OAuth callback handler
+  v1/leads/route.ts          ← Public API: list/create leads
+  v1/conversations/route.ts  ← Public API: conversation history
+  v1/webhooks/inbound/       ← Universal webhook (FB, Google, GHL, etc.)
+  landing-builder/route.ts   ← AI landing page generator
 
 src/app/
-  calendar/page.tsx      ← Calendar with monthly view + bottom sheet
-  pipeline/page.tsx      ← Kanban with pointer events drag & drop
-  leads/page.tsx         ← Lead list with query param filtering
-  analytics/page.tsx     ← Dashboard with clickable KPIs
-  sophia-os/page.tsx     ← Memory/Skills/Knowledge/Agents admin
-  training/page.tsx      ← SophiaModel training data dashboard
+  login/page.tsx             ← Login with Google + 2FA
+  register/page.tsx          ← Plan selection → form → phone verify → Stripe
+  setup/page.tsx             ← Onboarding wizard (logo, products, language)
+  forgot-password/page.tsx   ← Password recovery via WhatsApp
+  dashboard/page.tsx         ← KPIs, recent leads, token balance
+  leads/page.tsx             ← Lead list with filters
+  pipeline/page.tsx          ← Kanban drag-and-drop
+  analytics/page.tsx         ← Business intelligence dashboard
+  calendar/page.tsx          ← Calendar with events
+  reminders/page.tsx         ← Reminder system
+  campaigns/page.tsx         ← Marketing campaigns
+  social/page.tsx            ← Social intelligence center
+  social/connect/page.tsx    ← OAuth connections for 6 platforms
+  marketplace/page.tsx       ← Landing page builder
+  import/page.tsx            ← CSV/Excel contact import
+  vault/page.tsx             ← Archived leads from deleted sub-accounts
+  tools/page.tsx             ← 7-tab tools center
+  packages/page.tsx          ← Plans + pricing (decoy effect)
+  training/page.tsx          ← SophiaModel training data
+  accounts/page.tsx          ← Sub-account management
+  sophia-os/page.tsx         ← AI agents/skills/knowledge admin
+  settings/page.tsx          ← 8-tab settings (profile, security, licenses, socials, pipeline, sub-accounts, AI, APIs)
 
 src/components/
-  LeadDetailPanel.tsx    ← Main interaction panel (chat, coaching, modes)
-  EventModal.tsx         ← Create/edit calendar events
-  AppShell.tsx           ← Responsive layout with collapsible sidebar
-  Sidebar.tsx            ← Navigation
+  Sidebar.tsx                ← Navigation + account switcher
+  AppShell.tsx               ← Layout + trial banner + auth gate
+  FileUpload.tsx             ← Universal file picker (ref-based, works on iOS)
+  LeadDetailPanel.tsx        ← Chat + coaching + manual mode
+
+src/contexts/
+  AuthContext.tsx             ← Auth state + activeAccount + trial + route protection
 
 src/lib/
-  master-handler.ts      ← Master system (Carlos trains Sophia)
-  build-sophia-prompt.ts ← Dynamic prompt from memory+skills+knowledge
-  training-pipeline.ts   ← Extract training data from conversations
-  stage-context.ts       ← Different Sophia behavior per pipeline stage
-  product-radar.ts       ← Cross-sell opportunity detection
-  sophia-learning.ts     ← Learn from closed deals
-  knowledge-base.ts      ← Cigna DVH Plus complete data
-  voice-response.ts      ← OpenAI TTS for voice messages
-  lead-distribution.ts   ← Weighted round-robin by agent plan
-  design.ts              ← Design system constants (C.gold, C.surface, etc.)
+  master-handler.ts          ← Carlos trains Sophia via WhatsApp (12 actions + conversation history)
+  build-sophia-prompt.ts     ← Dynamic prompt: skills + knowledge + memory (capped at 6K+4K chars)
+  sophia-orchestrator.ts     ← Routes to expert agent by keywords + account_id
+  agent-onboarding.ts        ← WhatsApp onboarding flow (logo → color → welcome)
+  token-guard.ts             ← Token checking + consumption + monthly reset
+  api-auth.ts                ← Request authentication helper
+  api-key-auth.ts            ← Public API key validation + rate limiting
+  use-scoped-query.ts        ← Data isolation: scopeQuery() and scopeByAccount()
+  supabase.ts                ← Supabase client (anon key)
+  design.ts                  ← Design system constants
 ```
 
-## Webhook Processing Order (CRITICAL)
+## WhatsApp Webhook Order (CRITICAL — DO NOT REORDER)
 
-The `/api/whatsapp` POST handler MUST process in this exact order:
+1. Parse formData
+2. Validate Twilio AccountSid
+3. Slash commands ("/" menu)
+4. Master detection (+17869435656) → master-handler with conversation history
+5. Agent onboarding detection → agent-onboarding flow
+6. Audio transcription → Whisper
+7. Agent detection → handleAgentMessage
+8. Find lead (6 phone variants)
+9. Fresh mode check (query ALL leads with that phone)
+10. Manual/coaching block
+11. Processing lock (sophia_processing)
+12. Rate limit (<3s)
+13. **TOKEN CHECK** — block if agent exhausted
+14. History fetch
+15. Generate AI response (Claude + dynamic layers + expert routing)
+16. Token consumption logging
+17. Closing signal detection
+18. Stage update
+19. Save + send with typing delay
+20. Voice response (non-blocking)
+21. Battle card (if ready to buy)
+22. Release lock (finally)
 
-1. **Parse formData** (From, Body, MediaUrl0, NumMedia, MediaContentType0)
-2. **Master detection** — if from +17869435656 → handleMasterMessage() → return
-3. **Audio transcription** — if NumMedia > 0 and audio type → Whisper → set body
-4. **Agent detection** — if from agent phone → handleAgentMessage() → return
-5. **Find lead** — search ALL phone format variants, select one with most conversations
-6. **Fresh mode check** — query DB for conversation_mode, NOT use stale lead object
-7. **Manual/coaching block** — if mode != 'sophia' → save message, don't respond
-8. **Processing lock** — if sophia_processing = true → skip
-9. **Rate limit** — if last outbound < 3s ago → skip
-10. **History fetch** — conversations by lead_id, fallback by phone
-11. **Generate AI response** — Claude with full system prompt + dynamic layers
-12. **Closing signal detection** — force [LISTO_PARA_COMPRAR] if explicit signals
-13. **Stage update** — detect stage from message content
-14. **Save + send response** — with typing delay (3-9s)
-15. **Voice response** — non-blocking TTS if voice_enabled
-16. **Battle card** — if LISTO_PARA_COMPRAR → generate analysis → notify agent
-17. **Release lock** — always in finally block
+## AI Agents (40 templates across 7 industries)
+
+| Industry | Count | Agents |
+|----------|-------|--------|
+| Seguros | 6 | DentalExpert, VidaIULExpert, ACAExpert, MedicareExpert, ObjecionesYCierre, SocialSeller |
+| Realtor | 6 | PropertyExpert, MortgageAdvisor, InvestmentProperty, LeadNurturer, OpenHouseManager, SocialRealtor |
+| Dropshipping | 8 | SupplierScout, AdsCopywriter, AdsManager, StoreBuilder, FulfillmentManager, CustomerService, InventoryManager, ScalingStrategist |
+| Infoproductos | 5 | CourseExpert, CommunityManager, WebinarCloser, ContentStrategist, LaunchManager |
+| Inversiones | 5 | CryptoAdvisor, StockAdvisor, RealEstateInvestor, PortfolioBuilder, EducationCreator |
+| Autos | 5 | CarSalesExpert, FinanceManager, TradeInSpecialist, ServiceReminder, SocialAutos |
+| Multinivel | 5 | TeamBuilder, ProductTrainer, RetentionCoach, EventOrganizer, SocialRecruiter |
+
+Global agents (master account): SocialScanner, CuriosityCreator, GroupEngager, ContentScheduler, CommunityManager, AnalyticsReporter, DMCloser
 
 ## Database Tables
 
 ### Core
-- **leads**: id, name, phone, stage, conversation_mode, sophia_processing, score, color_favorito, state, quiz_coverage_type, quiz_dentist_last_visit, quiz_has_insurance, preferred_language, product_opportunities, manual_ended_at
-- **conversations**: id, lead_id, lead_phone, direction (inbound/outbound), message, sender, channel, ai_summary, created_at
-- **agents**: id, name, email, whatsapp_number, role, plan, available, voice_enabled, credits
-
-### Calendar
-- **calendar_events**: id, agent_id, title, event_type, start_time, end_time, location, lead_id, lead_phone, lead_color, notify_whatsapp, notify_sms, notification_sent, status
+- **agents**: id, name, email, phone, password_hash, role, plan, status, account_id, tokens_used, tokens_limit, tokens_extra, paid, trial_ends_at, onboarding_complete, subscription_plan, anthropic_api_key, openai_api_key, uses_own_ai_keys, social_*, bio, company_name, agency_url, products, licensed_states, wa_onboarding_step, totp_secret, totp_enabled, google_id
+- **accounts**: id, name, slug, parent_account_id, account_type, plan, industry, features, max_leads, max_agents, logo_url, brand_color, welcome_message, cross_sell_enabled
+- **leads**: id, name, phone, email, state, stage, score, agent_id, account_id, insurance_type, purchased_products, import_batch, import_source, conversation_mode, sophia_processing
+- **conversations**: id, lead_id, lead_phone, direction, message, channel, created_at
 
 ### Sophia OS
-- **sophia_memory**: category, key, value, importance, active, source
-- **sophia_skills**: name, prompt_injection, active (ventas_dental, coaching_agente, agendar, bilingue)
-- **sophia_knowledge**: title, content, source_type, embedding_summary, tags, active
-- **sophia_agents**: name, purpose, system_prompt, active
-- **sophia_training_data**: source, quality_score, approved, lead_profile, conversation, outcome, training_prompt, training_completion
+- **sophia_agents**: id, name, purpose, system_prompt, trigger_keywords, active, account_id, knowledge_sources
+- **sophia_skills**: id, name, description, prompt_injection, active, account_id
+- **sophia_knowledge**: id, title, content, source_type, tags, active, account_id
+- **sophia_memory**: id, category, key, value, importance, active, account_id
+- **sophia_training_data**: id, product_family, conversation, outcome, quality_score, source, approved, metadata
 
-## Known Bugs & Fixes
+### Tokens & Billing
+- **token_usage**: id, agent_id, account_id, lead_id, tokens_input, tokens_output, cost_usd
+- **token_purchases**: id, agent_id, package_name, token_count, amount_usd
+- **lead_orders**: id, agent_id, package_name, amount, stripe_session_id
+- **api_keys**: id, key, account_id, agent_id, scopes, rate_limit, active
 
-| Bug | Root Cause | Fix |
-|---|---|---|
-| Sophia responds in manual mode | Stale lead object has mode=sophia | Fresh DB query for conversation_mode before check |
-| Duplicate leads | save-lead creates new instead of updating | Check existing by phone variants before INSERT |
-| sophia_processing stuck | Error before finally block | /api/cleanup-locks cron every 10min |
-| Audio not transcribing | Twilio 307 redirect drops auth | Two-step: get redirect URL, then fetch without auth |
-| $NaN in packages | Division by zero | Guard: lead_count > 0 check |
-| Drag & drop fails on iOS | HTML5 DnD not supported | Use Pointer Events API with ghost element |
-| Manual mode updates wrong lead | Multiple leads with same phone | Update ALL leads matching phone, not just by ID |
+### Social & Content
+- **social_connections**: id, platform, access_token, platform_username, status
+- **social_content**: id, platform, content_type, content, hashtags, status
+- **social_groups**: id, platform, group_name, relevance_score, topics
 
-## Product: Cigna DVH Plus
+### Other
+- **calendar_events**, **reminders**, **campaigns**, **landing_builds**, **landing_templates**
+- **lead_vault**: archived leads from deleted sub-accounts with tags
+- **webhook_subscriptions**: outbound webhooks when CRM events fire
+- **password_reset_tokens**: phone verification + password reset codes
+- **industry_agent_templates**: 40 pre-built agent templates per industry
 
-- Dental: NO waiting period, day 1 coverage
-- Year 1: 60% basic, 20% major | Year 4+: up to 90%
-- Deductible: $0, $50, or $100 | Max annual: $1,000-$5,000
-- Vision: $200 every 2 years (6 month wait)
-- Hearing: $500/year (12 month wait)
-- Guaranteed issue: 18-89 years, no health questions
-- PPO Careington: 85,000+ providers
-- Prices FL: Individual $35-45/mo | Couple $65-80/mo | Family 5 $120-150/mo
-- ALWAYS say "plan de protección" NEVER "seguro"
+## Security Measures
 
-## Master Commands (via WhatsApp from +17869435656)
+- Twilio AccountSid validation on webhook
+- Server-side session validation (prevents localStorage spoofing)
+- Token gate blocks AI without balance
+- Password: 8+ chars, upper, lower, number, special
+- Phone verification via WhatsApp (6-digit code)
+- Stripe required before CRM access
+- Account data isolation via scopeQuery()
+- API key authentication for public endpoints
+- Rate limiting on API keys (1000 req/day)
 
-| Command | Action |
-|---|---|
-| `aprende esto: [info]` | Add to sophia_knowledge |
-| `recuerda que [instruction]` | Add to sophia_memory |
-| `olvida [topic]` | Deactivate knowledge/memory |
-| `activa skill [name]` | Enable skill |
-| `desactiva skill [name]` | Disable skill |
-| `muéstrame tu memoria` | List active memories |
-| `qué skills tienes?` | List skills with status |
-| `simula [scenario]` | Test Sophia with scenario |
-| `crea un agente para [purpose]` | Create new AI agent |
-| Send PDF | Extract knowledge with Claude |
-| Send audio | Transcribe + process as command |
+## Slash Commands (WhatsApp)
 
-## Pipeline Stages & Sophia Behavior
+Type "/" to see menu: /cita, /recordatorio, /buscar, /pipeline, /leads, /skills, /memoria, /activar, /desactivar, /test, /aprender, /recuerda, /olvida, /resumen, /salud, /comisiones
 
-| Stage | Sophia's Approach |
-|---|---|
-| nuevo | Connect emotionally, DON'T mention prices |
-| contactado | New angle to spark interest |
-| interesado | Present full plan + urgency |
-| propuesta | Handle objections, push to close |
-| negociacion | Close TODAY, include [LISTO_PARA_COMPRAR] |
-| cerrado | Welcome messages + referrals only |
-| perdido | Rescue sequence, different angle |
+## Master Handler Actions (12)
 
-## Closing Signals (force [LISTO_PARA_COMPRAR])
-
-"ya mismo", "ahora mismo", "quiero que me llamen", "consígueme", "quiero empezar", "dónde firmo", "cómo activo", "sí quiero", phone number (10+ digits)
-
-## Strategic Vision
-
-- **Current**: Luxury Shield Insurance in Florida
-- **Next**: SophiaOS — SaaS platform for external agencies ($297-997/mo)
-- **Dataset**: sophia_training_data — target 500-1000 conversations
-- **Fine-tuning**: SophiaModel v1 when dataset is ready
+schedule, reminder, find_lead, pipeline_status, daily_summary, commissions, learn, remember, forget, set_skill, show_memory, show_skills, test_sophia, chat (with full conversation history)

@@ -8,6 +8,10 @@
     {
       "path": "/api/send-scheduled",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/daily-token-report",
+      "schedule": "0 1 * * *"
     }
   ]
 }
