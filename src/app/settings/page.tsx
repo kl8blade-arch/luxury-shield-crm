@@ -541,23 +541,80 @@ export default function SettingsPage() {
 
             {/* ═══ INTEGRACIONES ═══ */}
             {tab === 'integraciones' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '520px' }}>
-                {[
-                  { name: 'Twilio (WhatsApp)', icon: '📱', connected: true, desc: 'Mensajes WhatsApp' },
-                  { name: 'Supabase', icon: '🗄️', connected: true, desc: 'Base de datos' },
-                  { name: 'Claude (Anthropic)', icon: '🤖', connected: true, desc: 'Sophia IA' },
-                  { name: 'Stripe', icon: '💳', connected: integrations.stripe, desc: 'Pagos' },
-                  { name: 'OpenAI Whisper', icon: '🎤', connected: true, desc: 'Audio a texto' },
-                ].map(i => (
-                  <div key={i.name} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '16px', borderRadius: '14px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
-                    <span style={{ fontSize: '22px' }}>{i.icon}</span>
-                    <div style={{ flex: 1 }}><p style={{ color: '#F0ECE3', fontSize: '14px', fontWeight: 600, margin: 0 }}>{i.name}</p><p style={{ color: 'rgba(240,236,227,0.35)', fontSize: '12px', margin: '2px 0 0' }}>{i.desc}</p></div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: i.connected ? '#34d399' : '#f87171', boxShadow: `0 0 8px ${i.connected ? 'rgba(52,211,153,0.5)' : 'rgba(248,113,113,0.5)'}` }} />
-                      <span style={{ color: i.connected ? '#34d399' : '#f87171', fontSize: '12px', fontWeight: 600 }}>{i.connected ? 'OK' : 'Off'}</span>
+              <div style={{ maxWidth: '620px' }}>
+                {/* Status */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
+                  {[
+                    { name: 'Twilio (WhatsApp)', icon: '📱', connected: true, desc: 'Mensajes' },
+                    { name: 'Supabase', icon: '🗄️', connected: true, desc: 'Base de datos' },
+                    { name: 'Claude (Anthropic)', icon: '🤖', connected: true, desc: 'Sophia IA' },
+                    { name: 'Stripe', icon: '💳', connected: integrations.stripe, desc: 'Pagos' },
+                    { name: 'Whisper', icon: '🎤', connected: true, desc: 'Audio' },
+                  ].map(i => (
+                    <div key={i.name} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '10px', background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)' }}>
+                      <span style={{ fontSize: '16px' }}>{i.icon}</span>
+                      <span style={{ flex: 1, fontSize: '13px', color: '#F0ECE3' }}>{i.name}</span>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: i.connected ? '#34d399' : '#f87171' }} />
+                      <span style={{ fontSize: '11px', color: i.connected ? '#34d399' : '#f87171' }}>{i.connected ? 'OK' : 'Off'}</span>
                     </div>
+                  ))}
+                </div>
+
+                {/* API Key section */}
+                <div style={{ padding: '20px', borderRadius: '14px', background: 'rgba(96,165,250,0.04)', border: '1px solid rgba(96,165,250,0.15)', marginBottom: '20px' }}>
+                  <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#60a5fa', margin: '0 0 8px' }}>Tu API Key</h4>
+                  <p style={{ fontSize: '12px', color: 'rgba(240,236,227,0.4)', margin: '0 0 12px' }}>Usa esta key para conectar Facebook Ads, Google Ads, GoHighLevel, Wix, n8n, Zapier, Make, etc.</p>
+
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                    <input value={user?.id ? `lscrm_account_${user.id.slice(0, 16)}` : ''} readOnly style={{ ...inp, flex: 1, fontSize: '12px', fontFamily: 'monospace', background: 'rgba(0,0,0,0.3)' }} />
+                    <button onClick={() => navigator.clipboard.writeText(`lscrm_account_${user?.id?.slice(0, 16) || ''}`)} style={{ padding: '10px 16px', borderRadius: '10px', background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.2)', color: '#60a5fa', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Copiar</button>
                   </div>
-                ))}
+
+                  <p style={{ fontSize: '10px', color: 'rgba(240,236,227,0.25)', margin: 0 }}>Nota: Para una key personalizada, contacta a soporte.</p>
+                </div>
+
+                {/* Integration guides */}
+                <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#F0ECE3', margin: '0 0 14px' }}>Conectar plataformas</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                  {[
+                    { name: 'Facebook Lead Ads', icon: 'f', color: '#1877F2', setup: 'En Facebook Ads Manager > Integraciones > Webhook URL:\nhttps://luxury-shield-crm.vercel.app/api/v1/webhooks/inbound\nHeader: x-api-key = tu key' },
+                    { name: 'Google Ads', icon: 'G', color: '#4285F4', setup: 'En Google Ads > Conversiones > Webhook.\nURL: /api/v1/webhooks/inbound\nMetodo: POST JSON' },
+                    { name: 'Meta Ads', icon: 'M', color: '#0668E1', setup: 'Meta Business > Leads Center > CRM.\nWebhook URL con tu API key.' },
+                    { name: 'GoHighLevel', icon: 'GH', color: '#FF6B35', setup: 'GHL > Settings > Webhooks.\nURL: /api/v1/webhooks/inbound\nTrigger: Contact Created' },
+                    { name: 'Wix', icon: 'W', color: '#0C6EFC', setup: 'Wix Automations > Webhook.\nCuando se envie formulario > POST a:\n/api/v1/webhooks/inbound' },
+                    { name: 'n8n', icon: 'n8', color: '#FF6D5A', setup: 'n8n > HTTP Request node.\nPOST a /api/v1/webhooks/inbound\nHeader: x-api-key' },
+                    { name: 'Zapier', icon: 'Z', color: '#FF4A00', setup: 'Zapier > Webhooks by Zapier.\nAction: POST /api/v1/webhooks/inbound\nJSON con nombre, telefono, email' },
+                    { name: 'Make (Integromat)', icon: 'Mk', color: '#6D00CC', setup: 'Make > HTTP module.\nPOST /api/v1/webhooks/inbound\nJSON body con lead data' },
+                    { name: 'Google Drive', icon: 'GD', color: '#0F9D58', setup: 'Via n8n o Zapier:\nGoogle Sheets trigger > Webhook a\n/api/v1/leads (POST)' },
+                    { name: 'HubSpot', icon: 'HS', color: '#FF7A59', setup: 'HubSpot > Workflows > Webhook.\nPOST /api/v1/webhooks/inbound\nTrigger: Contact created' },
+                  ].map(p => (
+                    <div key={p.name} style={{ padding: '12px', borderRadius: '12px', background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer' }}
+                      onClick={() => {
+                        const url = `https://luxury-shield-crm.vercel.app/api/v1/webhooks/inbound`
+                        navigator.clipboard.writeText(url)
+                        alert(`URL copiada!\n\n${p.setup}\n\nURL: ${url}`)
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                        <div style={{ width: '24px', height: '24px', borderRadius: '6px', background: `${p.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 800, color: p.color }}>{p.icon}</div>
+                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#F0ECE3' }}>{p.name}</span>
+                      </div>
+                      <p style={{ fontSize: '10px', color: 'rgba(240,236,227,0.3)', margin: 0 }}>Click para ver instrucciones</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* API Docs */}
+                <div style={{ marginTop: '20px', padding: '16px', borderRadius: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#C9A84C', margin: '0 0 10px' }}>API Endpoints</h4>
+                  <div style={{ fontFamily: 'monospace', fontSize: '11px', color: 'rgba(240,236,227,0.5)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div><span style={{ color: '#34d399' }}>GET </span>/api/v1/leads?stage=new&limit=50</div>
+                    <div><span style={{ color: '#60a5fa' }}>POST</span> /api/v1/leads {'{name, phone, email, state}'}</div>
+                    <div><span style={{ color: '#34d399' }}>GET </span>/api/v1/conversations?lead_id=xxx</div>
+                    <div><span style={{ color: '#60a5fa' }}>POST</span> /api/v1/webhooks/inbound {'{name, phone, source}'}</div>
+                  </div>
+                  <p style={{ fontSize: '10px', color: 'rgba(240,236,227,0.2)', marginTop: '8px' }}>Header: x-api-key: tu_key | o | Authorization: Bearer tu_key</p>
+                </div>
               </div>
             )}
           </div>
