@@ -46,18 +46,27 @@ export async function POST(req: NextRequest) {
       stripe_session_id: session.id,
     })
 
-    // Update agent: credits + mark as paid + set subscription plan
+    // Update agent: activate, start 7-day trial, set plan
     if (agentId) {
-      const { data: agent } = await supabase.from('agents').select('credits').eq('id', agentId).single()
+      const { data: agent } = await supabase.from('agents').select('credits, phone, name').eq('id', agentId).single()
       const planMap: Record<string, string> = { starter: 'starter', professional: 'professional', agency: 'agency', enterprise: 'enterprise' }
       const subPlan = planMap[packageId || ''] || 'starter'
 
       await supabase.from('agents').update({
         credits: (agent?.credits || 0) + parseInt(leadCount || '0'),
         paid: true,
+        status: 'active',
         subscription_plan: subPlan,
-        trial_ends_at: null, // Remove trial since they paid
+        trial_ends_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       }).eq('id', agentId)
+
+      // NOW trigger Sophia WhatsApp onboarding (only after payment)
+      try {
+        const { startAgentOnboarding } = await import('@/lib/agent-onboarding')
+        startAgentOnboarding(agentId).catch(e => console.error('[STRIPE] Onboarding error:', e))
+      } catch {}
+
+      console.log(`[STRIPE] Agent ${agentId} activated: plan=${subPlan}, 7-day trial started`)
     }
   }
 

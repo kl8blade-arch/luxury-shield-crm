@@ -26,7 +26,7 @@ const PLANS = [
 ]
 
 export default function RegisterPage() {
-  const [step, setStep] = useState<'plan' | 'form'>('plan')
+  const [step, setStep] = useState<'plan' | 'form' | 'verify'>('plan')
   const [selectedPlan, setSelectedPlan] = useState('')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -35,7 +35,21 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [isMobile, setIsMobile] = useState(false)
-  const { register, loginWithGoogle } = useAuth()
+  const [pendingAgentId, setPendingAgentId] = useState('')
+  const [phoneHint, setPhoneHint] = useState('')
+  const [verifyCode, setVerifyCode] = useState('')
+  const { register: authRegister, loginWithGoogle } = useAuth()
+
+  // Password strength indicators
+  const pwChecks = {
+    length: password.length >= 8,
+    upper: /[A-Z]/.test(password),
+    lower: /[a-z]/.test(password),
+    number: /[0-9]/.test(password),
+    special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
+  }
+  const pwStrength = Object.values(pwChecks).filter(Boolean).length
+  const pwValid = pwStrength === 5
 
   useEffect(() => { const c = () => setIsMobile(window.innerWidth < 768); c(); window.addEventListener('resize', c); return () => window.removeEventListener('resize', c) }, [])
 
@@ -51,9 +65,42 @@ export default function RegisterPage() {
     e.preventDefault()
     if (!phone.trim()) { setError('Telefono obligatorio'); return }
     if (!selectedPlan) { setError('Selecciona un plan'); return }
+    if (!pwValid) { setError('La contrasena no cumple los requisitos'); return }
     setLoading(true); setError('')
-    const err = await register(name, email, password, phone)
-    if (err) setError(err)
+
+    // Step 1: Create pending account + send verification code
+    const res = await fetch('/api/auth/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password, phone }),
+    })
+    const data = await res.json()
+    if (!res.ok) { setError(data.error); setLoading(false); return }
+
+    if (data.pending_verification) {
+      setPendingAgentId(data.agentId)
+      setPhoneHint(data.phone_hint)
+      setStep('verify')
+    }
+    setLoading(false)
+  }
+
+  async function handleVerify(e: React.FormEvent) {
+    e.preventDefault()
+    if (verifyCode.length !== 6) return
+    setLoading(true); setError('')
+
+    const res = await fetch('/api/auth/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'verify_phone', agentId: pendingAgentId, code: verifyCode }),
+    })
+    const data = await res.json()
+    if (!res.ok) { setError(data.error); setLoading(false); return }
+
+    if (data.verified && data.user) {
+      // Save user and redirect to packages for payment
+      localStorage.setItem('ls_auth', JSON.stringify(data.user))
+      window.location.href = '/packages'
+    }
     setLoading(false)
   }
 
@@ -100,7 +147,7 @@ export default function RegisterPage() {
                   La IA que vende seguros<br /><span style={{ color: '#C9A84C' }}>mientras tu duermes.</span>
                 </h1>
                 <p style={{ fontSize: '15px', color: 'rgba(240,236,227,0.4)', maxWidth: '460px', margin: '0 auto' }}>
-                  Empieza gratis por 10 dias. Sin tarjeta. Cancela cuando quieras.
+                  Empieza gratis por 7 dias. Sin tarjeta. Cancela cuando quieras.
                 </p>
               </div>
 
@@ -185,7 +232,7 @@ export default function RegisterPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 18px', borderRadius: '12px', background: 'rgba(52,211,153,0.04)', border: '1px solid rgba(52,211,153,0.12)', marginBottom: '18px' }}>
                   <span style={{ fontSize: '18px' }}>&#127873;</span>
                   <div>
-                    <p style={{ fontSize: '13px', color: '#34d399', fontWeight: 600, margin: 0 }}>10 dias GRATIS</p>
+                    <p style={{ fontSize: '13px', color: '#34d399', fontWeight: 600, margin: 0 }}>7 dias GRATIS</p>
                     <p style={{ fontSize: '11px', color: 'rgba(240,236,227,0.3)', margin: 0 }}>Sin tarjeta ahora. Se cobra al terminar la promocion.</p>
                   </div>
                 </div>
@@ -230,7 +277,7 @@ export default function RegisterPage() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderRadius: '14px', background: `${plan?.color || '#C9A84C'}08`, border: `1px solid ${plan?.color || '#C9A84C'}20`, marginBottom: '24px' }}>
                 <div>
                   <p style={{ fontSize: '14px', fontWeight: 700, color: plan?.color || '#C9A84C', margin: 0 }}>Plan {plan?.name}</p>
-                  <p style={{ fontSize: '11px', color: 'rgba(240,236,227,0.35)', margin: '2px 0 0' }}>${plan?.price}/mes despues de 10 dias gratis</p>
+                  <p style={{ fontSize: '11px', color: 'rgba(240,236,227,0.35)', margin: '2px 0 0' }}>${plan?.price}/mes despues de 7 dias gratis</p>
                 </div>
                 <button onClick={() => setStep('plan')} style={{ fontSize: '12px', color: 'rgba(240,236,227,0.4)', background: 'none', border: '1px solid rgba(255,255,255,0.08)', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontFamily: 'inherit' }}>Cambiar</button>
               </div>
@@ -249,11 +296,38 @@ export default function RegisterPage() {
                     </>
                   )}
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '16px' }}>
                     <div><label style={lbl}>Nombre completo *</label><input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Juan Perez" required style={inp} onFocus={focus} onBlur={blur} /></div>
                     <div><label style={lbl}>Email *</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="juan@email.com" required style={inp} onFocus={focus} onBlur={blur} /></div>
-                    <div><label style={lbl}>Telefono *</label><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 (786) 555-0000" required style={inp} onFocus={focus} onBlur={blur} /></div>
-                    <div><label style={lbl}>Contrasena *</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Minimo 6 caracteres" required style={inp} onFocus={focus} onBlur={blur} /></div>
+                    <div><label style={lbl}>Telefono (WhatsApp) *</label><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 (786) 555-0000" required style={inp} onFocus={focus} onBlur={blur} /><p style={{ fontSize: '10px', color: 'rgba(240,236,227,0.2)', marginTop: '4px' }}>Enviaremos un codigo de verificacion a este numero</p></div>
+                    <div>
+                      <label style={lbl}>Contrasena *</label>
+                      <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Min 8 caracteres, mayus, minus, num, especial" required style={{ ...inp, borderColor: password && !pwValid ? 'rgba(239,68,68,0.3)' : password && pwValid ? 'rgba(52,211,153,0.3)' : undefined }} onFocus={focus} onBlur={blur} />
+                      {/* Password strength */}
+                      {password && (
+                        <div style={{ marginTop: '8px' }}>
+                          <div style={{ display: 'flex', gap: '3px', marginBottom: '6px' }}>
+                            {[1,2,3,4,5].map(i => (
+                              <div key={i} style={{ flex: 1, height: '3px', borderRadius: '2px', background: pwStrength >= i ? (pwStrength <= 2 ? '#f87171' : pwStrength <= 4 ? '#fbbf24' : '#34d399') : 'rgba(255,255,255,0.06)' }} />
+                            ))}
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px' }}>
+                            {[
+                              { check: pwChecks.length, label: '8+ caracteres' },
+                              { check: pwChecks.upper, label: 'Mayuscula (A-Z)' },
+                              { check: pwChecks.lower, label: 'Minuscula (a-z)' },
+                              { check: pwChecks.number, label: 'Numero (0-9)' },
+                              { check: pwChecks.special, label: 'Especial (!@#$%)' },
+                            ].map(r => (
+                              <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <span style={{ fontSize: '9px', color: r.check ? '#34d399' : 'rgba(240,236,227,0.2)' }}>{r.check ? '●' : '○'}</span>
+                                <span style={{ fontSize: '10px', color: r.check ? 'rgba(240,236,227,0.5)' : 'rgba(240,236,227,0.2)' }}>{r.label}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {error && <div style={{ padding: '10px 14px', borderRadius: '10px', marginBottom: '16px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', fontSize: '13px', color: '#fca5a5', textAlign: 'center' }}>{error}</div>}
@@ -265,7 +339,7 @@ export default function RegisterPage() {
                     color: '#050507', border: 'none', cursor: loading ? 'wait' : 'pointer',
                     boxShadow: '0 8px 32px rgba(52,211,153,0.2)', transition: 'all 0.3s',
                   }}>
-                    {loading ? 'Creando...' : 'Empezar 10 dias gratis'}
+                    {loading ? 'Creando...' : 'Empezar 7 dias gratis'}
                   </button>
                 </div>
               </form>
@@ -277,6 +351,46 @@ export default function RegisterPage() {
               <div style={{ textAlign: 'center', marginTop: '16px' }}>
                 <Link href="/login" style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)', textDecoration: 'none' }}>Ya tienes cuenta? <span style={{ color: '#C9A84C', fontWeight: 600 }}>Inicia sesion</span></Link>
               </div>
+            </div>
+          )}
+
+          {/* ═══ STEP 3: VERIFY PHONE ═══ */}
+          {step === 'verify' && (
+            <div style={{ maxWidth: '420px', margin: '0 auto', paddingTop: '40px' }}>
+              <form onSubmit={handleVerify}>
+                <div style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '20px', padding: '36px 28px', textAlign: 'center' }}>
+                  <div style={{ width: '56px', height: '56px', margin: '0 auto 20px', borderRadius: '16px', background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' }}>💬</div>
+
+                  <h2 style={{ fontFamily: '"Cormorant Garamond",serif', fontSize: '24px', fontWeight: 400, color: '#F0ECE3', margin: '0 0 8px' }}>Verifica tu telefono</h2>
+                  <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)', marginBottom: '24px' }}>
+                    Enviamos un codigo de 6 digitos por WhatsApp a <span style={{ color: '#34d399', fontWeight: 600 }}>{phoneHint}</span>
+                  </p>
+
+                  <input type="text" value={verifyCode} onChange={e => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="000000" required maxLength={6} autoFocus
+                    style={{ width: '100%', padding: '18px', borderRadius: '14px', fontSize: '32px', fontWeight: 700, textAlign: 'center', letterSpacing: '0.4em', fontFamily: 'monospace', background: 'rgba(255,255,255,0.03)', border: `1px solid ${verifyCode.length === 6 ? 'rgba(52,211,153,0.3)' : 'rgba(255,255,255,0.08)'}`, color: '#F0ECE3', outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.2s' }} />
+
+                  <p style={{ fontSize: '11px', color: 'rgba(240,236,227,0.2)', marginTop: '8px', marginBottom: '20px' }}>El codigo expira en 10 minutos</p>
+
+                  {error && <div style={{ padding: '10px 14px', borderRadius: '10px', marginBottom: '16px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', fontSize: '13px', color: '#fca5a5' }}>{error}</div>}
+
+                  <button type="submit" disabled={loading || verifyCode.length !== 6} style={{
+                    width: '100%', padding: '15px', borderRadius: '14px', fontSize: '15px', fontWeight: 700,
+                    fontFamily: 'inherit',
+                    background: verifyCode.length === 6 ? 'linear-gradient(135deg, #34d399, #059669)' : 'rgba(52,211,153,0.15)',
+                    color: verifyCode.length === 6 ? '#050507' : 'rgba(240,236,227,0.3)',
+                    border: 'none', cursor: verifyCode.length === 6 ? 'pointer' : 'not-allowed',
+                    boxShadow: verifyCode.length === 6 ? '0 8px 32px rgba(52,211,153,0.2)' : 'none',
+                  }}>
+                    {loading ? 'Verificando...' : 'Verificar y continuar'}
+                  </button>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', marginTop: '16px', padding: '10px', borderRadius: '10px', background: 'rgba(201,168,76,0.03)', border: '1px solid rgba(201,168,76,0.08)' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" strokeWidth="1.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="m7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    <span style={{ fontSize: '10px', color: 'rgba(201,168,76,0.6)' }}>Verificacion de dos factores para proteger tu cuenta</span>
+                  </div>
+                </div>
+              </form>
             </div>
           )}
         </div>
