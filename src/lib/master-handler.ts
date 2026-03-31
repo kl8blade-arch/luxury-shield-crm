@@ -24,20 +24,14 @@ async function sendWhatsApp(to: string, message: string) {
   const auth = `Basic ${Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')}`
   const url = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`
 
-  // WhatsApp limit is 1600 chars — split long messages
   const chunks: string[] = []
-  if (message.length <= 1500) {
-    chunks.push(message)
-  } else {
+  if (message.length <= 1500) { chunks.push(message) }
+  else {
     const parts = message.split('\n\n')
     let current = ''
     for (const part of parts) {
-      if ((current + '\n\n' + part).length > 1500 && current) {
-        chunks.push(current.trim())
-        current = part
-      } else {
-        current = current ? current + '\n\n' + part : part
-      }
+      if ((current + '\n\n' + part).length > 1500 && current) { chunks.push(current.trim()); current = part }
+      else { current = current ? current + '\n\n' + part : part }
     }
     if (current.trim()) chunks.push(current.trim())
   }
@@ -52,13 +46,14 @@ async function sendWhatsApp(to: string, message: string) {
 export async function handleMasterMessage(from: string, body: string, mediaUrl?: string, mediaType?: string) {
   console.log('[MASTER] Processing:', body?.substring(0, 60) || '[media]')
 
-  // Handle PDF uploads — extract knowledge and auto-route to expert agent
+  // ══════════════════════════════════════════════
+  // HANDLE PDF UPLOADS
+  // ══════════════════════════════════════════════
   if (mediaUrl && (mediaType?.includes('pdf') || mediaType?.includes('application'))) {
     console.log('[MASTER] PDF detected, processing...')
-    await sendWhatsApp(from, '📄 Recibí tu PDF. Extrayendo conocimiento y asignando al agente experto...')
+    await sendWhatsApp(from, '📄 Recibi tu PDF. Extrayendo conocimiento y asignando al agente experto...')
 
     try {
-      // Download PDF from Twilio (handle redirect)
       const twilioAuth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')
       const redirectRes = await fetch(mediaUrl, { headers: { 'Authorization': `Basic ${twilioAuth}` }, redirect: 'manual' })
       const finalUrl = redirectRes.status === 307 ? redirectRes.headers.get('location') || mediaUrl : mediaUrl
@@ -66,9 +61,6 @@ export async function handleMasterMessage(from: string, body: string, mediaUrl?:
       const pdfBuffer = Buffer.from(await pdfRes.arrayBuffer())
       const pdfBase64 = pdfBuffer.toString('base64')
 
-      console.log(`[MASTER] PDF downloaded: ${pdfBuffer.length} bytes`)
-
-      // Extract knowledge with Claude (using document type)
       const extractRes = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01' },
@@ -77,303 +69,317 @@ export async function handleMasterMessage(from: string, body: string, mediaUrl?:
           messages: [{ role: 'user', content: [
             { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 } },
             { type: 'text', text: `Analiza este documento de seguros. Devuelve SOLO JSON:
-{"category":"dental"|"aca"|"vida"|"iul"|"medicare"|"suplementario"|"otro","carrier":"nombre del carrier/aseguradora","product_name":"nombre del producto","knowledge":"resumen completo de 500 palabras con: coberturas, precios, estados, elegibilidad, periodos de espera, redes, deducibles, beneficios clave, objeciones comunes y respuestas","keywords":["lista","de","keywords","relevantes"]}` }
+{"category":"dental"|"aca"|"vida"|"iul"|"medicare"|"otro","carrier":"nombre","product_name":"producto","knowledge":"resumen 500 palabras","keywords":["lista"]}` }
           ] }],
         }),
       })
 
       if (!extractRes.ok) throw new Error(`Claude error: ${extractRes.status}`)
-
       const extractData = await extractRes.json()
       const rawText = extractData.content?.[0]?.text || ''
       let parsed: any
       try { parsed = JSON.parse(rawText.replace(/```json\n?|\n?```/g, '').trim()) } catch { parsed = { category: 'otro', knowledge: rawText, keywords: [] } }
 
-      console.log(`[MASTER] PDF parsed: category=${parsed.category}, carrier=${parsed.carrier}`)
-
-      // Find the best matching expert agent
       const { data: agents } = await supabase.from('sophia_agents').select('*').eq('active', true)
-      let bestAgent: any = null
-      let bestScore = 0
-
+      let bestAgent: any = null, bestScore = 0
       for (const agent of agents || []) {
         let score = 0
-        const keywords = agent.trigger_keywords || []
-        for (const kw of keywords) {
-          if (parsed.category?.toLowerCase().includes(kw) || parsed.carrier?.toLowerCase().includes(kw) || parsed.product_name?.toLowerCase().includes(kw)) score += 2
+        for (const kw of (agent.trigger_keywords || [])) {
+          if (parsed.category?.toLowerCase().includes(kw) || parsed.carrier?.toLowerCase().includes(kw)) score += 2
           if (parsed.keywords?.some((pk: string) => pk.toLowerCase().includes(kw))) score += 1
         }
         if (score > bestScore) { bestScore = score; bestAgent = agent }
       }
 
-      // Save knowledge to sophia_knowledge
       await supabase.from('sophia_knowledge').insert({
         title: `${parsed.carrier || 'Documento'} — ${parsed.product_name || parsed.category}`,
-        content: parsed.knowledge,
-        source_type: 'pdf',
-        source_name: mediaUrl.split('/').pop() || 'documento.pdf',
+        content: parsed.knowledge, source_type: 'pdf', source_name: mediaUrl.split('/').pop() || 'documento.pdf',
         embedding_summary: parsed.knowledge?.substring(0, 300),
-        tags: [parsed.category, parsed.carrier, ...(parsed.keywords || [])].filter(Boolean),
-        active: true,
+        tags: [parsed.category, parsed.carrier, ...(parsed.keywords || [])].filter(Boolean), active: true,
       })
 
-      // Save training source linked to the expert agent
       await supabase.from('sophia_training_sources').insert({
         title: `${parsed.carrier || 'PDF'} — ${parsed.product_name || parsed.category}`,
-        source_type: 'pdf',
-        content: parsed.knowledge,
-        extracted_knowledge: parsed.knowledge,
-        agent_id: bestAgent?.id || null,
-        processed: true,
-        uploaded_by: 'master',
+        source_type: 'pdf', content: parsed.knowledge, extracted_knowledge: parsed.knowledge,
+        agent_id: bestAgent?.id || null, processed: true, uploaded_by: 'master',
       })
 
-      // If agent found, update its prompt with the new knowledge
       if (bestAgent) {
-        const updatedPrompt = bestAgent.system_prompt + `\n\nCONOCIMIENTO DE ${(parsed.carrier || '').toUpperCase()} — ${(parsed.product_name || '').toUpperCase()}:\n${parsed.knowledge}`
         await supabase.from('sophia_agents').update({
-          system_prompt: updatedPrompt,
+          system_prompt: bestAgent.system_prompt + `\n\n${(parsed.carrier || '').toUpperCase()}:\n${parsed.knowledge}`,
           knowledge_sources: [...(bestAgent.knowledge_sources || []), { carrier: parsed.carrier, product: parsed.product_name, date: new Date().toISOString() }],
         }).eq('id', bestAgent.id)
-
-        await sendWhatsApp(from,
-          `✅ PDF procesado y asignado!\n\n` +
-          `📚 Carrier: ${parsed.carrier || '—'}\n` +
-          `📦 Producto: ${parsed.product_name || '—'}\n` +
-          `🤖 Agente experto: *${bestAgent.name}*\n` +
-          `🏷️ Categoría: ${parsed.category}\n\n` +
-          `${bestAgent.name} ya tiene este conocimiento y lo usará en sus conversaciones.`
-        )
+        await sendWhatsApp(from, `✅ PDF procesado!\n📚 ${parsed.carrier || '—'} — ${parsed.product_name || '—'}\n🤖 Asignado a: *${bestAgent.name}*`)
       } else {
-        // No matching agent — offer to create one
-        await sendWhatsApp(from,
-          `✅ PDF procesado!\n\n` +
-          `📚 Carrier: ${parsed.carrier || '—'}\n` +
-          `📦 Producto: ${parsed.product_name || '—'}\n` +
-          `🏷️ Categoría: ${parsed.category}\n\n` +
-          `⚠️ No encontré un agente experto para esta categoría.\n` +
-          `Sophia usará este conocimiento directamente.\n\n` +
-          `¿Quieres que cree un agente experto? Escribe:\n` +
-          `"crea un agente para ${parsed.category}"`
-        )
+        await sendWhatsApp(from, `✅ PDF procesado!\n📚 ${parsed.carrier || '—'} — ${parsed.product_name || '—'}\nSophia usara este conocimiento directamente.`)
       }
     } catch (err: any) {
       console.error('[MASTER] PDF error:', err.message)
-      await sendWhatsApp(from, `⚠️ Error procesando el PDF: ${err.message}\nIntenta enviarlo de nuevo.`)
+      await sendWhatsApp(from, `⚠️ Error procesando PDF: ${err.message}`)
     }
     return
   }
 
-  // Handle URL — Sophia crawls, learns, and auto-routes to expert
+  // ══════════════════════════════════════════════
+  // HANDLE URLs
+  // ══════════════════════════════════════════════
   const urlMatch = (body || '').match(/https?:\/\/[^\s]+/i)
   if (urlMatch && !mediaUrl) {
     const url = urlMatch[0]
-    console.log('[MASTER] URL detected:', url)
-    await sendWhatsApp(from, `🌐 Analizando: ${url}\nExtrayendo conocimiento, documentos y reglas...`)
-
+    await sendWhatsApp(from, `🌐 Analizando: ${url}...`)
     try {
-      // Step 1: Fetch the page content
       const pageRes = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SophiaBot/1.0)' }, redirect: 'follow' })
       if (!pageRes.ok) throw new Error(`Page fetch failed: ${pageRes.status}`)
       const html = await pageRes.text()
+      const textContent = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 15000)
 
-      // Step 2: Extract text content (strip HTML tags)
-      const textContent = html
-        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .substring(0, 15000) // Limit for Claude context
-
-      // Step 3: Find PDF links on the page
-      const pdfLinks: string[] = []
-      const pdfMatches = html.match(/href=["']([^"']*\.pdf[^"']*)/gi) || []
-      for (const match of pdfMatches.slice(0, 5)) {
-        let pdfUrl = match.replace(/href=["']/i, '')
-        if (pdfUrl.startsWith('/')) {
-          const base = new URL(url)
-          pdfUrl = `${base.origin}${pdfUrl}`
-        } else if (!pdfUrl.startsWith('http')) {
-          pdfUrl = new URL(pdfUrl, url).href
-        }
-        pdfLinks.push(pdfUrl)
-      }
-
-      console.log(`[MASTER] Page text: ${textContent.length} chars, PDFs found: ${pdfLinks.length}`)
-
-      // Step 4: Claude analyzes the page content
       const analysisRes = await callClaude(
-        `Eres un analista experto en seguros. Analiza esta página web y extrae TODO el conocimiento relevante. Devuelve SOLO JSON:
-{"category":"dental"|"aca"|"vida"|"iul"|"medicare"|"suplementario"|"otro","carrier":"nombre del carrier","product_name":"nombre del producto si aplica","knowledge":"resumen COMPLETO de 800 palabras: coberturas, precios, estados, elegibilidad, periodos de espera, redes de proveedores, deducibles, copagos, máximos, exclusiones, reglas, lo que se puede y no se puede hacer, beneficios clave, comparación con competencia","rules":"lista de reglas y restricciones importantes separadas por |","exclusions":"lista de exclusiones separadas por |","keywords":["lista","de","keywords"],"skill_suggestion":"si este conocimiento justifica crear o mejorar un skill, describe qué skill en 1 línea, sino null","pdfs_found":${pdfLinks.length}}`,
-        `URL: ${url}\n\nContenido de la página:\n${textContent}`
+        `Analiza esta pagina de seguros. Devuelve SOLO JSON: {"category":"dental"|"aca"|"vida"|"iul"|"medicare"|"otro","carrier":"nombre","product_name":"producto","knowledge":"resumen 500 palabras","keywords":["lista"]}`,
+        `URL: ${url}\n\n${textContent}`
       )
-
       let parsed: any
-      try { parsed = JSON.parse(analysisRes.replace(/```json\n?|\n?```/g, '').trim()) } catch { parsed = { category: 'otro', knowledge: analysisRes, keywords: [] } }
+      try { parsed = JSON.parse(analysisRes.replace(/```json\n?|\n?```/g, '').trim()) } catch { parsed = { category: 'otro', knowledge: analysisRes } }
 
-      // Step 5: Find matching expert agent
-      const { data: agents } = await supabase.from('sophia_agents').select('*').eq('active', true)
-      let bestAgent: any = null
-      let bestScore = 0
-      for (const agent of agents || []) {
-        let score = 0
-        for (const kw of (agent.trigger_keywords || [])) {
-          if (parsed.category?.toLowerCase().includes(kw)) score += 2
-          if (parsed.carrier?.toLowerCase().includes(kw)) score += 2
-          if (parsed.keywords?.some((pk: string) => pk.toLowerCase().includes(kw))) score += 1
-        }
-        if (score > bestScore) { bestScore = score; bestAgent = agent }
-      }
-
-      // Step 6: Save knowledge
       await supabase.from('sophia_knowledge').insert({
-        title: `${parsed.carrier || 'Web'} — ${parsed.product_name || parsed.category} (URL)`,
-        content: parsed.knowledge + (parsed.rules ? `\n\nREGLAS:\n${parsed.rules.replace(/\|/g, '\n• ')}` : '') + (parsed.exclusions ? `\n\nEXCLUSIONES:\n${parsed.exclusions.replace(/\|/g, '\n• ')}` : ''),
-        source_type: 'url',
-        source_name: url,
+        title: `${parsed.carrier || 'Web'} — ${parsed.product_name || parsed.category}`,
+        content: parsed.knowledge, source_type: 'url', source_name: url,
         embedding_summary: parsed.knowledge?.substring(0, 300),
-        tags: [parsed.category, parsed.carrier, 'url', ...(parsed.keywords || [])].filter(Boolean),
-        active: true,
+        tags: [parsed.category, parsed.carrier, 'url', ...(parsed.keywords || [])].filter(Boolean), active: true,
       })
 
-      // Step 7: Save training source linked to agent
-      await supabase.from('sophia_training_sources').insert({
-        title: `URL: ${parsed.carrier || 'Web'} — ${parsed.product_name || url.substring(0, 50)}`,
-        source_type: 'url', url,
-        content: parsed.knowledge,
-        extracted_knowledge: parsed.knowledge,
-        agent_id: bestAgent?.id || null,
-        processed: true,
-      })
-
-      // Step 8: Update expert agent if found
-      if (bestAgent) {
-        const newKnowledge = `\n\nDE ${url}:\n${parsed.knowledge}${parsed.rules ? '\nREGLAS: ' + parsed.rules : ''}${parsed.exclusions ? '\nEXCLUSIONES: ' + parsed.exclusions : ''}`
-        await supabase.from('sophia_agents').update({
-          system_prompt: bestAgent.system_prompt + newKnowledge,
-          knowledge_sources: [...(bestAgent.knowledge_sources || []), { type: 'url', url, carrier: parsed.carrier, date: new Date().toISOString() }],
-        }).eq('id', bestAgent.id)
-      }
-
-      // Step 9: Save rules to memory for permanent access
-      if (parsed.rules) {
-        await supabase.from('sophia_memory').insert({
-          category: 'rules', key: `rules_${parsed.carrier || 'web'}_${Date.now()}`,
-          value: `REGLAS de ${parsed.carrier || 'este producto'}: ${parsed.rules}`,
-          source: 'url', importance: 9,
-        })
-      }
-      if (parsed.exclusions) {
-        await supabase.from('sophia_memory').insert({
-          category: 'rules', key: `exclusions_${parsed.carrier || 'web'}_${Date.now()}`,
-          value: `EXCLUSIONES de ${parsed.carrier || 'este producto'}: ${parsed.exclusions}`,
-          source: 'url', importance: 9,
-        })
-      }
-
-      // Step 10: Auto-create or suggest skill if needed
-      if (parsed.skill_suggestion) {
-        await supabase.from('sophia_memory').insert({
-          category: 'instruction', key: `skill_suggestion_${Date.now()}`,
-          value: `Sugerencia de skill: ${parsed.skill_suggestion} (de ${url})`,
-          source: 'url', importance: 7,
-        })
-      }
-
-      // Step 11: Try to download PDFs found on the page
-      let pdfProcessed = 0
-      for (const pdfUrl of pdfLinks.slice(0, 3)) {
-        try {
-          const pdfRes = await fetch(pdfUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, redirect: 'follow' })
-          if (!pdfRes.ok) continue
-          const contentType = pdfRes.headers.get('content-type') || ''
-          if (!contentType.includes('pdf') && !pdfUrl.endsWith('.pdf')) continue
-
-          const pdfBuf = Buffer.from(await pdfRes.arrayBuffer())
-          if (pdfBuf.length < 1000 || pdfBuf.length > 10000000) continue
-
-          const pdfB64 = pdfBuf.toString('base64')
-          const pdfExtract = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01' },
-            body: JSON.stringify({
-              model: 'claude-haiku-4-5-20251001', max_tokens: 2000,
-              messages: [{ role: 'user', content: [
-                { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdfB64 } },
-                { type: 'text', text: 'Extrae todo el conocimiento de este documento de seguros en máximo 500 palabras. Incluye coberturas, precios, reglas, exclusiones, estados, elegibilidad.' }
-              ] }],
-            }),
-          })
-
-          if (pdfExtract.ok) {
-            const pdfData = await pdfExtract.json()
-            const pdfKnowledge = pdfData.content?.[0]?.text || ''
-            if (pdfKnowledge.length > 50) {
-              await supabase.from('sophia_training_sources').insert({
-                title: `PDF de ${url}: ${pdfUrl.split('/').pop()}`,
-                source_type: 'pdf', url: pdfUrl,
-                content: pdfKnowledge, extracted_knowledge: pdfKnowledge,
-                agent_id: bestAgent?.id || null, processed: true,
-              })
-              if (bestAgent) {
-                await supabase.from('sophia_agents').update({
-                  system_prompt: bestAgent.system_prompt + `\n\nPDF (${pdfUrl.split('/').pop()}):\n${pdfKnowledge}`,
-                }).eq('id', bestAgent.id)
-              }
-              pdfProcessed++
-            }
-          }
-        } catch (e) { console.log(`[MASTER] PDF download failed: ${pdfUrl}`) }
-      }
-
-      // Final confirmation
-      const agentInfo = bestAgent ? `🤖 Agente: *${bestAgent.name}*` : '⚠️ Sin agente asignado (Sophia usará el conocimiento directamente)'
-      await sendWhatsApp(from,
-        `✅ URL procesada completamente!\n\n` +
-        `📚 Carrier: ${parsed.carrier || '—'}\n` +
-        `📦 Producto: ${parsed.product_name || '—'}\n` +
-        `🏷️ Categoría: ${parsed.category}\n` +
-        `${agentInfo}\n\n` +
-        `📝 Conocimiento: ${parsed.knowledge?.substring(0, 100)}...\n` +
-        `${parsed.rules ? `📋 Reglas: ${parsed.rules.split('|').length} reglas guardadas\n` : ''}` +
-        `${parsed.exclusions ? `🚫 Exclusiones: ${parsed.exclusions.split('|').length} exclusiones guardadas\n` : ''}` +
-        `${pdfProcessed > 0 ? `📄 PDFs descargados: ${pdfProcessed} documentos procesados\n` : ''}` +
-        `${pdfLinks.length > 0 && pdfProcessed === 0 ? `📄 PDFs encontrados: ${pdfLinks.length} (no descargables)\n` : ''}` +
-        `${parsed.skill_suggestion ? `\n💡 Sugerencia: ${parsed.skill_suggestion}` : ''}`
-      )
+      await sendWhatsApp(from, `✅ URL procesada!\n📚 ${parsed.carrier || '—'} — ${parsed.product_name || '—'}\n🏷️ ${parsed.category}`)
     } catch (err: any) {
-      console.error('[MASTER] URL error:', err.message)
-      await sendWhatsApp(from, `⚠️ Error procesando la URL: ${err.message}`)
+      await sendWhatsApp(from, `⚠️ Error: ${err.message}`)
     }
     return
   }
 
   let text = body
 
-  // Detect intent
+  // ══════════════════════════════════════════════
+  // DETECT INTENT — Now includes CRM actions
+  // ══════════════════════════════════════════════
   const intentText = await callClaude(
-    `Detecta la intención del maestro de Sophia. Devuelve SOLO JSON: {"action":"learn"|"remember"|"forget"|"set_skill"|"show_memory"|"show_skills"|"test_sophia"|"chat","topic":string|null,"content":string|null,"skill_name":string|null,"skill_active":boolean|null}
-Ejemplos: "aprende esto: deducible $0" → learn. "recuerda mensajes cortos" → remember. "olvida precio anterior" → forget. "activa coaching" → set_skill,active:true. "muéstrame memoria" → show_memory. "qué skills?" → show_skills. "simula lead TX" → test_sophia. Otro → chat`,
+    `Detecta la intencion del maestro. Devuelve SOLO JSON:
+{"action":"schedule"|"reminder"|"find_lead"|"pipeline_status"|"send_campaign"|"learn"|"remember"|"forget"|"set_skill"|"show_memory"|"show_skills"|"test_sophia"|"chat",
+"topic":string|null,"content":string|null,"skill_name":string|null,"skill_active":boolean|null,
+"lead_name":string|null,"lead_phone":string|null,"date":string|null,"time":string|null,"event_title":string|null,"reminder_type":string|null}
+
+Acciones CRM:
+- "agendame cita con Maria manana a las 3pm" → schedule, lead_name:"Maria", date:"manana", time:"3pm", event_title:"Cita con Maria"
+- "ponme un recordatorio de llamar a Juan el viernes" → reminder, lead_name:"Juan", date:"viernes", reminder_type:"call"
+- "recordatorio seguimiento Pedro en 2 horas" → reminder, lead_name:"Pedro", time:"2 horas", reminder_type:"followup"
+- "busca el lead de Miami que pregunto por dental" → find_lead, content:"Miami dental"
+- "como va el pipeline?" → pipeline_status
+- "manda campana de rescate a leads frios" → send_campaign, content:"rescue cold"
+
+Acciones Sophia:
+- "aprende esto: X" → learn
+- "recuerda que X" → remember
+- "olvida X" → forget
+- "activa/desactiva skill X" → set_skill
+- "muestrame memoria/skills" → show_memory/show_skills
+- "simula X" → test_sophia
+- Todo lo demas → chat`,
     text
   )
 
   let intent: any = { action: 'chat' }
   try { intent = JSON.parse(intentText.replace(/```json\n?|\n?```/g, '').trim()) } catch {}
 
-  console.log('[MASTER] Intent:', intent.action)
+  console.log('[MASTER] Intent:', intent.action, JSON.stringify(intent).substring(0, 100))
 
   switch (intent.action) {
+
+    // ══════════════════════════════════════════════
+    // CRM: SCHEDULE — Create calendar event
+    // ══════════════════════════════════════════════
+    case 'schedule': {
+      const title = intent.event_title || `Cita con ${intent.lead_name || 'lead'}`
+      const now = new Date()
+
+      // Parse relative dates
+      let eventDate = new Date()
+      const dateStr = (intent.date || '').toLowerCase()
+      const timeStr = (intent.time || '').toLowerCase()
+
+      if (dateStr.includes('manana') || dateStr.includes('mañana')) eventDate.setDate(now.getDate() + 1)
+      else if (dateStr.includes('lunes')) { eventDate.setDate(now.getDate() + ((1 - now.getDay() + 7) % 7 || 7)) }
+      else if (dateStr.includes('martes')) { eventDate.setDate(now.getDate() + ((2 - now.getDay() + 7) % 7 || 7)) }
+      else if (dateStr.includes('miercoles') || dateStr.includes('miércoles')) { eventDate.setDate(now.getDate() + ((3 - now.getDay() + 7) % 7 || 7)) }
+      else if (dateStr.includes('jueves')) { eventDate.setDate(now.getDate() + ((4 - now.getDay() + 7) % 7 || 7)) }
+      else if (dateStr.includes('viernes')) { eventDate.setDate(now.getDate() + ((5 - now.getDay() + 7) % 7 || 7)) }
+      else if (dateStr.includes('sabado') || dateStr.includes('sábado')) { eventDate.setDate(now.getDate() + ((6 - now.getDay() + 7) % 7 || 7)) }
+      else if (dateStr.includes('domingo')) { eventDate.setDate(now.getDate() + ((7 - now.getDay() + 7) % 7 || 7)) }
+
+      // Parse time
+      const timeMatch = timeStr.match(/(\d{1,2})\s*(am|pm|a\.m|p\.m)?/i) || (intent.time || '').match(/(\d{1,2})\s*(am|pm)?/i)
+      if (timeMatch) {
+        let hours = parseInt(timeMatch[1])
+        const period = (timeMatch[2] || '').toLowerCase()
+        if (period.includes('p') && hours < 12) hours += 12
+        if (period.includes('a') && hours === 12) hours = 0
+        if (!period && hours < 8) hours += 12 // Assume PM for business hours
+        eventDate.setHours(hours, 0, 0, 0)
+      } else {
+        eventDate.setHours(10, 0, 0, 0) // Default 10am
+      }
+
+      // Find lead if name provided
+      let leadId = null, leadPhone = null
+      if (intent.lead_name) {
+        const { data: leads } = await supabase.from('leads').select('id, name, phone').ilike('name', `%${intent.lead_name}%`).limit(1)
+        if (leads?.[0]) { leadId = leads[0].id; leadPhone = leads[0].phone }
+      }
+
+      // Create calendar event
+      const endDate = new Date(eventDate.getTime() + 30 * 60 * 1000) // 30 min default
+      await supabase.from('calendar_events').insert({
+        title, start_time: eventDate.toISOString(), end_time: endDate.toISOString(),
+        event_type: 'lead_call', status: 'scheduled',
+        lead_name: intent.lead_name || null, lead_phone: leadPhone,
+      })
+
+      // Also create a reminder
+      await supabase.from('reminders').insert({
+        lead_id: leadId, type: 'meeting', status: 'pending',
+        scheduled_for: eventDate.toISOString(),
+        notes: title,
+      })
+
+      const dateFormatted = eventDate.toLocaleDateString('es-ES', { weekday: 'long', month: 'long', day: 'numeric' })
+      const timeFormatted = eventDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+
+      await sendWhatsApp(from,
+        `📅 Listo! Cita agendada:\n\n` +
+        `📌 ${title}\n` +
+        `🗓️ ${dateFormatted}\n` +
+        `⏰ ${timeFormatted}\n` +
+        `${leadPhone ? `📱 ${leadPhone}\n` : ''}` +
+        `\nTe recordare antes de la cita.`
+      )
+      break
+    }
+
+    // ══════════════════════════════════════════════
+    // CRM: REMINDER — Create follow-up reminder
+    // ══════════════════════════════════════════════
+    case 'reminder': {
+      const now = new Date()
+      let reminderDate = new Date()
+
+      const dateStr = (intent.date || '').toLowerCase()
+      const timeStr = (intent.time || '').toLowerCase()
+
+      // Parse relative time
+      const hoursMatch = timeStr.match(/(\d+)\s*hora/i)
+      const minsMatch = timeStr.match(/(\d+)\s*min/i)
+      const daysMatch = dateStr.match(/(\d+)\s*dia/i)
+
+      if (hoursMatch) reminderDate = new Date(now.getTime() + parseInt(hoursMatch[1]) * 60 * 60 * 1000)
+      else if (minsMatch) reminderDate = new Date(now.getTime() + parseInt(minsMatch[1]) * 60 * 1000)
+      else if (daysMatch) { reminderDate.setDate(now.getDate() + parseInt(daysMatch[1])); reminderDate.setHours(9, 0, 0, 0) }
+      else if (dateStr.includes('manana') || dateStr.includes('mañana')) { reminderDate.setDate(now.getDate() + 1); reminderDate.setHours(9, 0, 0, 0) }
+      else if (dateStr.includes('lunes')) { reminderDate.setDate(now.getDate() + ((1 - now.getDay() + 7) % 7 || 7)); reminderDate.setHours(9, 0, 0, 0) }
+      else if (dateStr.includes('viernes')) { reminderDate.setDate(now.getDate() + ((5 - now.getDay() + 7) % 7 || 7)); reminderDate.setHours(9, 0, 0, 0) }
+      else { reminderDate = new Date(now.getTime() + 60 * 60 * 1000) } // Default: 1 hour
+
+      let leadId = null
+      if (intent.lead_name) {
+        const { data: leads } = await supabase.from('leads').select('id').ilike('name', `%${intent.lead_name}%`).limit(1)
+        if (leads?.[0]) leadId = leads[0].id
+      }
+
+      const typeMap: Record<string, string> = { call: 'call', llamar: 'call', followup: 'followup', seguimiento: 'followup', whatsapp: 'whatsapp', mensaje: 'whatsapp' }
+      const reminderType = typeMap[intent.reminder_type || ''] || 'followup'
+
+      await supabase.from('reminders').insert({
+        lead_id: leadId, type: reminderType, status: 'pending',
+        scheduled_for: reminderDate.toISOString(),
+        notes: intent.content || `${intent.reminder_type || 'Seguimiento'} ${intent.lead_name || ''}`.trim(),
+      })
+
+      const dateFormatted = reminderDate.toLocaleDateString('es-ES', { weekday: 'long', month: 'long', day: 'numeric' })
+      const timeFormatted = reminderDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+
+      await sendWhatsApp(from,
+        `⏰ Recordatorio creado!\n\n` +
+        `📌 ${intent.content || intent.reminder_type || 'Seguimiento'} ${intent.lead_name || ''}\n` +
+        `🗓️ ${dateFormatted} a las ${timeFormatted}\n` +
+        `📋 Tipo: ${reminderType}`
+      )
+      break
+    }
+
+    // ══════════════════════════════════════════════
+    // CRM: FIND LEAD — Search leads
+    // ══════════════════════════════════════════════
+    case 'find_lead': {
+      const searchTerm = intent.content || intent.lead_name || text
+      const { data: leads } = await supabase.from('leads')
+        .select('name, phone, state, stage, score, insurance_type, purchased_products, updated_at')
+        .or(`name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%,state.ilike.%${searchTerm}%,insurance_type.ilike.%${searchTerm}%`)
+        .order('updated_at', { ascending: false })
+        .limit(5)
+
+      if (!leads?.length) {
+        await sendWhatsApp(from, `🔍 No encontre leads con "${searchTerm}". Intenta con otro nombre, telefono o estado.`)
+      } else {
+        const list = leads.map((l, i) =>
+          `${i + 1}. *${l.name}* — ${l.phone}\n   ${l.state || '?'} | ${l.insurance_type || '?'} | Score: ${l.score || 0} | ${l.stage}${l.purchased_products?.length ? '\n   Ya tiene: ' + l.purchased_products.join(', ') : ''}`
+        ).join('\n\n')
+        await sendWhatsApp(from, `🔍 Encontre ${leads.length} lead${leads.length > 1 ? 's' : ''}:\n\n${list}`)
+      }
+      break
+    }
+
+    // ══════════════════════════════════════════════
+    // CRM: PIPELINE STATUS — Quick overview
+    // ══════════════════════════════════════════════
+    case 'pipeline_status': {
+      const stages = ['new', 'contacted', 'qualification', 'proposal', 'negotiation', 'closed_won', 'closed_lost']
+      const stageLabels: Record<string, string> = { new: 'Nuevos', contacted: 'Contactados', qualification: 'Calificacion', proposal: 'Propuesta', negotiation: 'Negociacion', closed_won: 'Cerrados ✅', closed_lost: 'Perdidos ❌' }
+
+      let report = '📊 *Estado del Pipeline:*\n\n'
+      let totalActive = 0
+
+      for (const stage of stages) {
+        const { count } = await supabase.from('leads').select('*', { count: 'exact', head: true }).eq('stage', stage)
+        const c = count || 0
+        if (stage !== 'closed_won' && stage !== 'closed_lost') totalActive += c
+        report += `${stageLabels[stage]}: *${c}*\n`
+      }
+
+      // Hot leads
+      const { count: hot } = await supabase.from('leads').select('*', { count: 'exact', head: true }).gte('score', 75).not('stage', 'in', '("closed_won","closed_lost")')
+      // Today's leads
+      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
+      const { count: today } = await supabase.from('leads').select('*', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString())
+      // Pending reminders
+      const { count: reminders } = await supabase.from('reminders').select('*', { count: 'exact', head: true }).eq('status', 'pending')
+
+      report += `\n🔥 Leads calientes (75+): *${hot || 0}*`
+      report += `\n📥 Leads hoy: *${today || 0}*`
+      report += `\n⏰ Recordatorios pendientes: *${reminders || 0}*`
+      report += `\n\n💼 Total activos: *${totalActive}*`
+
+      await sendWhatsApp(from, report)
+      break
+    }
+
+    // ══════════════════════════════════════════════
+    // SOPHIA: LEARN
+    // ══════════════════════════════════════════════
     case 'learn': {
       const content = intent.content || text
       await supabase.from('sophia_knowledge').insert({ title: intent.topic || 'general', content, source_type: 'text', source_name: 'Maestro', embedding_summary: content.substring(0, 200), tags: [intent.topic || 'master'], active: true })
-      await sendWhatsApp(from, `✅ Aprendido y guardado.\n📚 Tema: ${intent.topic || 'general'}\nSophia usará esto en sus conversaciones.`)
+      await sendWhatsApp(from, `✅ Aprendido.\n📚 Tema: ${intent.topic || 'general'}`)
       break
     }
     case 'remember': {
       const content = intent.content || text
       await supabase.from('sophia_memory').insert({ category: 'instruction', key: `instruccion_${Date.now()}`, value: content, source: 'master', importance: 8 })
-      await sendWhatsApp(from, `🧠 Guardado en memoria permanente:\n"${content}"`)
+      await sendWhatsApp(from, `🧠 Guardado en memoria:\n"${content}"`)
       break
     }
     case 'forget': {
@@ -387,13 +393,13 @@ Ejemplos: "aprende esto: deducible $0" → learn. "recuerda mensajes cortos" →
       const name = intent.skill_name || ''
       const active = intent.skill_active ?? true
       const { data } = await supabase.from('sophia_skills').update({ active }).ilike('name', `%${name}%`).select()
-      if (!data?.length) { await sendWhatsApp(from, `⚠️ Skill "${name}" no encontrado. Escribe "qué skills tienes?"`) }
-      else { await sendWhatsApp(from, `${active ? '✅' : '⏸️'} Skill "${data[0].name}" ${active ? 'activado' : 'desactivado'}.`) }
+      if (!data?.length) await sendWhatsApp(from, `⚠️ Skill "${name}" no encontrado.`)
+      else await sendWhatsApp(from, `${active ? '✅' : '⏸️'} Skill "${data[0].name}" ${active ? 'activado' : 'desactivado'}.`)
       break
     }
     case 'show_memory': {
       const { data } = await supabase.from('sophia_memory').select('value, category, importance').eq('active', true).order('importance', { ascending: false }).limit(10)
-      const list = data?.map(m => `• [${m.category}] ${m.value.substring(0, 80)}`).join('\n') || 'Vacía'
+      const list = data?.map(m => `• [${m.category}] ${m.value.substring(0, 80)}`).join('\n') || 'Vacia'
       await sendWhatsApp(from, `🧠 Mi memoria:\n\n${list}`)
       break
     }
@@ -406,42 +412,51 @@ Ejemplos: "aprende esto: deducible $0" → learn. "recuerda mensajes cortos" →
     case 'test_sophia': {
       const scenario = intent.content || 'lead de FL interesado en dental'
       const { data: skills } = await supabase.from('sophia_skills').select('prompt_injection').eq('active', true)
-      const skillsText = skills?.map(s => s.prompt_injection).join('\n') || ''
-      const response = await callClaude(`Eres Sophia de Luxury Shield Insurance. ${skillsText}`, `[SIMULACIÓN - ${scenario}] Hola, quiero información sobre el seguro dental`)
-      await sendWhatsApp(from, `🧪 *Test* (${scenario}):\n\n${response}`)
+      const response = await callClaude(`Eres Sophia de Luxury Shield Insurance. ${skills?.map(s => s.prompt_injection).join('\n')}`, `[SIMULACION - ${scenario}] Hola, quiero informacion sobre seguro`, 'claude-haiku-4-5-20251001', 400)
+      await sendWhatsApp(from, `🧪 Test (${scenario}):\n\n${response}`)
       break
     }
+
+    // ══════════════════════════════════════════════
+    // DEFAULT: CHAT — Sophia as colleague with CRM awareness
+    // ══════════════════════════════════════════════
     default: {
-      // Load ALL knowledge: memory + PDFs + URLs + training sources
       const [{ data: memory }, { data: knowledge }, { data: agentKnowledge }] = await Promise.all([
         supabase.from('sophia_memory').select('value, category').eq('active', true).order('importance', { ascending: false }).limit(10),
         supabase.from('sophia_knowledge').select('title, content').eq('active', true).order('created_at', { ascending: false }).limit(5),
         supabase.from('sophia_agents').select('name, system_prompt').eq('active', true),
       ])
 
-      const memoryText = memory?.map(m => `[${m.category}] ${m.value}`).join('\n') || 'Sin memoria'
-      const knowledgeText = knowledge?.map(k => `[${k.title}]:\n${k.content}`).join('\n\n') || 'Sin documentos'
-      const agentsText = agentKnowledge?.map(a => `[${a.name}]: ${a.system_prompt?.substring(0, 500)}`).join('\n\n') || ''
+      // Get quick pipeline stats for context
+      const { count: totalLeads } = await supabase.from('leads').select('*', { count: 'exact', head: true }).not('stage', 'in', '("closed_won","closed_lost","unqualified")')
+      const { count: pendingReminders } = await supabase.from('reminders').select('*', { count: 'exact', head: true }).eq('status', 'pending')
+
+      const memoryText = memory?.map(m => `[${m.category}] ${m.value}`).join('\n') || ''
+      const knowledgeText = knowledge?.map(k => `[${k.title}]: ${k.content?.substring(0, 300)}`).join('\n') || ''
+      const agentsText = agentKnowledge?.map(a => `${a.name}`).join(', ') || 'ninguno'
 
       const response = await callClaude(
         `Eres Sophia, la mano derecha de Carlos Silva en Luxury Shield Insurance.
-Habla con él como colega de confianza — directo, sin rodeos, sin formalismos.
-NO te auto-diagnostiques ni hables de tus limitaciones.
-NO uses asteriscos (**bold**) ni headers (#). Solo texto plano natural.
-NO listes lo que puedes o no puedes hacer — simplemente HAZLO.
-Responde en máximo 4-5 oraciones a menos que Carlos pida más detalle.
+Habla como colega de confianza — directo, sin rodeos.
+NO uses **bold** ni headers. Solo texto plano natural.
+Responde en maximo 4-5 oraciones.
 
-Cuando Carlos pregunte sobre un producto, dale la respuesta con los datos que tienes.
-Cuando Carlos pida una opinión, dala con seguridad.
-Cuando Carlos dé una instrucción, confírmala en una línea.
+IMPORTANTE — TIENES ACCESO AL CRM:
+- Puedes agendar citas (dile "ya la agendo" si te lo pide)
+- Puedes crear recordatorios
+- Puedes buscar leads
+- Puedes ver el pipeline
+- Si Carlos te pide algo del CRM, HAZLO. No preguntes "en que sistema" ni "en que calendario". TU ERES EL SISTEMA.
 
-CONOCIMIENTO QUE TIENES:
+ESTADO ACTUAL DEL CRM:
+- ${totalLeads || 0} leads activos en pipeline
+- ${pendingReminders || 0} recordatorios pendientes
+- Agentes IA activos: ${agentsText}
+
+CONOCIMIENTO:
 ${knowledgeText}
 
-AGENTES QUE MANEJAS:
-${agentsText}
-
-INSTRUCCIONES PREVIAS DE CARLOS:
+INSTRUCCIONES DE CARLOS:
 ${memoryText}`,
         text,
         'claude-haiku-4-5-20251001',
