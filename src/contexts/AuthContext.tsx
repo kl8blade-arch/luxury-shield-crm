@@ -9,15 +9,24 @@ interface User {
   role: string
   plan: string
   account_id: string | null
+  totp_enabled?: boolean
+  paid?: boolean
+  onboarding_complete?: boolean
+  trial_ends_at?: string | null
+  profile_photo?: string | null
 }
 
 interface AuthContextType {
   user: User | null
   loading: boolean
-  login: (email: string, password: string) => Promise<string | null>
-  register: (name: string, email: string, password: string, phone?: string) => Promise<string | null>
+  login: (email: string, password: string) => Promise<{ error?: string; requires_2fa?: boolean; agent_id?: string; name?: string } | null>
+  register: (name: string, email: string, password: string, phone: string) => Promise<string | null>
+  loginWithGoogle: (credential: string) => Promise<string | null>
+  verify2FA: (agentId: string, code: string) => Promise<string | null>
   logout: () => void
   isAdmin: boolean
+  trialDaysLeft: number | null
+  isTrialExpired: boolean
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -25,8 +34,12 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   login: async () => null,
   register: async () => null,
+  loginWithGoogle: async () => null,
+  verify2FA: async () => null,
   logout: () => {},
   isAdmin: false,
+  trialDaysLeft: null,
+  isTrialExpired: false,
 })
 
 export const useAuth = () => useContext(AuthContext)
@@ -40,16 +53,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname()
 
   useEffect(() => {
-    // Load from localStorage on mount
     try {
       const stored = localStorage.getItem('ls_auth')
       if (stored) {
         const parsed = JSON.parse(stored)
-        // Support both old format (email+role) and new format (full user object)
         if (parsed.id) {
           setUser(parsed)
         } else if (parsed.email) {
-          // Old format — treat as admin for backwards compat
           setUser({
             id: 'legacy',
             name: parsed.name || 'Carlos Silva',
@@ -57,6 +67,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             role: parsed.role || 'admin',
             plan: 'elite',
             account_id: null,
+            paid: true,
+            onboarding_complete: true,
           })
         }
       }
@@ -71,9 +83,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user && !isPublic) {
       router.push('/login')
     }
+    // Redirect to setup if onboarding not complete (except admin)
+    if (user && !user.onboarding_complete && user.role !== 'admin' && pathname !== '/setup' && !isPublic) {
+      router.push('/setup')
+    }
   }, [user, loading, pathname, router])
 
-  async function login(email: string, password: string): Promise<string | null> {
+  // Trial calculation
+  const trialDaysLeft = user?.trial_ends_at
+    ? Math.max(0, Math.ceil((new Date(user.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : null
+
+  const isTrialExpired = user?.role !== 'admin' && !user?.paid && trialDaysLeft !== null && trialDaysLeft <= 0
+
+  async function login(email: string, password: string) {
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -81,17 +104,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email, password }),
       })
       const data = await res.json()
-      if (!res.ok) return data.error || 'Error de autenticacion'
+      if (!res.ok) return { error: data.error || 'Error de autenticacion' }
+
+      // 2FA required
+      if (data.requires_2fa) {
+        return { requires_2fa: true, agent_id: data.agent_id, name: data.name }
+      }
+
       setUser(data.user)
       localStorage.setItem('ls_auth', JSON.stringify(data.user))
-      router.push('/dashboard')
+
+      if (!data.user.onboarding_complete && data.user.role !== 'admin') {
+        router.push('/setup')
+      } else {
+        router.push('/dashboard')
+      }
       return null
     } catch {
-      return 'Error de conexion'
+      return { error: 'Error de conexion' }
     }
   }
 
-  async function register(name: string, email: string, password: string, phone?: string): Promise<string | null> {
+  async function register(name: string, email: string, password: string, phone: string): Promise<string | null> {
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
@@ -102,7 +136,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!res.ok) return data.error || 'Error al crear cuenta'
       setUser(data.user)
       localStorage.setItem('ls_auth', JSON.stringify(data.user))
-      router.push('/dashboard')
+      router.push('/setup')
+      return null
+    } catch {
+      return 'Error de conexion'
+    }
+  }
+
+  async function loginWithGoogle(credential: string): Promise<string | null> {
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential }),
+      })
+      const data = await res.json()
+      if (!res.ok) return data.error || 'Error con Google'
+
+      if (data.user.totp_enabled) {
+        // Store temp data for 2FA
+        sessionStorage.setItem('pending_2fa', JSON.stringify({ agent_id: data.user.id, name: data.user.name }))
+        return '2FA_REQUIRED'
+      }
+
+      setUser(data.user)
+      localStorage.setItem('ls_auth', JSON.stringify(data.user))
+
+      if (data.isNew || !data.user.onboarding_complete) {
+        router.push('/setup')
+      } else {
+        router.push('/dashboard')
+      }
+      return null
+    } catch {
+      return 'Error de conexion'
+    }
+  }
+
+  async function verify2FA(agentId: string, code: string): Promise<string | null> {
+    try {
+      const res = await fetch('/api/auth/verify-totp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId, code }),
+      })
+      const data = await res.json()
+      if (!res.ok) return data.error || 'Codigo incorrecto'
+
+      setUser(data.user)
+      localStorage.setItem('ls_auth', JSON.stringify(data.user))
+
+      if (!data.user.onboarding_complete && data.user.role !== 'admin') {
+        router.push('/setup')
+      } else {
+        router.push('/dashboard')
+      }
       return null
     } catch {
       return 'Error de conexion'
@@ -118,7 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = user?.role === 'admin'
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, isAdmin }}>
+    <AuthContext.Provider value={{ user, loading, login, register, loginWithGoogle, verify2FA, logout, isAdmin, trialDaysLeft, isTrialExpired }}>
       {children}
     </AuthContext.Provider>
   )

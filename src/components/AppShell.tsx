@@ -4,13 +4,13 @@ import { usePathname } from 'next/navigation'
 import Sidebar from './Sidebar'
 import { useAuth } from '@/contexts/AuthContext'
 
-const PUBLIC_ROUTES = ['/login', '/register', '/l/']
+const PUBLIC_ROUTES = ['/login', '/register', '/l/', '/setup']
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const pathname = usePathname()
-  const { user, loading } = useAuth()
+  const { user, loading, trialDaysLeft, isTrialExpired } = useAuth()
 
   const isPublicPage = pathname === '/' || PUBLIC_ROUTES.some(r => pathname.startsWith(r))
 
@@ -66,6 +66,27 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         minHeight: '100vh', overflow: 'hidden',
         width: isMobile ? '100%' : undefined,
       }}>
+        {/* Trial banner */}
+        {trialDaysLeft !== null && !user?.paid && user?.role !== 'admin' && (
+          <div style={{
+            padding: '10px 20px', textAlign: 'center', fontSize: '13px', fontWeight: 600,
+            fontFamily: '"Outfit","Inter",sans-serif',
+            background: isTrialExpired
+              ? 'linear-gradient(90deg, #991b1b, #7f1d1d)'
+              : trialDaysLeft <= 2
+                ? 'linear-gradient(90deg, #92400e, #78350f)'
+                : 'linear-gradient(90deg, #1e3a5f, #172554)',
+            color: isTrialExpired ? '#fca5a5' : trialDaysLeft <= 2 ? '#fde68a' : '#93c5fd',
+          }}>
+            {isTrialExpired
+              ? 'Tu prueba gratuita ha expirado. Actualiza tu plan para continuar usando el CRM.'
+              : `Te quedan ${trialDaysLeft} dia${trialDaysLeft !== 1 ? 's' : ''} de prueba gratis.`}
+            {' '}
+            <a href="/packages" style={{ color: '#C9A84C', textDecoration: 'underline', fontWeight: 700 }}>
+              {isTrialExpired ? 'Ver planes' : 'Actualizar ahora'}
+            </a>
+          </div>
+        )}
         {children}
       </main>
 
