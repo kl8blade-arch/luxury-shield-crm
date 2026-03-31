@@ -119,6 +119,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user && !user.onboarding_complete && user.role !== 'admin' && pathname !== '/setup' && !isPublic) {
       router.push('/setup')
     }
+    // Block access if trial expired and not paid (except admin and packages page)
+    if (user && user.role !== 'admin' && !user.paid && user.trial_ends_at) {
+      const daysLeft = Math.ceil((new Date(user.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      if (daysLeft <= 0 && pathname !== '/packages' && pathname !== '/settings' && !isPublic) {
+        router.push('/packages')
+      }
+    }
   }, [user, loading, pathname, router])
 
   // Trial calculation
