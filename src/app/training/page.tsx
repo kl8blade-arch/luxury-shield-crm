@@ -55,15 +55,21 @@ export default function TrainingPage() {
       {loading ? <div style={{ padding: '48px', textAlign: 'center', color: C.textMuted }}>Cargando...</div> : (
         <>
           {/* Progress bar */}
-          <div style={{ background: 'linear-gradient(145deg, #141420, #0e0e1a)', border: `1px solid ${C.border}`, borderRadius: '16px', padding: '24px', marginBottom: '20px' }}>
+          <div style={{ background: 'linear-gradient(145deg, #141420, #0e0e1a)', border: `1px solid ${(stats?.approved || 0) >= 500 ? 'rgba(52,211,153,0.3)' : C.border}`, borderRadius: '16px', padding: '24px', marginBottom: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-              <span style={{ color: C.text, fontSize: '14px', fontWeight: 700 }}>Progreso hacia fine-tuning v1</span>
-              <span style={{ color: C.gold, fontSize: '14px', fontWeight: 800 }}>{stats?.approved || 0}/500</span>
+              <span style={{ color: C.text, fontSize: '14px', fontWeight: 700 }}>
+                {(stats?.approved || 0) >= 500 ? 'SophiaModel v1 — Lista para fine-tuning' : 'Progreso hacia fine-tuning v1'}
+              </span>
+              <span style={{ color: (stats?.approved || 0) >= 500 ? '#34d399' : C.gold, fontSize: '14px', fontWeight: 800 }}>{stats?.approved || 0}/500</span>
             </div>
             <div style={{ height: '10px', background: 'rgba(255,255,255,0.06)', borderRadius: '5px', overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${progress}%`, background: `linear-gradient(90deg, #C9A84C, #E2C060)`, borderRadius: '5px', transition: 'width 0.5s' }} />
+              <div style={{ height: '100%', width: `${Math.min(progress, 100)}%`, background: (stats?.approved || 0) >= 500 ? 'linear-gradient(90deg, #34d399, #059669)' : 'linear-gradient(90deg, #C9A84C, #E2C060)', borderRadius: '5px', transition: 'width 0.5s' }} />
             </div>
-            <p style={{ color: C.textMuted, fontSize: '11px', marginTop: '8px' }}>Faltan {Math.max(0, 500 - (stats?.approved || 0))} conversaciones para SophiaModel v1</p>
+            <p style={{ color: (stats?.approved || 0) >= 500 ? '#34d399' : C.textMuted, fontSize: '11px', marginTop: '8px', fontWeight: (stats?.approved || 0) >= 500 ? 600 : 400 }}>
+              {(stats?.approved || 0) >= 500
+                ? `${stats?.approved || 0} conversaciones listas. Puedes exportar el dataset JSONL para fine-tuning.`
+                : `Faltan ${Math.max(0, 500 - (stats?.approved || 0))} conversaciones para SophiaModel v1`}
+            </p>
           </div>
 
           {/* Stats */}
