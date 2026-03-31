@@ -22,11 +22,19 @@ const FEATURES = [
 ]
 
 const PLANS = [
-  { key: 'starter', label: 'Starter', price: '$97/mes', color: '#60a5fa', subs: 0, leads: 100, agents: 1, features: ['sophia_ai', 'pipeline', 'whatsapp', 'forms'] },
-  { key: 'professional', label: 'Professional', price: '$297/mes', color: '#a78bfa', subs: 5, leads: 500, agents: 5, features: ['sophia_ai', 'coaching', 'pipeline', 'calendar', 'analytics', 'whatsapp', 'sms', 'forms', 'rescue_sequence', 'referrals'] },
-  { key: 'agency', label: 'Agency', price: '$597/mes', color: '#C9A84C', subs: 25, leads: null, agents: 25, features: ['sophia_ai', 'coaching', 'pipeline', 'calendar', 'analytics', 'training', 'voice', 'rescue_sequence', 'referrals', 'whatsapp', 'sms', 'email', 'forms', 'api_access'] },
-  { key: 'enterprise', label: 'Enterprise', price: '$997/mes', color: '#34d399', subs: 50, leads: null, agents: 100, features: FEATURES.map(f => f.key) },
+  { key: 'starter', label: 'Starter', price: '$97/mes', color: '#60a5fa', subs: 0, leads: 100, agents: 1, maxFeatures: 4, features: ['sophia_ai', 'pipeline', 'whatsapp', 'forms'] },
+  { key: 'professional', label: 'Professional', price: '$297/mes', color: '#a78bfa', subs: 5, leads: 500, agents: 5, maxFeatures: 10, features: ['sophia_ai', 'coaching', 'pipeline', 'calendar', 'analytics', 'whatsapp', 'sms', 'forms', 'rescue_sequence', 'referrals'] },
+  { key: 'agency', label: 'Agency', price: '$597/mes', color: '#C9A84C', subs: 25, leads: null, agents: 25, maxFeatures: 14, features: ['sophia_ai', 'coaching', 'pipeline', 'calendar', 'analytics', 'training', 'voice', 'rescue_sequence', 'referrals', 'whatsapp', 'sms', 'email', 'forms', 'api_access'] },
+  { key: 'enterprise', label: 'Enterprise', price: '$997/mes', color: '#34d399', subs: 50, leads: null, agents: 100, maxFeatures: 15, features: FEATURES.map(f => f.key) },
 ]
+
+// Determine which plan is needed based on selected feature count
+function getPlanForFeatureCount(count: number) {
+  if (count <= 4) return PLANS[0]
+  if (count <= 10) return PLANS[1]
+  if (count <= 14) return PLANS[2]
+  return PLANS[3]
+}
 
 export default function AccountsPage() {
   const [account, setAccount] = useState<any>(null)
@@ -342,6 +350,64 @@ export default function AccountsPage() {
                         ))}
                       </div>
 
+                      {/* FEATURES — auto-determines plan */}
+                      <p style={{ color: 'rgba(201,168,76,0.6)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', marginBottom: '6px' }}>FEATURES ({Object.values(newSub.features).filter(Boolean).length} seleccionados)</p>
+                      {(() => {
+                        const selectedCount = Object.values(newSub.features).filter(Boolean).length
+                        const requiredPlan = getPlanForFeatureCount(selectedCount)
+                        const isOverPlan = selectedCount > (PLANS.find(p => p.key === newSub.plan)?.maxFeatures || 4)
+                        return (
+                          <div style={{ padding: '10px 14px', borderRadius: '10px', marginBottom: '12px', background: isOverPlan ? 'rgba(251,191,36,0.06)' : 'rgba(52,211,153,0.04)', border: `1px solid ${isOverPlan ? 'rgba(251,191,36,0.2)' : 'rgba(52,211,153,0.15)'}` }}>
+                            <p style={{ fontSize: '12px', color: isOverPlan ? '#fbbf24' : '#34d399', fontWeight: 600, margin: 0 }}>
+                              {isOverPlan
+                                ? `Necesitas plan ${requiredPlan.label} (${requiredPlan.price}) para ${selectedCount} features`
+                                : `Plan ${requiredPlan.label} — ${selectedCount}/${requiredPlan.maxFeatures} features`}
+                            </p>
+                          </div>
+                        )
+                      })()}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px', marginBottom: '20px' }}>
+                        {FEATURES.map(f => {
+                          const isEnabled = !!newSub.features[f.key]
+                          const selectedCount = Object.values(newSub.features).filter(Boolean).length
+                          const currentPlanMax = PLANS.find(p => p.key === newSub.plan)?.maxFeatures || 4
+                          const canToggleOn = isEnabled || selectedCount < FEATURES.length // Always allow toggle, plan auto-adjusts
+
+                          return (
+                            <div key={f.key} onClick={() => {
+                              const newFeatures = { ...newSub.features, [f.key]: !isEnabled }
+                              const newCount = Object.values(newFeatures).filter(Boolean).length
+                              const autoplan = getPlanForFeatureCount(newCount)
+                              setNewSub({ ...newSub, features: newFeatures, plan: autoplan.key })
+                            }}
+                              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', borderRadius: '8px', cursor: 'pointer', background: isEnabled ? 'rgba(52,211,153,0.04)' : 'rgba(255,255,255,0.01)', border: `1px solid ${isEnabled ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.04)'}`, transition: 'all 0.15s' }}>
+                              <div style={{ width: '14px', height: '14px', borderRadius: '4px', border: `1px solid ${isEnabled ? '#34d399' : 'rgba(255,255,255,0.15)'}`, background: isEnabled ? '#34d399' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', color: '#06070B', flexShrink: 0 }}>{isEnabled ? '✓' : ''}</div>
+                              <span style={{ fontSize: '11px', color: isEnabled ? '#F0ECE3' : 'rgba(240,236,227,0.35)' }}>{f.icon} {f.label}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      {/* Plan auto-selected indicator */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginBottom: '20px' }}>
+                        {PLANS.map(p => {
+                          const selectedCount = Object.values(newSub.features).filter(Boolean).length
+                          const isAutoSelected = newSub.plan === p.key
+                          return (
+                            <div key={p.key} style={{
+                              padding: '10px 8px', borderRadius: '10px', textAlign: 'center',
+                              background: isAutoSelected ? `${p.color}10` : 'rgba(255,255,255,0.01)',
+                              border: `2px solid ${isAutoSelected ? p.color : 'rgba(255,255,255,0.04)'}`,
+                              transition: 'all 0.2s',
+                            }}>
+                              <p style={{ fontSize: '12px', fontWeight: isAutoSelected ? 800 : 400, color: isAutoSelected ? p.color : 'rgba(240,236,227,0.3)', margin: '0 0 2px' }}>{p.label}</p>
+                              <p style={{ fontSize: '10px', color: isAutoSelected ? p.color : 'rgba(240,236,227,0.2)', margin: '0 0 2px' }}>{p.price}</p>
+                              <p style={{ fontSize: '9px', color: 'rgba(240,236,227,0.2)', margin: 0 }}>max {p.maxFeatures} features</p>
+                            </div>
+                          )
+                        })}
+                      </div>
+
                       {/* Clone vs fresh agents */}
                       <p style={{ color: 'rgba(201,168,76,0.6)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', marginBottom: '10px' }}>AGENTES IA</p>
                       <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
@@ -365,36 +431,6 @@ export default function AccountsPage() {
                           <span style={{ fontSize: '12px', fontWeight: !newSub.cloneAgents ? 700 : 400, color: !newSub.cloneAgents ? '#34d399' : 'rgba(240,236,227,0.4)', display: 'block' }}>Empezar de cero</span>
                           <span style={{ fontSize: '10px', color: 'rgba(240,236,227,0.25)', marginTop: '4px', display: 'block' }}>Agentes pre-configurados para {newSub.industry}</span>
                         </div>
-                      </div>
-
-                      <p style={{ color: 'rgba(201,168,76,0.6)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', marginBottom: '10px' }}>PLAN BASE</p>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '20px' }}>
-                        {PLANS.map(p => (
-                          <div key={p.key} onClick={() => setNewSub({ ...newSub, plan: p.key })}
-                            style={{ padding: '12px', borderRadius: '12px', cursor: 'pointer', border: newSub.plan === p.key ? `1px solid ${p.color}50` : '1px solid rgba(255,255,255,0.05)', background: newSub.plan === p.key ? `${p.color}08` : 'rgba(255,255,255,0.015)', transition: 'all 0.15s' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                              <span style={{ fontSize: '13px', fontWeight: 700, color: newSub.plan === p.key ? p.color : '#F0ECE3' }}>{p.label}</span>
-                              <span style={{ fontSize: '11px', color: 'rgba(240,236,227,0.4)' }}>{p.price}</span>
-                            </div>
-                            <div style={{ fontSize: '10px', color: 'rgba(240,236,227,0.3)' }}>{p.subs} subs · {p.leads || '∞'} leads · {p.agents} agentes</div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <p style={{ color: 'rgba(201,168,76,0.6)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', marginBottom: '10px' }}>FEATURES (PERSONALIZAR)</p>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px', marginBottom: '20px' }}>
-                        {FEATURES.map(f => {
-                          const planFeatures = PLANS.find(p => p.key === newSub.plan)?.features || []
-                          const isInPlan = planFeatures.includes(f.key)
-                          const isEnabled = newSub.features[f.key] !== undefined ? newSub.features[f.key] : isInPlan
-                          return (
-                            <div key={f.key} onClick={() => setNewSub({ ...newSub, features: { ...newSub.features, [f.key]: !isEnabled } })}
-                              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', borderRadius: '8px', cursor: 'pointer', background: isEnabled ? 'rgba(52,211,153,0.04)' : 'rgba(255,255,255,0.01)', border: `1px solid ${isEnabled ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.04)'}`, transition: 'all 0.15s' }}>
-                              <div style={{ width: '14px', height: '14px', borderRadius: '4px', border: `1px solid ${isEnabled ? '#34d399' : 'rgba(255,255,255,0.15)'}`, background: isEnabled ? '#34d399' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', color: '#06070B', flexShrink: 0 }}>{isEnabled ? '✓' : ''}</div>
-                              <span style={{ fontSize: '11px', color: isEnabled ? '#F0ECE3' : 'rgba(240,236,227,0.35)' }}>{f.icon} {f.label}</span>
-                            </div>
-                          )
-                        })}
                       </div>
 
                       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
