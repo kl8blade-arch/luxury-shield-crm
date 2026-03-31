@@ -41,6 +41,29 @@ export async function checkTokens(agentId: string): Promise<{ allowed: boolean; 
   const extra = agent.tokens_extra || 0
   const remaining = (limit + extra) - used
 
+  // If depleted, try auto-recharge
+  if (remaining <= 0) {
+    try {
+      const { data: rechargeAgent } = await supabase.from('agents')
+        .select('token_recharge_mode').eq('id', agentId).single()
+      if (rechargeAgent?.token_recharge_mode && rechargeAgent.token_recharge_mode !== 'manual') {
+        const rechargeRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'https://luxury-shield-crm.vercel.app'}/api/tokens/recharge`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agentId }),
+        })
+        const rechargeData = await rechargeRes.json()
+        if (rechargeData.recharged) {
+          // Tokens were recharged, re-check
+          const { data: refreshed } = await supabase.from('agents').select('tokens_used, tokens_limit, tokens_extra').eq('id', agentId).single()
+          if (refreshed) {
+            const newRemaining = (refreshed.tokens_limit || 0) + (refreshed.tokens_extra || 0) - (refreshed.tokens_used || 0)
+            return { allowed: newRemaining > 0, used: refreshed.tokens_used || 0, limit: refreshed.tokens_limit || 0, extra: refreshed.tokens_extra || 0, remaining: newRemaining }
+          }
+        }
+      }
+    } catch {}
+  }
+
   return { allowed: remaining > 0, used, limit, extra, remaining }
 }
 

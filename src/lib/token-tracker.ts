@@ -45,12 +45,24 @@ export async function callAI(options: AICallOptions): Promise<AIResponse> {
     }
   }
 
-  // 2. Get API key (agent's own or platform managed)
+  // 2. Get API key (agent's own encrypted key → decrypt, or platform managed)
   let apiKey = process.env.ANTHROPIC_API_KEY!
   if (!isAdmin && agentId) {
-    const { data: agent } = await supabase.from('agents').select('uses_own_ai_keys, anthropic_api_key').eq('id', agentId).single()
-    if (agent?.uses_own_ai_keys && agent?.anthropic_api_key) {
-      apiKey = agent.anthropic_api_key
+    const { data: agent } = await supabase.from('agents')
+      .select('uses_own_ai_keys, anthropic_api_key, anthropic_key_encrypted, anthropic_key_iv, anthropic_key_tag')
+      .eq('id', agentId).single()
+    if (agent?.uses_own_ai_keys) {
+      // Try encrypted key first
+      if (agent.anthropic_key_encrypted && agent.anthropic_key_iv && agent.anthropic_key_tag) {
+        try {
+          const { decryptApiKey } = await import('@/lib/encryption')
+          apiKey = decryptApiKey(agent.anthropic_key_encrypted, agent.anthropic_key_iv, agent.anthropic_key_tag)
+        } catch { /* fallback to plain */ }
+      }
+      // Fallback to plain key
+      if (apiKey === process.env.ANTHROPIC_API_KEY && agent.anthropic_api_key && !agent.anthropic_api_key.includes('•')) {
+        apiKey = agent.anthropic_api_key
+      }
     }
   }
 

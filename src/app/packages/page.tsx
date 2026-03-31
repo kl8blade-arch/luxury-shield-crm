@@ -155,10 +155,10 @@ function PackagesPage() {
   async function saveApiKeys() {
     if (!user) return
     setSavingKeys(true)
-    const update: any = { uses_own_ai_keys: useOwnKeys }
-    if (anthropicKey && !anthropicKey.includes('•')) update.anthropic_api_key = anthropicKey
-    if (openaiKey && !openaiKey.includes('•')) update.openai_api_key = openaiKey
-    await supabase.from('agents').update(update).eq('id', user.id)
+    await fetch('/api/settings/save-keys', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentId: user.id, anthropicKey, openaiKey, useOwnKeys }),
+    })
     setSavingKeys(false); setKeysSaved(true); setTimeout(() => setKeysSaved(false), 3000)
   }
 
