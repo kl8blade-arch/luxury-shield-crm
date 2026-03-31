@@ -342,7 +342,7 @@ export default function AccountsPage() {
                         {[
                           { key: 'seguros', label: 'Seguros', icon: '🛡️', color: '#C9A84C' },
                           { key: 'realtor', label: 'Bienes Raices', icon: '🏠', color: '#60a5fa' },
-                          { key: 'hotseller', label: 'Hot Seller', icon: '🔥', color: '#f97316' },
+                          { key: 'dropshipping', label: 'Dropshipping', icon: '📦', color: '#f97316' },
                           { key: 'infoproductos', label: 'Infoproductos', icon: '📚', color: '#a78bfa' },
                           { key: 'inversiones', label: 'Inversiones', icon: '📈', color: '#34d399' },
                           { key: 'autos', label: 'Autos', icon: '🚗', color: '#ef4444' },

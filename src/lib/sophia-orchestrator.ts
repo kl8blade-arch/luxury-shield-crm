@@ -11,15 +11,17 @@ export interface ExpertAgent {
 }
 
 // Sophia analyzes the message and decides which expert should handle it
-export async function routeToExpert(message: string, leadContext: any): Promise<ExpertAgent | null> {
+export async function routeToExpert(message: string, leadContext: any, accountId?: string | null): Promise<ExpertAgent | null> {
   const msgLower = message.toLowerCase()
 
-  // Get all active specialized agents
-  const { data: agents } = await supabase
-    .from('sophia_agents')
-    .select('*')
-    .eq('active', true)
-    .eq('agent_type', 'product_expert')
+  // Get active agents for this specific account (or master if no account)
+  let q = supabase.from('sophia_agents').select('*').eq('active', true).eq('agent_type', 'product_expert')
+  if (accountId) {
+    q = q.eq('account_id', accountId)
+  } else {
+    q = q.is('account_id', null)
+  }
+  const { data: agents } = await q
 
   if (!agents || agents.length === 0) return null
 

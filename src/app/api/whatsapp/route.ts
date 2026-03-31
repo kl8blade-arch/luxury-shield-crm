@@ -412,7 +412,7 @@ Si algún dato dice 'desconocido', puedes preguntarlo. Si ya está, NUNCA volver
   let expertLayer = ''
   try {
     const { routeToExpert, buildOrchestratedPrompt } = await import('@/lib/sophia-orchestrator')
-    const expert = await routeToExpert(incomingMessage, lead)
+    const expert = await routeToExpert(incomingMessage, lead, lead?.account_id)
     if (expert) {
       expertLayer = `\n═══ ESPECIALISTA: ${expert.name} ═══\n${expert.system_prompt}\n═══════════════════════════════════`
       console.log(`[ORCHESTRATOR] Routed to ${expert.name} for "${incomingMessage.substring(0, 40)}"`)

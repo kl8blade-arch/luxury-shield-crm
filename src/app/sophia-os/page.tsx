@@ -2,8 +2,10 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/design'
+import { useAuth } from '@/contexts/AuthContext'
 
 export default function SophiaOSPage() {
+  const { user, activeAccount, isViewingSubAccount } = useAuth()
   const [memories, setMemories] = useState<any[]>([])
   const [skills, setSkills] = useState<any[]>([])
   const [knowledge, setKnowledge] = useState<any[]>([])
@@ -12,15 +14,23 @@ export default function SophiaOSPage() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'memory' | 'skills' | 'knowledge' | 'agents' | 'sources' | 'commands'>('agents')
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [activeAccount?.id])
 
   async function load() {
     setLoading(true)
+    // Filter agents by active account (sub-account sees only its own agents)
+    let agentQuery = supabase.from('sophia_agents').select('*').order('created_at', { ascending: false })
+    if (isViewingSubAccount && activeAccount?.id) {
+      agentQuery = agentQuery.eq('account_id', activeAccount.id)
+    } else {
+      agentQuery = agentQuery.is('account_id', null)
+    }
+
     const [{ data: m }, { data: s }, { data: k }, { data: a }, { data: src }] = await Promise.all([
       supabase.from('sophia_memory').select('*').eq('active', true).order('importance', { ascending: false }),
       supabase.from('sophia_skills').select('*').order('active', { ascending: false }),
       supabase.from('sophia_knowledge').select('*').eq('active', true).order('created_at', { ascending: false }),
-      supabase.from('sophia_agents').select('*').order('created_at', { ascending: false }),
+      agentQuery,
       supabase.from('sophia_training_sources').select('*').order('created_at', { ascending: false }).limit(20),
     ])
     setMemories(m || []); setSkills(s || []); setKnowledge(k || []); setAgents(a || []); setSources(src || [])
