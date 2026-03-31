@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabase'
 import { C, STAGE_META, scoreColor, fmtDate } from '@/lib/design'
 import { Lead, LeadStage } from '@/types'
 import LeadDetailPanel from '@/components/LeadDetailPanel'
+import { useAuth } from '@/contexts/AuthContext'
+import { scopeQuery } from '@/lib/use-scoped-query'
 
 const STAGES = [{ value: 'all', label: 'Todas las etapas' }, ...Object.entries(STAGE_META).map(([v, m]) => ({ value: v, label: m.label }))]
 
@@ -14,6 +16,7 @@ export default function LeadsPageWrapper() {
 
 function LeadsPage() {
   const searchParams = useSearchParams()
+  const { user } = useAuth()
   const [leads, setLeads] = useState<Lead[]>([])
   const [filtered, setFiltered] = useState<Lead[]>([])
   const [selected, setSelected] = useState<Lead | null>(null)
@@ -23,7 +26,7 @@ function LeadsPage() {
   const [focused, setFocused] = useState(false)
   const [filterLabel, setFilterLabel] = useState('')
 
-  useEffect(() => { loadLeads() }, [])
+  useEffect(() => { if (user) loadLeads() }, [user])
 
   // Handle query params from analytics
   useEffect(() => {
@@ -63,7 +66,8 @@ function LeadsPage() {
 
   async function loadLeads() {
     setLoading(true)
-    const { data } = await supabase.from('leads').select('*').order('created_at', { ascending: false })
+    const q = supabase.from('leads').select('*').order('created_at', { ascending: false })
+    const { data } = await scopeQuery(q, user)
     setLeads(data || []); setLoading(false)
   }
 

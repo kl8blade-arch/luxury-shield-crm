@@ -3,10 +3,13 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { C, STAGE_META, scoreColor } from '@/lib/design'
 import LeadDetailPanel from '@/components/LeadDetailPanel'
+import { useAuth } from '@/contexts/AuthContext'
+import { scopeQuery } from '@/lib/use-scoped-query'
 
 const COLS = Object.entries(STAGE_META).filter(([k]) => k !== 'unqualified')
 
 export default function PipelinePage() {
+  const { user } = useAuth()
   const [leads, setLeads] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<any>(null)
@@ -53,10 +56,11 @@ export default function PipelinePage() {
 
   useEffect(() => { return () => { document.removeEventListener('pointermove', onPointerMove); document.removeEventListener('pointerup', onPointerUp); const g = document.getElementById('drag-ghost'); if (g) g.remove(); document.body.style.overflow = '' } }, [onPointerMove, onPointerUp])
 
-  useEffect(() => { loadLeads() }, [])
+  useEffect(() => { if (user) loadLeads() }, [user])
 
   async function loadLeads() {
-    const { data } = await supabase.from('leads').select('*').order('created_at', { ascending: false })
+    const q = supabase.from('leads').select('*').order('created_at', { ascending: false })
+    const { data } = await scopeQuery(q, user)
     setLeads(data || []); setLoading(false)
   }
 

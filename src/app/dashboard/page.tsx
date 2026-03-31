@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { C, scoreColor, fmtDate } from '@/lib/design'
+import { useAuth } from '@/contexts/AuthContext'
+import { scopeQuery } from '@/lib/use-scoped-query'
 
 const CARDS = [
   { key: 'total_leads', label: 'Total leads', color: '#60a5fa', icon: '👥' },
@@ -19,23 +21,25 @@ export default function DashboardPage() {
   const [leads, setLeads] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
+  const { user } = useAuth()
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => { if (user) loadData() }, [user])
   useEffect(() => { const c = () => setIsMobile(window.innerWidth < 768); c(); window.addEventListener('resize', c); return () => window.removeEventListener('resize', c) }, [])
 
   async function loadData() {
     setLoading(true)
     try {
+      const s = (q: any) => scopeQuery(q, user)
       const [{ count: total }, { count: newL }, { count: ready }, { count: reminders }, { count: closed }, { count: cross }, { data: agent }, { data: scores }, { data: recent }] = await Promise.all([
-        supabase.from('leads').select('*', { count: 'exact', head: true }),
-        supabase.from('leads').select('*', { count: 'exact', head: true }).eq('stage', 'new'),
-        supabase.from('leads').select('*', { count: 'exact', head: true }).eq('ready_to_buy', true),
+        s(supabase.from('leads').select('*', { count: 'exact', head: true })),
+        s(supabase.from('leads').select('*', { count: 'exact', head: true }).eq('stage', 'new')),
+        s(supabase.from('leads').select('*', { count: 'exact', head: true }).eq('ready_to_buy', true)),
         supabase.from('reminders').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-        supabase.from('leads').select('*', { count: 'exact', head: true }).eq('stage', 'closed_won'),
-        supabase.from('leads').select('*', { count: 'exact', head: true }).eq('for_crossselling', true),
-        supabase.from('agents').select('credits').eq('email', 'kl8blade@gmail.com').single(),
-        supabase.from('leads').select('score'),
-        supabase.from('leads').select('*').order('created_at', { ascending: false }).limit(8),
+        s(supabase.from('leads').select('*', { count: 'exact', head: true }).eq('stage', 'closed_won')),
+        s(supabase.from('leads').select('*', { count: 'exact', head: true }).eq('for_crossselling', true)),
+        supabase.from('agents').select('credits').eq('id', user?.id).single(),
+        s(supabase.from('leads').select('score')),
+        s(supabase.from('leads').select('*').order('created_at', { ascending: false }).limit(8)),
       ])
       const sc = (scores || []).map((l: any) => l.score).filter(Boolean)
       const avg = sc.length ? Math.round(sc.reduce((a: number, b: number) => a + b, 0) / sc.length) : 0
@@ -59,7 +63,7 @@ export default function DashboardPage() {
         {/* Header */}
         <div style={{ marginBottom: '36px' }}>
           <p style={{ color: 'rgba(201,168,76,0.5)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.2em', marginBottom: '8px' }}>{greeting.toUpperCase()}</p>
-          <h1 style={{ fontFamily: '"DM Serif Display",serif', fontSize: isMobile ? '32px' : '44px', color: '#F0ECE3', margin: 0, lineHeight: 1 }}>Carlos Silva</h1>
+          <h1 style={{ fontFamily: '"DM Serif Display",serif', fontSize: isMobile ? '32px' : '44px', color: '#F0ECE3', margin: 0, lineHeight: 1 }}>{user?.name || 'Dashboard'}</h1>
           <p style={{ color: 'rgba(240,236,227,0.3)', fontSize: '13px', marginTop: '8px' }}>
             {now.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </p>

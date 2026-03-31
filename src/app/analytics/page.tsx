@@ -3,6 +3,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { C, scoreColor, STAGE_META } from '@/lib/design'
+import { useAuth } from '@/contexts/AuthContext'
+import { scopeQuery } from '@/lib/use-scoped-query'
 
 const CARD = {
   background: 'linear-gradient(145deg, #141420, #0e0e1a)',
@@ -41,6 +43,7 @@ function HealthRing({ score, size = 120 }: { score: number; size?: number }) {
 
 export default function AnalyticsPage() {
   const router = useRouter()
+  const { user } = useAuth()
   const [health, setHealth] = useState<any>(null)
   const [atRisk, setAtRisk] = useState<any[]>([])
   const [agentStats, setAgentStats] = useState<any[]>([])
@@ -52,15 +55,17 @@ export default function AnalyticsPage() {
   const [waking, setWaking] = useState<string | null>(null)
 
   const loadData = useCallback(async () => {
+    if (!user) return
     setLoading(true)
     try { const hRes = await fetch('/api/business-health'); if (hRes.ok) setHealth(await hRes.json()) } catch {}
 
+    const s = (q: any) => scopeQuery(q, user)
     const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
     const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
-    const { data: risk } = await supabase.from('leads').select('id, name, stage, state, updated_at, score')
-      .not('stage', 'in', '("closed_won","closed_lost","unqualified")').lt('updated_at', sixHoursAgo).gte('created_at', monthAgo).order('updated_at', { ascending: true }).limit(10)
+    const { data: risk } = await s(supabase.from('leads').select('id, name, stage, state, updated_at, score')
+      .not('stage', 'in', '("closed_won","closed_lost","unqualified")').lt('updated_at', sixHoursAgo).gte('created_at', monthAgo).order('updated_at', { ascending: true }).limit(10))
     setAtRisk(risk || [])
 
     const { data: agents } = await supabase.from('agents').select('id, name')
@@ -96,7 +101,7 @@ export default function AnalyticsPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => { if (user) loadData() }, [user])
 
   const peakHour = heatmap.indexOf(Math.max(...heatmap))
   const maxHeat = Math.max(...heatmap, 1)
