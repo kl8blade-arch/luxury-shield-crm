@@ -21,6 +21,7 @@ export default function MarketplacePage() {
   const [buildAnswer, setBuildAnswer] = useState('')
   const [isMobile, setIsMobile] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
 
   // Wizard state
   const [wizardActive, setWizardActive] = useState(false)
@@ -85,6 +86,7 @@ export default function MarketplacePage() {
       if (!res.ok) { setWizardError(data.error || 'Error'); setSubmitting(false); return }
 
       setBuildAnswer('')
+      setPhotoPreview(null)
 
       if (data.status === 'complete') {
         setWizardComplete(true)
@@ -99,6 +101,18 @@ export default function MarketplacePage() {
       }
     } catch { setWizardError('Error de conexion') }
     setSubmitting(false)
+  }
+
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      setPhotoPreview(dataUrl)
+      setBuildAnswer(dataUrl)
+    }
+    reader.readAsDataURL(file)
   }
 
   // Resume a build that was left incomplete
@@ -247,20 +261,53 @@ export default function MarketplacePage() {
                 {wizardError && <p style={{ color: '#fca5a5', fontSize: '12px', marginBottom: '8px' }}>{wizardError}</p>}
 
                 {wizardIsPhoto ? (
-                  <p style={{ color: 'rgba(240,236,227,0.4)', fontSize: '12px', fontStyle: 'italic' }}>📸 Sube una foto. O escribe "saltar" si no tienes una ahora.</p>
-                ) : null}
-
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input value={buildAnswer} onChange={e => setBuildAnswer(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && submitAnswer()}
-                    placeholder={wizardIsPhoto ? 'Escribe "saltar" o pega URL de imagen' : 'Tu respuesta...'}
-                    style={{ flex: 1, padding: '12px 16px', borderRadius: '12px', fontSize: '14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#F0ECE3', outline: 'none', fontFamily: 'inherit' }} />
-                  <button onClick={submitAnswer} disabled={submitting || !buildAnswer.trim()} style={{
-                    padding: '12px 24px', borderRadius: '12px', background: submitting ? 'rgba(201,168,76,0.3)' : '#C9A84C',
-                    color: '#06070B', fontSize: '13px', fontWeight: 700, border: 'none',
-                    cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
-                  }}>{submitting ? '...' : '\u2192'}</button>
-                </div>
+                  <div>
+                    {/* Photo upload area */}
+                    {photoPreview ? (
+                      <div style={{ marginBottom: '12px', textAlign: 'center' }}>
+                        <img src={photoPreview} alt="Preview" style={{ maxHeight: '160px', borderRadius: '12px', border: '2px solid rgba(201,168,76,0.3)' }} />
+                        <p style={{ fontSize: '11px', color: '#34d399', marginTop: '6px' }}>Foto lista</p>
+                      </div>
+                    ) : null}
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <label style={{
+                        flex: 1, padding: '16px', borderRadius: '12px', textAlign: 'center', cursor: 'pointer',
+                        background: 'rgba(201,168,76,0.04)', border: '2px dashed rgba(201,168,76,0.2)',
+                        color: '#C9A84C', fontSize: '13px', fontWeight: 600, transition: 'all 0.2s',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                      }}>
+                        <span style={{ fontSize: '20px' }}>📸</span>
+                        <span>{photoPreview ? 'Cambiar foto' : 'Seleccionar de galeria'}</span>
+                        <input type="file" accept="image/*" onChange={handleFileUpload} style={{ display: 'none' }} />
+                      </label>
+                      <button onClick={() => { setBuildAnswer('saltar'); setPhotoPreview(null); submitAnswer() }}
+                        style={{ padding: '12px 20px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(240,236,227,0.4)', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                        Saltar
+                      </button>
+                    </div>
+                    {photoPreview && (
+                      <button onClick={() => { setPhotoPreview(null); submitAnswer() }} style={{
+                        width: '100%', marginTop: '10px', padding: '12px', borderRadius: '12px',
+                        background: '#C9A84C', color: '#06070B', fontSize: '13px', fontWeight: 700,
+                        border: 'none', cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
+                      }}>
+                        {submitting ? 'Subiendo...' : 'Usar esta foto \u2192'}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input value={buildAnswer} onChange={e => setBuildAnswer(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && submitAnswer()}
+                      placeholder="Tu respuesta..."
+                      style={{ flex: 1, padding: '12px 16px', borderRadius: '12px', fontSize: '14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#F0ECE3', outline: 'none', fontFamily: 'inherit' }} />
+                    <button onClick={submitAnswer} disabled={submitting || !buildAnswer.trim()} style={{
+                      padding: '12px 24px', borderRadius: '12px', background: submitting ? 'rgba(201,168,76,0.3)' : '#C9A84C',
+                      color: '#06070B', fontSize: '13px', fontWeight: 700, border: 'none',
+                      cursor: submitting ? 'wait' : 'pointer', fontFamily: 'inherit',
+                    }}>{submitting ? '...' : '\u2192'}</button>
+                  </div>
+                )}
               </div>
             )}
 

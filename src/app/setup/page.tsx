@@ -26,6 +26,7 @@ export default function SetupPage() {
   const [phone, setPhone] = useState('')
   const [companyName, setCompanyName] = useState('')
   const [agencyUrl, setAgencyUrl] = useState('')
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
 
   // Step 2 — Products
   const [products, setProducts] = useState<string[]>([])
@@ -40,10 +41,19 @@ export default function SetupPage() {
     setProducts(prev => prev.includes(key) ? prev.filter(p => p !== key) : [...prev, key])
   }
 
+  function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => setLogoPreview(reader.result as string)
+    reader.readAsDataURL(file)
+  }
+
   async function handleFinish() {
     if (!user) return
     setLoading(true)
-    await supabase.from('agents').update({
+
+    const agentUpdate: any = {
       name: agentName || user.name,
       phone: phone || undefined,
       company_name: companyName || null,
@@ -51,7 +61,16 @@ export default function SetupPage() {
       products: products,
       licensed_states: states.split(',').map(s => s.trim()).filter(Boolean),
       onboarding_complete: true,
-    }).eq('id', user.id)
+      wa_onboarding_step: 'done',
+    }
+    if (logoPreview) agentUpdate.profile_photo = logoPreview
+
+    await supabase.from('agents').update(agentUpdate).eq('id', user.id)
+
+    // Also update account logo if exists
+    if (user.account_id && logoPreview) {
+      await supabase.from('accounts').update({ logo_url: logoPreview, name: companyName || undefined }).eq('id', user.account_id)
+    }
 
     // Update local storage
     const updated = { ...user, onboarding_complete: true }
@@ -98,6 +117,32 @@ export default function SetupPage() {
                 <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)', marginBottom: '24px' }}>Datos basicos de tu perfil y agencia</p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  {/* Logo upload */}
+                  <div>
+                    <label style={labelStyle}>Logo de tu agencia</label>
+                    <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+                      <label style={{
+                        width: '72px', height: '72px', borderRadius: '16px', cursor: 'pointer',
+                        background: logoPreview ? 'none' : 'rgba(201,168,76,0.04)',
+                        border: `2px dashed ${logoPreview ? 'rgba(52,211,153,0.3)' : 'rgba(201,168,76,0.2)'}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0,
+                      }}>
+                        {logoPreview ? (
+                          <img src={logoPreview} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          <span style={{ fontSize: '24px', opacity: 0.4 }}>📷</span>
+                        )}
+                        <input type="file" accept="image/*" onChange={handleLogoUpload} style={{ display: 'none' }} />
+                      </label>
+                      <div>
+                        <p style={{ fontSize: '12px', color: 'rgba(240,236,227,0.5)', margin: 0 }}>
+                          {logoPreview ? 'Logo cargado. Toca para cambiar.' : 'Toca para subir tu logo (PNG, JPG)'}
+                        </p>
+                        <p style={{ fontSize: '10px', color: 'rgba(240,236,227,0.25)', margin: '4px 0 0' }}>Aparecera en tu CRM y landing pages</p>
+                      </div>
+                    </div>
+                  </div>
+
                   <div>
                     <label style={labelStyle}>Tu nombre completo *</label>
                     <input type="text" value={agentName} onChange={e => setAgentName(e.target.value)}
