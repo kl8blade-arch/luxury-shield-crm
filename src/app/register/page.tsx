@@ -97,8 +97,26 @@ export default function RegisterPage() {
     if (!res.ok) { setError(data.error); setLoading(false); return }
 
     if (data.verified && data.user) {
-      // Save user and redirect to packages for payment
       localStorage.setItem('ls_auth', JSON.stringify(data.user))
+
+      // Go to Stripe to register card (7-day free trial, then auto-charge)
+      const planData = PLANS.find(p => p.key === selectedPlan)
+      try {
+        const stripeRes = await fetch('/api/stripe/checkout', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            packageName: planData?.name || 'Starter',
+            price: planData?.price || 47,
+            leadCount: planData?.subs || 1,
+            packageId: selectedPlan,
+            agentId: data.user.id,
+            trialDays: 7,
+          }),
+        })
+        const stripeData = await stripeRes.json()
+        if (stripeData.url) { window.location.href = stripeData.url; return }
+      } catch {}
+      // Fallback if Stripe fails
       window.location.href = '/packages'
     }
     setLoading(false)
@@ -382,7 +400,7 @@ export default function RegisterPage() {
                     border: 'none', cursor: verifyCode.length === 6 ? 'pointer' : 'not-allowed',
                     boxShadow: verifyCode.length === 6 ? '0 8px 32px rgba(52,211,153,0.2)' : 'none',
                   }}>
-                    {loading ? 'Verificando...' : 'Verificar y continuar'}
+                    {loading ? 'Verificando...' : 'Verificar y registrar tarjeta'}
                   </button>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', marginTop: '16px', padding: '10px', borderRadius: '10px', background: 'rgba(201,168,76,0.03)', border: '1px solid rgba(201,168,76,0.08)' }}>
