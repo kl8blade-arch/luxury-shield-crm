@@ -5,7 +5,7 @@ import { C } from '@/lib/design'
 import { useAuth } from '@/contexts/AuthContext'
 import FileUpload from '@/components/FileUpload'
 
-type Tab = 'perfil' | 'seguridad' | 'licencias' | 'redes' | 'pipeline' | 'ia' | 'notificaciones' | 'integraciones'
+type Tab = 'perfil' | 'seguridad' | 'licencias' | 'redes' | 'pipeline' | 'subcuentas' | 'ia' | 'notificaciones' | 'integraciones'
 
 const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC','PR']
 
@@ -42,6 +42,11 @@ export default function SettingsPage() {
   // Socials
   const [socials, setSocials] = useState<Record<string, string>>({})
   const [editingSocial, setEditingSocial] = useState<string | null>(null)
+
+  // Sub-accounts
+  const [subAccounts, setSubAccounts] = useState<any[]>([])
+  const [deletingSubId, setDeletingSubId] = useState<string | null>(null)
+  const [archiveLeads, setArchiveLeads] = useState(true)
 
   // Pipeline stage names
   const [pipelineStages, setPipelineStages] = useState<Record<string, string>>({
@@ -83,6 +88,16 @@ export default function SettingsPage() {
     }
 
     setIntegrations({ twilio: true, supabase: true, anthropic: true, stripe: false })
+
+    // Load sub-accounts if admin
+    if (user?.role === 'admin') {
+      const { data: parent } = await supabase.from('accounts').select('id').eq('slug', 'luxury-shield').single()
+      if (parent) {
+        const { data: subs } = await supabase.from('accounts').select('*').eq('parent_account_id', parent.id).order('created_at')
+        setSubAccounts(subs || [])
+      }
+    }
+
     setLoading(false)
   }
 
@@ -149,6 +164,7 @@ export default function SettingsPage() {
     { key: 'licencias', label: 'Licencias', icon: '📋' },
     { key: 'redes', label: 'Redes', icon: '🔗' },
     { key: 'pipeline', label: 'Pipeline', icon: '📊' },
+    { key: 'subcuentas', label: 'Sub-cuentas', icon: '🏢' },
     { key: 'ia', label: 'Sophia IA', icon: '🤖' },
     { key: 'notificaciones', label: 'Alertas', icon: '🔔' },
     { key: 'integraciones', label: 'APIs', icon: '🔌' },
@@ -385,6 +401,89 @@ export default function SettingsPage() {
                 <p style={{ fontSize: '11px', color: 'rgba(240,236,227,0.2)', marginTop: '16px' }}>
                   Los nombres se aplican en Pipeline, Leads, y Analytics. Los keys internos (new, contacted, etc.) no cambian.
                 </p>
+              </div>
+            )}
+
+            {/* ═══ SUB-CUENTAS ═══ */}
+            {tab === 'subcuentas' && (
+              <div>
+                <h3 style={{ fontFamily: '"DM Serif Display",serif', fontSize: '20px', color: '#F0ECE3', margin: '0 0 6px' }}>Gestionar Sub-cuentas</h3>
+                <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)', marginBottom: '20px' }}>Elimina sub-cuentas y archiva sus leads en el Vault para futuras campanas.</p>
+
+                {subAccounts.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                    <p style={{ fontSize: '14px', color: 'rgba(240,236,227,0.25)' }}>No hay sub-cuentas creadas.</p>
+                    <a href="/accounts?tab=subs&create=true" style={{ color: '#C9A84C', fontSize: '13px', textDecoration: 'none', fontWeight: 600 }}>Crear sub-cuenta &rarr;</a>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {subAccounts.map(sub => (
+                      <div key={sub.id} style={{ padding: '16px 20px', borderRadius: '14px', background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', gap: '14px' }}>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: '14px', fontWeight: 600, color: '#F0ECE3', margin: '0 0 2px' }}>{sub.name}</p>
+                          <p style={{ fontSize: '11px', color: 'rgba(240,236,227,0.35)', margin: 0 }}>/{sub.slug} · {sub.plan} · {sub.industry || 'seguros'}</p>
+                        </div>
+                        <button onClick={() => setDeletingSubId(deletingSubId === sub.id ? null : sub.id)} style={{
+                          padding: '7px 16px', borderRadius: '8px', fontSize: '11px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+                          background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171',
+                        }}>Eliminar</button>
+                      </div>
+                    ))}
+
+                    {/* Delete confirmation panel */}
+                    {deletingSubId && (() => {
+                      const sub = subAccounts.find(s => s.id === deletingSubId)
+                      if (!sub) return null
+                      return (
+                        <div style={{ padding: '20px', borderRadius: '14px', background: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.15)' }}>
+                          <p style={{ fontSize: '14px', fontWeight: 700, color: '#f87171', margin: '0 0 12px' }}>Eliminar "{sub.name}"</p>
+
+                          <div onClick={() => setArchiveLeads(!archiveLeads)} style={{
+                            display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', borderRadius: '10px', cursor: 'pointer', marginBottom: '12px',
+                            background: archiveLeads ? 'rgba(52,211,153,0.04)' : 'rgba(255,255,255,0.02)',
+                            border: `1px solid ${archiveLeads ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.06)'}`,
+                          }}>
+                            <div style={{ width: '18px', height: '18px', borderRadius: '4px', border: `1.5px solid ${archiveLeads ? '#34d399' : 'rgba(255,255,255,0.15)'}`, background: archiveLeads ? '#34d399' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: '#06070B', flexShrink: 0 }}>{archiveLeads ? '✓' : ''}</div>
+                            <div>
+                              <p style={{ fontSize: '13px', fontWeight: 600, color: archiveLeads ? '#34d399' : 'rgba(240,236,227,0.4)', margin: 0 }}>Archivar leads en el Vault</p>
+                              <p style={{ fontSize: '11px', color: 'rgba(240,236,227,0.3)', margin: '2px 0 0' }}>Los leads se guardan con su metadata, tags, y productos para futuras campanas</p>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button onClick={() => setDeletingSubId(null)} style={{ flex: 1, padding: '10px', borderRadius: '10px', background: 'none', border: '1px solid rgba(255,255,255,0.06)', color: 'rgba(240,236,227,0.4)', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+                            <button onClick={async () => {
+                              // 1. Archive leads to vault if checked
+                              if (archiveLeads) {
+                                const { data: leads } = await supabase.from('leads').select('*').eq('account_id', sub.id)
+                                for (const l of leads || []) {
+                                  await supabase.from('lead_vault').insert({
+                                    original_lead_id: l.id, name: l.name, phone: l.phone, email: l.email,
+                                    state: l.state, insurance_type: l.insurance_type, stage: l.stage,
+                                    score: l.score, source: l.source, purchased_products: l.purchased_products,
+                                    notes: l.notes, from_account_id: sub.id, from_account_name: sub.name,
+                                    archived_by: user?.id, metadata: { utm_source: l.utm_source, utm_campaign: l.utm_campaign },
+                                  })
+                                }
+                              }
+                              // 2. Delete leads
+                              await supabase.from('leads').delete().eq('account_id', sub.id)
+                              // 3. Delete agents for this account
+                              await supabase.from('sophia_agents').delete().eq('account_id', sub.id)
+                              // 4. Delete the sub-account
+                              await supabase.from('accounts').delete().eq('id', sub.id)
+                              // 5. Refresh
+                              setSubAccounts(prev => prev.filter(s => s.id !== sub.id))
+                              setDeletingSubId(null)
+                            }} style={{ flex: 1, padding: '10px', borderRadius: '10px', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                              {archiveLeads ? 'Archivar leads y eliminar' : 'Eliminar sin archivar'}
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )}
               </div>
             )}
 

@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, Kanban, Bell, Calendar,
   MessageSquare, Settings, Shield, Building2,
   UserCheck, Package, ChevronRight, BarChart3, Brain, LogOut, Upload,
-  ChevronDown, Plus, Circle, Share2,
+  ChevronDown, Plus, Circle, Share2, Archive,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useEffect, useState } from 'react'
@@ -25,6 +25,7 @@ const NAV = [
   { href: '/social',      icon: Share2,          label: 'Social IA',       badge: null, admin: false },
   { href: '/marketplace', icon: Package,         label: 'Marketplace',     badge: null, admin: false },
   { href: '/import',     icon: Upload,          label: 'Importar',        badge: null, admin: false },
+  { href: '/vault',      icon: Archive,         label: 'Vault',           badge: null, admin: true },
   { href: '/tools',      icon: Settings,        label: 'Herramientas',    badge: null, admin: false },
   { href: '/training',   icon: Brain,           label: 'SophiaModel',     badge: null, admin: true },
   { href: '/accounts',   icon: Building2,       label: 'Mi Cuenta',       badge: null, admin: true },
