@@ -17,9 +17,14 @@ export default function ToolsPage() {
 
   async function load() {
     setLoading(true)
-    const tables: Record<Tab, string> = { landings: 'landing_pages', emails: 'email_campaigns', compliance: 'compliance_records', commissions: 'commissions', marketplace: 'lead_marketplace', api: 'api_keys', voice: 'voice_calls' }
-    const { data: d } = await supabase.from(tables[tab]).select('*').order('created_at', { ascending: false }).limit(20)
-    setData(d || [])
+    if (tab === 'landings') {
+      const { data: d } = await supabase.from('landing_builds').select('*, landing_templates(name, category)').order('created_at', { ascending: false }).limit(20)
+      setData(d || [])
+    } else {
+      const tables: Record<string, string> = { emails: 'email_campaigns', compliance: 'compliance_records', commissions: 'commissions', marketplace: 'lead_marketplace', api: 'api_keys', voice: 'voice_calls' }
+      const { data: d } = await supabase.from(tables[tab]).select('*').order('created_at', { ascending: false }).limit(20)
+      setData(d || [])
+    }
     setLoading(false)
   }
 
@@ -110,13 +115,9 @@ export default function ToolsPage() {
         {showCreate && (
           <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(201,168,76,0.15)', borderRadius: '14px', padding: '20px', marginBottom: '20px' }}>
             {tab === 'landings' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <input placeholder="Título de la landing" value={newLanding.title} onChange={e => setNewLanding({ ...newLanding, title: e.target.value })} style={inp} />
-                <input placeholder="URL slug" value={newLanding.slug} onChange={e => setNewLanding({ ...newLanding, slug: e.target.value })} style={inp} />
-                <select value={newLanding.template} onChange={e => setNewLanding({ ...newLanding, template: e.target.value })} style={inp}>
-                  <option value="dental">Dental</option><option value="aca">ACA/Obamacare</option><option value="vida">Vida/IUL</option><option value="medicare">Medicare</option>
-                </select>
-                <button onClick={createLanding} style={{ padding: '10px', borderRadius: '10px', background: '#C9A84C', color: '#06070B', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Crear Landing</button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center', padding: '12px 0' }}>
+                <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.5)', textAlign: 'center', margin: 0 }}>Para crear landing pages con IA, usa el Marketplace</p>
+                <a href="/marketplace" style={{ padding: '10px 24px', borderRadius: '10px', background: '#C9A84C', color: '#06070B', fontSize: '13px', fontWeight: 700, textDecoration: 'none', fontFamily: 'inherit' }}>Ir al Marketplace &rarr;</a>
               </div>
             )}
             {tab === 'emails' && (
@@ -187,10 +188,13 @@ export default function ToolsPage() {
 
                   {tab === 'landings' && <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                      <span style={{ color: '#F0ECE3', fontSize: '14px', fontWeight: 600 }}>{item.title}</span>
-                      <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '100px', background: item.published ? 'rgba(52,211,153,0.1)' : 'rgba(251,191,36,0.1)', color: item.published ? '#34d399' : '#fbbf24' }}>{item.published ? 'Publicada' : 'Borrador'}</span>
+                      <span style={{ color: '#F0ECE3', fontSize: '14px', fontWeight: 600 }}>{item.landing_templates?.name || item.title || 'Landing'}</span>
+                      <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '100px', background: item.status === 'ready' ? 'rgba(52,211,153,0.1)' : 'rgba(251,191,36,0.1)', color: item.status === 'ready' ? '#34d399' : '#fbbf24' }}>{item.status === 'ready' ? 'Lista' : 'En proceso'}</span>
                     </div>
-                    <p style={{ fontSize: '11px', color: 'rgba(240,236,227,0.35)' }}>/{item.slug} · {item.template} · {item.visits || 0} visitas · {item.conversions || 0} conversiones</p>
+                    <p style={{ fontSize: '11px', color: 'rgba(240,236,227,0.35)' }}>
+                      {item.slug ? `/${item.slug}` : 'Sin URL'} · {item.landing_templates?.category || '—'} · {item.visits || 0} visitas
+                      {item.status === 'ready' && item.slug && <> · <a href={`/l/${item.slug}`} target="_blank" style={{ color: '#C9A84C', textDecoration: 'none' }}>Ver &rarr;</a></>}
+                    </p>
                   </>}
 
                   {tab === 'emails' && <>
