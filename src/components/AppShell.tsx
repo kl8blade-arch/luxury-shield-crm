@@ -2,11 +2,17 @@
 import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import Sidebar from './Sidebar'
+import { useAuth } from '@/contexts/AuthContext'
+
+const PUBLIC_ROUTES = ['/login', '/register', '/l/']
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const pathname = usePathname()
+  const { user, loading } = useAuth()
+
+  const isPublicPage = pathname === '/' || PUBLIC_ROUTES.some(r => pathname.startsWith(r))
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 1024)
@@ -17,9 +23,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { if (isMobile) setOpen(false) }, [pathname, isMobile])
 
+  // On public pages or when not logged in, render without sidebar
+  if (isPublicPage || (!loading && !user)) {
+    return <>{children}</>
+  }
+
+  // While loading, show nothing (prevents flash)
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#07080A', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 40, height: 40, border: '3px solid rgba(201,168,76,0.2)', borderTopColor: '#C9A84C', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      </div>
+    )
+  }
+
   return (
     <>
-      {/* Mobile overlay — z-index ABOVE sidebar, catches all taps */}
+      {/* Mobile overlay */}
       {isMobile && open && (
         <div onClick={() => setOpen(false)} style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
@@ -27,7 +48,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         }} />
       )}
 
-      {/* Sidebar wrapper — overrides Sidebar's own position:fixed */}
+      {/* Sidebar wrapper */}
       <div style={{
         position: 'fixed', left: 0, top: 0, bottom: 0,
         zIndex: isMobile ? (open ? 120 : -1) : 50,
@@ -39,7 +60,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <Sidebar onNavigate={() => isMobile && setOpen(false)} />
       </div>
 
-      {/* Main content — full width on mobile */}
+      {/* Main content */}
       <main style={{
         marginLeft: isMobile ? 0 : '224px',
         minHeight: '100vh', overflow: 'hidden',

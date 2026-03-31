@@ -35,6 +35,7 @@ export default function AccountsPage() {
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [showProduct, setShowProduct] = useState(false)
+  const [selectedSub, setSelectedSub] = useState<any>(null)
   const [tab, setTab] = useState<'overview' | 'subs' | 'products' | 'features' | 'plans'>('overview')
   const [newSub, setNewSub] = useState({ name: '', slug: '', plan: 'starter', features: {} as Record<string, boolean> })
   const [newProduct, setNewProduct] = useState({ name: '', carrier: '', product_type: 'dental', description: '', states: '' })
@@ -171,13 +172,14 @@ export default function AccountsPage() {
                     <p style={{ fontFamily: '"DM Serif Display",serif', fontSize: '18px', color: 'rgba(240,236,227,0.25)', fontStyle: 'italic' }}>Sin sub-cuentas</p>
                     <p style={{ color: 'rgba(240,236,227,0.15)', fontSize: '13px', marginTop: '6px' }}>Crea una para cada producto o cliente</p>
                   </div>
-                ) : (
+                ) : (<>
                   <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', gap: '12px' }}>
                     {subAccounts.map(sub => {
                       const planInfo = PLANS.find(p => p.key === sub.plan) || PLANS[0]
                       const enabledFeatures = Object.entries(sub.features || {}).filter(([, v]) => v).length
+                      const isSelected = selectedSub?.id === sub.id
                       return (
-                        <div key={sub.id} style={{ background: 'rgba(255,255,255,0.015)', border: `1px solid ${planInfo.color}20`, borderRadius: '16px', padding: '20px', borderLeft: `3px solid ${planInfo.color}` }}>
+                        <div key={sub.id} onClick={() => setSelectedSub(isSelected ? null : sub)} style={{ background: isSelected ? 'rgba(201,168,76,0.04)' : 'rgba(255,255,255,0.015)', border: `1px solid ${isSelected ? planInfo.color + '50' : planInfo.color + '20'}`, borderRadius: '16px', padding: '20px', borderLeft: `3px solid ${planInfo.color}`, cursor: 'pointer', transition: 'all 0.2s' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                             <div>
                               <h3 style={{ color: '#F0ECE3', fontSize: '16px', fontWeight: 700, margin: 0 }}>{sub.name}</h3>
@@ -188,7 +190,7 @@ export default function AccountsPage() {
                           <div style={{ display: 'flex', gap: '16px', fontSize: '11px', color: 'rgba(240,236,227,0.4)' }}>
                             <span>{enabledFeatures} features</span>
                             <span>{sub.max_agents} agentes</span>
-                            <span>{sub.max_leads || '∞'} leads</span>
+                            <span>{sub.max_leads || '\u221E'} leads</span>
                           </div>
                           <div style={{ display: 'flex', gap: '4px', marginTop: '10px', flexWrap: 'wrap' }}>
                             {Object.entries(sub.features || {}).filter(([, v]) => v).slice(0, 5).map(([k]) => {
@@ -201,7 +203,50 @@ export default function AccountsPage() {
                       )
                     })}
                   </div>
-                )}
+
+                  {/* Sub-account detail panel */}
+                  {selectedSub && (() => {
+                    const planInfo = PLANS.find(p => p.key === selectedSub.plan) || PLANS[0]
+                    return (
+                      <div style={{ marginTop: '16px', background: 'rgba(255,255,255,0.02)', border: `1px solid ${planInfo.color}30`, borderRadius: '16px', padding: '24px', position: 'relative' }}>
+                        <button onClick={() => setSelectedSub(null)} style={{ position: 'absolute', top: '12px', right: '16px', background: 'none', border: 'none', color: 'rgba(240,236,227,0.3)', cursor: 'pointer', fontSize: '18px' }}>&times;</button>
+                        <h3 style={{ fontFamily: '"DM Serif Display",serif', fontSize: '22px', color: planInfo.color, margin: '0 0 16px' }}>{selectedSub.name}</h3>
+
+                        {/* Stats */}
+                        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
+                          {[
+                            { label: 'Plan', value: selectedSub.plan, color: planInfo.color },
+                            { label: 'Agentes max', value: selectedSub.max_agents, color: '#60a5fa' },
+                            { label: 'Leads max', value: selectedSub.max_leads || '\u221E', color: '#34d399' },
+                            { label: 'Slug', value: '/' + selectedSub.slug, color: '#a78bfa' },
+                          ].map(s => (
+                            <div key={s.label} style={{ background: 'rgba(255,255,255,0.02)', borderRadius: '10px', padding: '12px', borderBottom: `2px solid ${s.color}30` }}>
+                              <p style={{ fontSize: '9px', fontWeight: 700, color: 'rgba(240,236,227,0.3)', letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0 0 6px' }}>{s.label}</p>
+                              <p style={{ fontSize: '18px', fontWeight: 800, color: s.color, margin: 0, textTransform: 'capitalize' }}>{s.value}</p>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Features toggles */}
+                        <p style={{ color: 'rgba(201,168,76,0.6)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', marginBottom: '10px' }}>FEATURES</p>
+                        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '6px' }}>
+                          {FEATURES.map(f => {
+                            const isEnabled = selectedSub.features?.[f.key]
+                            return (
+                              <div key={f.key} onClick={() => { toggleFeature(selectedSub.id, f.key, selectedSub.features); setSelectedSub({ ...selectedSub, features: { ...selectedSub.features, [f.key]: !isEnabled } }) }}
+                                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', borderRadius: '8px', cursor: 'pointer', background: isEnabled ? 'rgba(52,211,153,0.04)' : 'rgba(255,255,255,0.01)', border: `1px solid ${isEnabled ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.04)'}`, transition: 'all 0.15s' }}>
+                                <div style={{ width: '28px', height: '16px', borderRadius: '8px', background: isEnabled ? '#34d399' : 'rgba(255,255,255,0.08)', position: 'relative', transition: 'all 0.2s', flexShrink: 0 }}>
+                                  <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: isEnabled ? '#fff' : 'rgba(255,255,255,0.3)', position: 'absolute', top: '2px', left: isEnabled ? '14px' : '2px', transition: 'all 0.2s' }} />
+                                </div>
+                                <span style={{ fontSize: '11px', color: isEnabled ? '#F0ECE3' : 'rgba(240,236,227,0.35)' }}>{f.icon} {f.label}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </>)}
 
                 {/* Create sub-account modal */}
                 {showCreate && (

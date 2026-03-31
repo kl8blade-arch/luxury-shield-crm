@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Stripe from 'stripe'
-
-function getStripe() {
-  return new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-03-25.dahlia' })
-}
 
 export async function POST(req: NextRequest) {
   try {
-    const stripe = getStripe()
+    const stripeKey = process.env.STRIPE_SECRET_KEY
+    if (!stripeKey) {
+      return NextResponse.json({ error: 'Stripe no esta configurado. Contacta al administrador para activar los pagos.' }, { status: 503 })
+    }
+
+    const Stripe = (await import('stripe')).default
+    const stripe = new Stripe(stripeKey, { apiVersion: '2025-03-31.basil' as any })
     const { packageId, packageName, price, leadCount, agentId } = await req.json()
 
     if (!packageName || !price || !leadCount) {

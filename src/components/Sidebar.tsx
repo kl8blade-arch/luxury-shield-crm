@@ -4,8 +4,9 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, Kanban, Bell, Calendar,
   MessageSquare, Settings, Shield, Building2,
-  UserCheck, Package, ChevronRight, BarChart3, Brain,
+  UserCheck, Package, ChevronRight, BarChart3, Brain, LogOut,
 } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
 
 const NAV = [
   { href: '/dashboard',  icon: LayoutDashboard, label: 'Dashboard',      badge: null, admin: false },
@@ -15,22 +16,24 @@ const NAV = [
   { href: '/calendar',   icon: Calendar,        label: 'Agenda',          badge: null, admin: false },
   { href: '/reminders',  icon: Bell,            label: 'Recordatorios',   badge: null, admin: false },
   { href: '/templates',  icon: MessageSquare,   label: 'Plantillas',      badge: null, admin: false },
-  { href: '/agents',     icon: UserCheck,       label: 'Agentes',         badge: null, admin: false },
+  { href: '/agents',     icon: UserCheck,        label: 'Agentes',         badge: null, admin: true },
   { href: '/packages',   icon: Package,         label: 'Paquetes',        badge: null, admin: false },
-  { href: '/campaigns',   icon: BarChart3,       label: 'Campañas',        badge: null, admin: false },
+  { href: '/campaigns',   icon: BarChart3,       label: 'Campanas',        badge: null, admin: false },
   { href: '/marketplace', icon: Package,         label: 'Marketplace',     badge: null, admin: false },
   { href: '/tools',      icon: Settings,        label: 'Herramientas',    badge: null, admin: false },
   { href: '/training',   icon: Brain,           label: 'SophiaModel',     badge: null, admin: true },
-  { href: '/accounts',   icon: Building2,       label: 'Mi Cuenta',       badge: null, admin: false },
+  { href: '/accounts',   icon: Building2,       label: 'Mi Cuenta',       badge: null, admin: true },
   { href: '/sophia-os',  icon: Shield,          label: 'Sophia OS',       badge: null, admin: true },
-  { href: '/settings',   icon: Settings,        label: 'Configuración',   badge: null, admin: false },
+  { href: '/settings',   icon: Settings,        label: 'Configuracion',   badge: null, admin: false },
 ]
-
-// Only Carlos (admin) sees admin-only pages
-const IS_ADMIN = true // TODO: replace with auth check
 
 export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const pathname = usePathname()
+  const { user, logout, isAdmin } = useAuth()
+
+  const initials = user?.name
+    ? user.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
+    : 'AG'
 
   return (
     <aside style={{
@@ -41,7 +44,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
       zIndex: 50, fontFamily: '"Inter","Segoe UI",sans-serif',
     }}>
 
-      {/* ── LOGO ── */}
+      {/* Logo */}
       <div style={{ padding: '24px 20px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '11px' }}>
           <div style={{
@@ -56,22 +59,22 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
               Luxury Shield
             </p>
             <p style={{ fontSize: '10px', color: 'rgba(240,236,227,0.3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '1px' }}>
-              CRM · Admin
+              CRM {isAdmin ? '· Admin' : ''}
             </p>
           </div>
         </div>
       </div>
 
-      {/* ── NAV LABEL ── */}
+      {/* Nav label */}
       <div style={{ padding: '20px 20px 8px' }}>
         <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(240,236,227,0.22)' }}>
-          Navegación
+          Navegacion
         </p>
       </div>
 
-      {/* ── NAV ITEMS ── */}
+      {/* Nav items */}
       <nav style={{ flex: 1, padding: '0 12px', display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
-        {NAV.filter(n => !n.admin || IS_ADMIN).map(({ href, icon: Icon, label, badge }) => {
+        {NAV.filter(n => !n.admin || isAdmin).map(({ href, icon: Icon, label, badge }) => {
           const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
           return (
             <Link key={href} href={href} onClick={onNavigate} style={{ textDecoration: 'none' }}>
@@ -102,7 +105,6 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
                   }
                 }}
               >
-                {/* Active indicator bar */}
                 {active && (
                   <div style={{
                     position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
@@ -125,10 +127,10 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
         })}
       </nav>
 
-      {/* ── DIVIDER ── */}
+      {/* Divider */}
       <div style={{ margin: '0 20px', borderTop: '1px solid rgba(255,255,255,0.05)' }} />
 
-      {/* ── AGENT CARD ── */}
+      {/* Agent Card */}
       <div style={{ padding: '16px 16px 20px' }}>
         <div style={{
           background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)',
@@ -141,16 +143,25 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: '12px', fontWeight: 800, color: '#07080A',
             boxShadow: '0 2px 8px rgba(201,168,76,0.3)',
-          }}>CS</div>
+          }}>{initials}</div>
           <div style={{ minWidth: 0, flex: 1 }}>
             <p style={{ fontSize: '13px', fontWeight: 600, color: '#F0ECE3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              Carlos Silva
+              {user?.name || 'Agent'}
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px' }}>
               <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#34d399', display: 'inline-block' }} />
-              <p style={{ fontSize: '10px', color: '#C9A84C', fontWeight: 600 }}>Admin · Elite</p>
+              <p style={{ fontSize: '10px', color: '#C9A84C', fontWeight: 600, textTransform: 'capitalize' }}>{user?.role || 'Agent'} · {user?.plan || 'Free'}</p>
             </div>
           </div>
+          <button onClick={logout} title="Cerrar sesion" style={{
+            background: 'none', border: 'none', cursor: 'pointer', padding: '6px',
+            color: 'rgba(240,236,227,0.3)', transition: 'color 0.2s', flexShrink: 0,
+          }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#f87171')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(240,236,227,0.3)')}
+          >
+            <LogOut style={{ width: '14px', height: '14px' }} />
+          </button>
         </div>
       </div>
     </aside>

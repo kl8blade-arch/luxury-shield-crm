@@ -1,25 +1,21 @@
 'use client'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { useAuth } from '@/contexts/AuthContext'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const router = useRouter()
+  const { login } = useAuth()
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError('')
-    // Simple auth — replace with Supabase Auth later
-    if (email === 'kl8blade@gmail.com' && password === 'luxury2026') {
-      localStorage.setItem('ls_auth', JSON.stringify({ email, role: 'admin', name: 'Carlos Silva', ts: Date.now() }))
-      router.push('/dashboard')
-    } else {
-      setError('Credenciales incorrectas')
-    }
+    const err = await login(email, password)
+    if (err) setError(err)
     setLoading(false)
   }
 
@@ -37,21 +33,19 @@ export default function LoginPage() {
         <div style={{ position: 'absolute', bottom: '-25%', right: '-15%', width: '600px', height: '600px', background: 'radial-gradient(circle, rgba(201,168,76,0.04) 0%, transparent 60%)', pointerEvents: 'none' }} />
         <div style={{ position: 'absolute', top: '15%', right: '20%', width: '300px', height: '300px', background: 'radial-gradient(circle, rgba(167,139,250,0.03) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
-        {/* Subtle grid pattern */}
+        {/* Grid pattern */}
         <div style={{
           position: 'absolute', inset: 0, opacity: 0.02,
           backgroundImage: 'linear-gradient(rgba(201,168,76,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(201,168,76,0.3) 1px, transparent 1px)',
           backgroundSize: '60px 60px',
         }} />
 
-        {/* Gold accent line at top */}
+        {/* Gold line top */}
         <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '1px', background: 'linear-gradient(90deg, transparent, rgba(201,168,76,0.3), transparent)' }} />
 
-        {/* Login card */}
-        <div style={{
-          width: '420px', maxWidth: '92vw', position: 'relative', zIndex: 1,
-        }}>
-          {/* Logo section */}
+        {/* Card */}
+        <div style={{ width: '420px', maxWidth: '92vw', position: 'relative', zIndex: 1 }}>
+          {/* Logo */}
           <div style={{ textAlign: 'center', marginBottom: '48px' }}>
             <div style={{
               width: '64px', height: '64px', margin: '0 auto 20px',
@@ -95,7 +89,7 @@ export default function LoginPage() {
                 }}>Email</label>
                 <input
                   type="email" value={email} onChange={e => setEmail(e.target.value)}
-                  placeholder="carlos@luxuryshield.com" required autoComplete="email"
+                  placeholder="tu@email.com" required autoComplete="email"
                   style={{
                     width: '100%', padding: '14px 18px', borderRadius: '12px',
                     fontSize: '15px', fontFamily: '"Outfit",sans-serif',
@@ -115,7 +109,7 @@ export default function LoginPage() {
                   display: 'block', fontSize: '11px', fontWeight: 600,
                   letterSpacing: '0.12em', textTransform: 'uppercase',
                   color: 'rgba(240,236,227,0.35)', marginBottom: '8px',
-                }}>Contraseña</label>
+                }}>Contrasena</label>
                 <input
                   type="password" value={password} onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••" required autoComplete="current-password"
@@ -158,13 +152,23 @@ export default function LoginPage() {
             </div>
           </form>
 
+          {/* Register link */}
+          <div style={{ textAlign: 'center', marginTop: '24px' }}>
+            <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.35)' }}>
+              Eres agente?{' '}
+              <Link href="/register" style={{ color: '#C9A84C', textDecoration: 'none', fontWeight: 600 }}>
+                Crea tu cuenta gratis
+              </Link>
+            </p>
+          </div>
+
           {/* Footer */}
-          <div style={{ textAlign: 'center', marginTop: '32px' }}>
+          <div style={{ textAlign: 'center', marginTop: '24px' }}>
             <p style={{ fontSize: '11px', color: 'rgba(240,236,227,0.2)' }}>
               Powered by <span style={{ color: 'rgba(201,168,76,0.4)', fontWeight: 600 }}>SophiaOS</span>
             </p>
             <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginTop: '12px' }}>
-              <span style={{ fontSize: '10px', color: 'rgba(240,236,227,0.15)' }}>© 2026 Luxury Shield Insurance</span>
+              <span style={{ fontSize: '10px', color: 'rgba(240,236,227,0.15)' }}>2026 Luxury Shield Insurance</span>
               <span style={{ fontSize: '10px', color: 'rgba(240,236,227,0.15)' }}>SeguriSSimo Agency</span>
             </div>
           </div>
