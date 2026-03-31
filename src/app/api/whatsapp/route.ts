@@ -403,7 +403,9 @@ Si algún dato dice 'desconocido', puedes preguntarlo. Si ya está, NUNCA volver
   let dynamicLayers = ''
   try {
     const { buildDynamicPromptLayers } = await import('@/lib/build-sophia-prompt')
-    dynamicLayers = await buildDynamicPromptLayers()
+    // Pass product hint from lead's insurance type to prioritize relevant skills/knowledge
+    const productHint = lead?.insurance_type || lead?.purchased_products?.[0] || ''
+    dynamicLayers = await buildDynamicPromptLayers(productHint)
   } catch {}
 
   // Sophia Orchestrator — route to expert agent if needed
