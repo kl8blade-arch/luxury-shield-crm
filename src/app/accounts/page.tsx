@@ -88,22 +88,33 @@ export default function AccountsPage() {
     // Clone agents from parent OR create industry-specific agents
     if (newAccount) {
       if (newSub.cloneAgents) {
-        // Clone sophia_agents from parent account (copy their prompts, skills, knowledge)
-        const { data: parentAgents } = await supabase.from('sophia_agents').select('*').eq('active', true)
+        // Clone ONLY parent account agents (account_id IS NULL = master account)
+        const { data: parentAgents } = await supabase.from('sophia_agents').select('*').eq('active', true).is('account_id', null)
         for (const agent of parentAgents || []) {
           await supabase.from('sophia_agents').insert({
-            name: agent.name, agent_type: agent.agent_type, description: agent.description,
+            name: agent.name, agent_type: agent.agent_type, purpose: agent.purpose,
             system_prompt: agent.system_prompt, trigger_keywords: agent.trigger_keywords,
+            knowledge_sources: agent.knowledge_sources,
             active: true, account_id: newAccount.id,
           })
         }
       } else {
-        // Create agents from industry templates
+        // Create agents from INDUSTRY TEMPLATES (not parent agents)
         const { data: templates } = await supabase.from('industry_agent_templates').select('*').eq('industry', newSub.industry)
-        for (const tmpl of templates || []) {
+        if (templates && templates.length > 0) {
+          for (const tmpl of templates) {
+            await supabase.from('sophia_agents').insert({
+              name: tmpl.agent_name, agent_type: tmpl.agent_type, purpose: tmpl.description,
+              system_prompt: tmpl.system_prompt, trigger_keywords: tmpl.trigger_keywords,
+              active: true, account_id: newAccount.id,
+            })
+          }
+        } else {
+          // Fallback: if no templates for this industry, create a generic Sophia
           await supabase.from('sophia_agents').insert({
-            name: tmpl.agent_name, agent_type: tmpl.agent_type, description: tmpl.description,
-            system_prompt: tmpl.system_prompt, trigger_keywords: tmpl.trigger_keywords,
+            name: 'SophiaGeneral', agent_type: 'product_expert', purpose: `Agente de ventas para ${newSub.industry}`,
+            system_prompt: `Eres Sophia, una agente de ventas experta en ${newSub.industry}. Hablas espanol natural, eres empática y consultiva. Tu objetivo es entender las necesidades del lead, educar sobre las soluciones disponibles, y guiar hacia el siguiente paso sin presionar.`,
+            trigger_keywords: [newSub.industry, 'venta', 'producto', 'precio', 'informacion'],
             active: true, account_id: newAccount.id,
           })
         }
