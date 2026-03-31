@@ -106,6 +106,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (stored) setActiveAccount(JSON.parse(stored))
     } catch {}
     setLoading(false)
+
+    // Server-side session validation (prevents localStorage spoofing)
+    const storedAuth = localStorage.getItem('ls_auth')
+    if (storedAuth) {
+      try {
+        const parsed = JSON.parse(storedAuth)
+        if (parsed.id && parsed.id !== 'legacy') {
+          fetch('/api/auth/validate', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agentId: parsed.id }),
+          }).then(r => r.json()).then(data => {
+            if (!data.valid) { localStorage.removeItem('ls_auth'); setUser(null) }
+            else if (data.user) { setUser(data.user); localStorage.setItem('ls_auth', JSON.stringify(data.user)) }
+          }).catch(() => {})
+        }
+      } catch {}
+    }
   }, [])
 
   // Route protection

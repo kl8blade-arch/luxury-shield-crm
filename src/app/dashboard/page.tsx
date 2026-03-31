@@ -13,7 +13,7 @@ const CARDS = [
   { key: 'closed_won', label: 'Cerrados este mes', color: '#a78bfa', icon: '✅' },
   { key: 'avg_score', label: 'Score promedio', color: '#f472b6', icon: '⭐' },
   { key: 'crossselling', label: 'Cross-selling', color: '#e879f9', icon: '💰' },
-  { key: 'credits', label: 'Créditos', color: '#C9A84C', icon: '🛡️' },
+  { key: 'tokens', label: 'Tokens IA', color: '#C9A84C', icon: '🛡️' },
 ]
 
 export default function DashboardPage() {
@@ -37,13 +37,14 @@ export default function DashboardPage() {
         supabase.from('reminders').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
         s(supabase.from('leads').select('*', { count: 'exact', head: true }).eq('stage', 'closed_won')),
         s(supabase.from('leads').select('*', { count: 'exact', head: true }).eq('for_crossselling', true)),
-        supabase.from('agents').select('credits').eq('id', user?.id).single(),
+        supabase.from('agents').select('credits, tokens_used, tokens_limit, tokens_extra').eq('id', user?.id).single(),
         s(supabase.from('leads').select('score')),
         s(supabase.from('leads').select('*').order('created_at', { ascending: false }).limit(8)),
       ])
       const sc = (scores || []).map((l: any) => l.score).filter(Boolean)
       const avg = sc.length ? Math.round(sc.reduce((a: number, b: number) => a + b, 0) / sc.length) : 0
-      setStats({ total_leads: total || 0, new_leads: newL || 0, ready_to_buy: ready || 0, pending_reminders: reminders || 0, credits: agent?.credits || 0, closed_won: closed || 0, avg_score: avg, crossselling: cross || 0 })
+      const tokensRemaining = Math.max(0, (agent?.tokens_limit || 0) + (agent?.tokens_extra || 0) - (agent?.tokens_used || 0))
+      setStats({ total_leads: total || 0, new_leads: newL || 0, ready_to_buy: ready || 0, pending_reminders: reminders || 0, tokens: tokensRemaining, closed_won: closed || 0, avg_score: avg, crossselling: cross || 0 })
       setLeads(recent || [])
     } catch (e) { console.error(e) }
     setLoading(false)

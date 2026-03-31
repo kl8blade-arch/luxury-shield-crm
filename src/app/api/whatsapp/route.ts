@@ -729,6 +729,13 @@ export async function POST(req: NextRequest) {
     const numMedia = parseInt(formData.get('NumMedia') as string || '0')
     const mediaType = formData.get('MediaContentType0') as string || ''
 
+    // Validate Twilio signature (basic: check AccountSid)
+    const accountSid = formData.get('AccountSid') as string || ''
+    if (accountSid && accountSid !== TWILIO_SID) {
+      console.error(`[SECURITY] Invalid AccountSid: ${accountSid}`)
+      return new NextResponse('Forbidden', { status: 403 })
+    }
+
     console.log(`[TWILIO RAW] From: ${from} | Body: "${body}" | MediaUrl: ${mediaUrl ? 'yes' : 'no'} | NumMedia: ${numMedia} | Type: ${mediaType}`)
 
     // ══════════════════════════════════════════════
@@ -1246,6 +1253,21 @@ Escribe el comando o dime que necesitas 👇`
     const priorOutbound = (history || []).filter((m: any) => m.direction === 'outbound')
     const alreadyIntroduced = priorOutbound.length > 0
 
+    // TOKEN CHECK — Block auto-response if agent has no tokens
+    try {
+      const { checkTokens } = await import('@/lib/token-guard')
+      const ownerAgentId = lead?.agent_id || null
+      if (ownerAgentId) {
+        const tokenCheck = await checkTokens(ownerAgentId)
+        if (!tokenCheck.allowed) {
+          console.log(`[TOKENS] Exhausted for agent ${ownerAgentId}. Saving message, skipping Sophia.`)
+          await supabase.from('conversations').insert({ lead_id: lead.id, lead_name: lead.name, lead_phone: from, channel: 'whatsapp', direction: 'inbound', message: body })
+          await supabase.from('leads').update({ sophia_processing: false }).eq('id', lead.id)
+          return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
+        }
+      }
+    } catch (e: any) { console.error('[TOKENS]', e.message) }
+
     let aiResponse = await getAIResponse(lead, history || [], body, alreadyIntroduced)
 
     // ══════════════════════════════════════════════
@@ -1301,6 +1323,12 @@ Escribe el comando o dime que necesitas 👇`
       message: cleanResponse,
       ai_summary: isReadyToBuy ? 'LISTO PARA COMPRAR' : null,
     })
+
+    // Consume token after successful AI response
+    try {
+      const { consumeToken } = await import('@/lib/token-guard')
+      if (lead?.agent_id) await consumeToken(lead.agent_id, lead.id, from, 2500, 150, lead.account_id)
+    } catch {}
 
     // Human-like typing delay before sending
     const len = cleanResponse.length

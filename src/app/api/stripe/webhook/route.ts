@@ -48,17 +48,35 @@ export async function POST(req: NextRequest) {
 
     // Update agent: activate, start 7-day trial, set plan
     if (agentId) {
-      const { data: agent } = await supabase.from('agents').select('credits, phone, name').eq('id', agentId).single()
-      const planMap: Record<string, string> = { starter: 'starter', professional: 'professional', agency: 'agency', enterprise: 'enterprise' }
-      const subPlan = planMap[packageId || ''] || 'starter'
+      const { data: agent } = await supabase.from('agents').select('credits, phone, name, tokens_extra').eq('id', agentId).single()
+      // Check if this is a token purchase
+      if (packageId?.startsWith('tokens_')) {
+        const tokenCount = parseInt(leadCount || '0')
+        await supabase.from('agents').update({
+          tokens_extra: (agent?.tokens_extra || 0) + tokenCount,
+        }).eq('id', agentId)
+        await supabase.from('token_purchases').insert({
+          agent_id: agentId, package_name: packageName,
+          token_count: tokenCount, amount_usd: (session.amount_total || 0) / 100,
+          stripe_session_id: session.id,
+        })
+        console.log(`[STRIPE] Token purchase: ${tokenCount} tokens for agent ${agentId}`)
+      } else {
+        // Plan purchase/subscription
+        const planMap: Record<string, string> = { starter: 'starter', professional: 'professional', agency: 'agency', enterprise: 'enterprise' }
+        const subPlan = planMap[packageId || ''] || 'starter'
+        const tokenLimits: Record<string, number> = { starter: 300, professional: 1000, agency: 3000, enterprise: 10000 }
 
-      await supabase.from('agents').update({
-        credits: (agent?.credits || 0) + parseInt(leadCount || '0'),
-        paid: true,
-        status: 'active',
-        subscription_plan: subPlan,
-        trial_ends_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      }).eq('id', agentId)
+        await supabase.from('agents').update({
+          credits: (agent?.credits || 0) + parseInt(leadCount || '0'),
+          paid: true, status: 'active',
+          subscription_plan: subPlan,
+          tokens_limit: tokenLimits[subPlan] || 300,
+          tokens_used: 0,
+          tokens_reset_at: new Date().toISOString(),
+          trial_ends_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        }).eq('id', agentId)
+      }
 
       // NOW trigger Sophia WhatsApp onboarding (only after payment)
       try {
@@ -66,7 +84,7 @@ export async function POST(req: NextRequest) {
         startAgentOnboarding(agentId).catch(e => console.error('[STRIPE] Onboarding error:', e))
       } catch {}
 
-      console.log(`[STRIPE] Agent ${agentId} activated: plan=${subPlan}, 7-day trial started`)
+      console.log(`[STRIPE] Agent ${agentId} activated: plan=${packageId}, 7-day trial started`)
     }
   }
 
