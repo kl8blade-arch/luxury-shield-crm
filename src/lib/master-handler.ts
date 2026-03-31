@@ -161,7 +161,7 @@ export async function handleMasterMessage(from: string, body: string, mediaUrl?:
   // ══════════════════════════════════════════════
   const intentText = await callClaude(
     `Detecta la intencion del maestro. Devuelve SOLO JSON:
-{"action":"schedule"|"reminder"|"find_lead"|"pipeline_status"|"send_campaign"|"learn"|"remember"|"forget"|"set_skill"|"show_memory"|"show_skills"|"test_sophia"|"chat",
+{"action":"schedule"|"reminder"|"find_lead"|"pipeline_status"|"daily_summary"|"commissions"|"send_campaign"|"learn"|"remember"|"forget"|"set_skill"|"show_memory"|"show_skills"|"test_sophia"|"chat",
 "topic":string|null,"content":string|null,"skill_name":string|null,"skill_active":boolean|null,
 "lead_name":string|null,"lead_phone":string|null,"date":string|null,"time":string|null,"event_title":string|null,"reminder_type":string|null}
 
@@ -172,6 +172,11 @@ Acciones CRM:
 - "busca el lead de Miami que pregunto por dental" → find_lead, content:"Miami dental"
 - "como va el pipeline?" → pipeline_status
 - "manda campana de rescate a leads frios" → send_campaign, content:"rescue cold"
+
+- "dame un resumen del dia" → daily_summary
+- "como esta la salud del negocio" → daily_summary
+- "cuanto llevo en comisiones" → commissions
+- "total de comisiones" → commissions
 
 Acciones Sophia:
 - "aprende esto: X" → learn
@@ -362,6 +367,70 @@ Acciones Sophia:
       report += `\n📥 Leads hoy: *${today || 0}*`
       report += `\n⏰ Recordatorios pendientes: *${reminders || 0}*`
       report += `\n\n💼 Total activos: *${totalActive}*`
+
+      await sendWhatsApp(from, report)
+      break
+    }
+
+    // ══════════════════════════════════════════════
+    // SOPHIA: LEARN
+    // ══════════════════════════════════════════════
+    // ══════════════════════════════════════════════
+    // CRM: DAILY SUMMARY
+    // ══════════════════════════════════════════════
+    case 'daily_summary': {
+      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
+      const [
+        { count: newToday },
+        { count: totalActive },
+        { count: closedToday },
+        { count: hotLeads },
+        { count: pendingReminders },
+        { data: recentLeads },
+      ] = await Promise.all([
+        supabase.from('leads').select('*', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString()),
+        supabase.from('leads').select('*', { count: 'exact', head: true }).not('stage', 'in', '("closed_won","closed_lost","unqualified")'),
+        supabase.from('leads').select('*', { count: 'exact', head: true }).eq('stage', 'closed_won').gte('updated_at', todayStart.toISOString()),
+        supabase.from('leads').select('*', { count: 'exact', head: true }).gte('score', 75).not('stage', 'in', '("closed_won","closed_lost")'),
+        supabase.from('reminders').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('leads').select('name, stage, score').gte('created_at', todayStart.toISOString()).order('created_at', { ascending: false }).limit(5),
+      ])
+
+      let report = `📊 *Resumen del dia*\n\n`
+      report += `📥 Leads nuevos hoy: *${newToday || 0}*\n`
+      report += `✅ Cerrados hoy: *${closedToday || 0}*\n`
+      report += `🔥 Leads calientes (75+): *${hotLeads || 0}*\n`
+      report += `💼 Total activos: *${totalActive || 0}*\n`
+      report += `⏰ Recordatorios pendientes: *${pendingReminders || 0}*\n`
+
+      if (recentLeads?.length) {
+        report += `\n📋 *Ultimos leads:*\n`
+        recentLeads.forEach((l: any) => { report += `• ${l.name} — ${l.stage} (score: ${l.score || 0})\n` })
+      }
+
+      await sendWhatsApp(from, report)
+      break
+    }
+
+    // ══════════════════════════════════════════════
+    // CRM: COMMISSIONS
+    // ══════════════════════════════════════════════
+    case 'commissions': {
+      const { data: comms } = await supabase.from('commissions').select('carrier, product, commission_amount, premium').order('created_at', { ascending: false }).limit(20)
+      const total = (comms || []).reduce((s: number, c: any) => s + (c.commission_amount || 0), 0)
+      const totalPremium = (comms || []).reduce((s: number, c: any) => s + (c.premium || 0), 0)
+
+      let report = `💰 *Comisiones*\n\n`
+      report += `📊 Total: *$${total.toFixed(2)}*\n`
+      report += `💎 Prima total: *$${totalPremium.toFixed(2)}*\n`
+      report += `📋 Registros: *${comms?.length || 0}*\n`
+
+      if (comms?.length) {
+        report += `\n📋 *Ultimas:*\n`
+        comms.slice(0, 5).forEach((c: any) => {
+          report += `• ${c.carrier} — ${c.product}: *$${(c.commission_amount || 0).toFixed(2)}*\n`
+        })
+      }
 
       await sendWhatsApp(from, report)
       break

@@ -732,6 +732,86 @@ export async function POST(req: NextRequest) {
     console.log(`[TWILIO RAW] From: ${from} | Body: "${body}" | MediaUrl: ${mediaUrl ? 'yes' : 'no'} | NumMedia: ${numMedia} | Type: ${mediaType}`)
 
     // ══════════════════════════════════════════════
+    // SLASH COMMANDS — "/" triggers command menu
+    // ══════════════════════════════════════════════
+    const trimmed = body.trim()
+    if (trimmed === '/' || trimmed === '/help' || trimmed === '/menu' || trimmed === '/comandos') {
+      const cleanTo = from.startsWith('+') ? from : `+${from.replace(/\D/g, '')}`
+      const auth = `Basic ${Buffer.from(`${TWILIO_SID}:${TWILIO_TOKEN}`).toString('base64')}`
+      const menu = `🛡️ *Luxury Shield CRM — Comandos*
+
+📋 *AGENDA Y CRM:*
+/cita [nombre] [dia] [hora] — Agendar cita
+/recordatorio [nombre] [cuando] — Crear recordatorio
+/buscar [nombre o telefono] — Buscar lead
+/pipeline — Ver estado del pipeline
+/leads — Resumen de leads activos
+
+🤖 *SOPHIA IA:*
+/skills — Ver skills activos
+/memoria — Ver memoria de Sophia
+/activar [skill] — Activar un skill
+/desactivar [skill] — Desactivar un skill
+/test [escenario] — Simular conversacion
+
+📚 *CONOCIMIENTO:*
+/aprender [info] — Ensenar algo a Sophia
+/recuerda [instruccion] — Guardar en memoria
+/olvida [tema] — Borrar de memoria
+Enviar PDF — Sophia extrae conocimiento
+Enviar URL — Sophia analiza la pagina
+
+📊 *REPORTES:*
+/resumen — Resumen del dia
+/salud — Health score del negocio
+/comisiones — Total de comisiones
+
+⚡ *RAPIDOS:*
+/modo manual [telefono] — Desactivar Sophia para un lead
+/modo sophia [telefono] — Reactivar Sophia para un lead
+
+Escribe el comando o dime que necesitas 👇`
+
+      await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`, {
+        method: 'POST',
+        headers: { 'Authorization': auth, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ From: `whatsapp:${TWILIO_FROM}`, To: `whatsapp:${cleanTo}`, Body: menu }).toString(),
+      })
+      return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
+    }
+
+    // Handle slash commands (convert to natural language for the handler)
+    if (trimmed.startsWith('/')) {
+      const cmdMap: Record<string, string> = {
+        '/cita': 'agendame cita',
+        '/recordatorio': 'ponme un recordatorio',
+        '/buscar': 'busca el lead',
+        '/pipeline': 'como va el pipeline',
+        '/leads': 'cuantos leads activos tengo',
+        '/skills': 'que skills tienes',
+        '/memoria': 'muestrame tu memoria',
+        '/activar': 'activa skill',
+        '/desactivar': 'desactiva skill',
+        '/test': 'simula',
+        '/aprender': 'aprende esto:',
+        '/recuerda': 'recuerda que',
+        '/olvida': 'olvida',
+        '/resumen': 'dame un resumen del dia',
+        '/salud': 'como esta la salud del negocio',
+        '/comisiones': 'cuanto llevo en comisiones',
+      }
+
+      const parts = trimmed.split(' ')
+      const cmd = parts[0].toLowerCase()
+      const args = parts.slice(1).join(' ')
+
+      if (cmdMap[cmd]) {
+        body = `${cmdMap[cmd]} ${args}`.trim()
+        console.log(`[SLASH] Converted "${trimmed}" → "${body}"`)
+      }
+    }
+
+    // ══════════════════════════════════════════════
     // MASTER DETECTION — Carlos trains Sophia via WhatsApp
     // ══════════════════════════════════════════════
     const MASTER_NUM = '17869435656'
