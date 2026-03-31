@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import Sidebar from './Sidebar'
 import { useAuth } from '@/contexts/AuthContext'
 
-const PUBLIC_ROUTES = ['/login', '/register', '/l/', '/setup']
+const PUBLIC_ROUTES = ['/login', '/register', '/l/', '/setup', '/forgot-password']
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false)

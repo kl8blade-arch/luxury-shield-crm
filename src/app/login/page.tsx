@@ -230,7 +230,12 @@ export default function LoginPage() {
                 </div>
               </form>
 
-              <div style={{ textAlign: 'center', marginTop: '24px' }}>
+              <div style={{ textAlign: 'center', marginTop: '20px' }}>
+                <Link href="/forgot-password" style={{ fontSize: '13px', color: 'rgba(167,139,250,0.7)', textDecoration: 'none', fontWeight: 500 }}>
+                  Olvide mi contrasena
+                </Link>
+              </div>
+              <div style={{ textAlign: 'center', marginTop: '12px' }}>
                 <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.35)' }}>
                   Eres agente?{' '}
                   <Link href="/register" style={{ color: '#C9A84C', textDecoration: 'none', fontWeight: 600 }}>Crea tu cuenta gratis</Link>
