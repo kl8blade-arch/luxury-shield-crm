@@ -102,6 +102,19 @@ export default function AccountsPage() {
     load()
   }
 
+  async function deleteSubAccount(subId: string) {
+    if (!confirm('Eliminar esta sub-cuenta? Esta accion no se puede deshacer.')) return
+    await supabase.from('accounts').delete().eq('id', subId)
+    setSelectedSub(null)
+    load()
+  }
+
+  async function toggleSubAccount(subId: string, currentPlan: string) {
+    const newPlan = currentPlan === 'suspended' ? 'starter' : 'suspended'
+    await supabase.from('accounts').update({ plan: newPlan }).eq('id', subId)
+    load()
+  }
+
   const inp = { width: '100%', padding: '10px 14px', borderRadius: '10px', fontSize: '13px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: '#F0ECE3', outline: 'none', fontFamily: '"Outfit","Inter",sans-serif', boxSizing: 'border-box' as const }
 
   const tabs = [
@@ -242,6 +255,24 @@ export default function AccountsPage() {
                               </div>
                             )
                           })}
+                        </div>
+
+                        {/* Action buttons */}
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                          <button onClick={() => toggleSubAccount(selectedSub.id, selectedSub.plan)} style={{
+                            flex: 1, padding: '10px', borderRadius: '10px', fontSize: '12px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+                            background: selectedSub.plan === 'suspended' ? 'rgba(52,211,153,0.08)' : 'rgba(251,191,36,0.08)',
+                            border: `1px solid ${selectedSub.plan === 'suspended' ? 'rgba(52,211,153,0.2)' : 'rgba(251,191,36,0.2)'}`,
+                            color: selectedSub.plan === 'suspended' ? '#34d399' : '#fbbf24',
+                          }}>
+                            {selectedSub.plan === 'suspended' ? 'Reactivar cuenta' : 'Suspender cuenta'}
+                          </button>
+                          <button onClick={() => deleteSubAccount(selectedSub.id)} style={{
+                            padding: '10px 20px', borderRadius: '10px', fontSize: '12px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+                            background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171',
+                          }}>
+                            Eliminar
+                          </button>
                         </div>
                       </div>
                     )

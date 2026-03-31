@@ -5,7 +5,7 @@ import { C } from '@/lib/design'
 import { useAuth } from '@/contexts/AuthContext'
 import FileUpload from '@/components/FileUpload'
 
-type Tab = 'perfil' | 'seguridad' | 'licencias' | 'redes' | 'ia' | 'notificaciones' | 'integraciones'
+type Tab = 'perfil' | 'seguridad' | 'licencias' | 'redes' | 'pipeline' | 'ia' | 'notificaciones' | 'integraciones'
 
 const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC','PR']
 
@@ -42,6 +42,12 @@ export default function SettingsPage() {
   // Socials
   const [socials, setSocials] = useState<Record<string, string>>({})
   const [editingSocial, setEditingSocial] = useState<string | null>(null)
+
+  // Pipeline stage names
+  const [pipelineStages, setPipelineStages] = useState<Record<string, string>>({
+    new: 'Nuevo', contacted: 'Contactado', qualification: 'Calificacion',
+    proposal: 'Propuesta', negotiation: 'Negociacion', closed_won: 'Cerrado Ganado', closed_lost: 'Cerrado Perdido',
+  })
 
   // IA Config
   const [iaConfig, setIaConfig] = useState({ sophia_active: true, sophia_tone: 'amigable', work_hours_start: 9, work_hours_end: 21, welcome_message: '' })
@@ -142,6 +148,7 @@ export default function SettingsPage() {
     { key: 'seguridad', label: 'Seguridad', icon: '🔒' },
     { key: 'licencias', label: 'Licencias', icon: '📋' },
     { key: 'redes', label: 'Redes', icon: '🔗' },
+    { key: 'pipeline', label: 'Pipeline', icon: '📊' },
     { key: 'ia', label: 'Sophia IA', icon: '🤖' },
     { key: 'notificaciones', label: 'Alertas', icon: '🔔' },
     { key: 'integraciones', label: 'APIs', icon: '🔌' },
@@ -352,6 +359,32 @@ export default function SettingsPage() {
                     )
                   })}
                 </div>
+              </div>
+            )}
+
+            {/* ═══ PIPELINE ═══ */}
+            {tab === 'pipeline' && (
+              <div style={{ maxWidth: '520px' }}>
+                <h3 style={{ fontFamily: '"DM Serif Display",serif', fontSize: '20px', color: '#F0ECE3', margin: '0 0 6px' }}>Nombres del Pipeline</h3>
+                <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)', marginBottom: '20px' }}>Personaliza los nombres de cada etapa de tu embudo de ventas</p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {Object.entries(pipelineStages).map(([key, label]) => {
+                    const colors: Record<string, string> = { new: '#60a5fa', contacted: '#a78bfa', qualification: '#fbbf24', proposal: '#f97316', negotiation: '#C9A84C', closed_won: '#34d399', closed_lost: '#f87171' }
+                    return (
+                      <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: colors[key] || '#6b7280', flexShrink: 0 }} />
+                        <span style={{ fontSize: '11px', color: 'rgba(240,236,227,0.3)', width: '100px', flexShrink: 0, fontFamily: 'monospace' }}>{key}</span>
+                        <input value={label} onChange={e => setPipelineStages({ ...pipelineStages, [key]: e.target.value })}
+                          style={{ ...inp, flex: 1 }} />
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <p style={{ fontSize: '11px', color: 'rgba(240,236,227,0.2)', marginTop: '16px' }}>
+                  Los nombres se aplican en Pipeline, Leads, y Analytics. Los keys internos (new, contacted, etc.) no cambian.
+                </p>
               </div>
             )}
 

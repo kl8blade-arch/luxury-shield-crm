@@ -5,6 +5,7 @@ import {
   LayoutDashboard, Users, Kanban, Bell, Calendar,
   MessageSquare, Settings, Shield, Building2,
   UserCheck, Package, ChevronRight, BarChart3, Brain, LogOut, Upload,
+  ChevronDown, Plus, Circle,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useEffect, useState } from 'react'
@@ -35,14 +36,35 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
   const { user, logout, isAdmin } = useAuth()
   const [accountLogo, setAccountLogo] = useState<string | null>(null)
   const [accountName, setAccountName] = useState<string | null>(null)
+  const [parentAccount, setParentAccount] = useState<any>(null)
+  const [subAccounts, setSubAccounts] = useState<any[]>([])
+  const [accountsOpen, setAccountsOpen] = useState(false)
 
   useEffect(() => {
     if (!user?.account_id) return
-    supabase.from('accounts').select('logo_url, name, brand_color').eq('id', user.account_id).single()
+    // Load account info + sub-accounts
+    supabase.from('accounts').select('id, logo_url, name, brand_color, slug, parent_account_id').eq('id', user.account_id).single()
       .then(({ data }) => {
         if (data?.logo_url) setAccountLogo(data.logo_url)
         if (data?.name && !isAdmin) setAccountName(data.name)
+        setParentAccount(data)
       })
+
+    // Load sub-accounts (only for admin/parent accounts)
+    if (isAdmin) {
+      supabase.from('accounts').select('id, name, slug, plan, logo_url, parent_account_id')
+        .order('created_at', { ascending: true })
+        .then(({ data }) => {
+          if (data) {
+            // Find parent (luxury-shield) and its children
+            const parent = data.find(a => a.slug === 'luxury-shield' || !a.parent_account_id)
+            if (parent) {
+              setParentAccount(parent)
+              setSubAccounts(data.filter(a => a.parent_account_id === parent.id))
+            }
+          }
+        })
+    }
   }, [user?.account_id, isAdmin])
 
   const initials = user?.name
@@ -52,134 +74,178 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
   return (
     <aside style={{
       position: 'fixed', left: 0, top: 0, bottom: 0, width: '224px',
-      background: '#08090d',
-      borderRight: '1px solid rgba(255,255,255,0.06)',
+      background: '#08090d', borderRight: '1px solid rgba(255,255,255,0.06)',
       display: 'flex', flexDirection: 'column',
       zIndex: 50, fontFamily: '"Inter","Segoe UI",sans-serif',
     }}>
 
-      {/* Logo */}
-      <div style={{ padding: '24px 20px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '11px' }}>
+      {/* ── LOGO ── */}
+      <div style={{ padding: '20px 16px 8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
           <div style={{
-            width: '36px', height: '36px', borderRadius: '10px', flexShrink: 0,
+            width: '34px', height: '34px', borderRadius: '10px', flexShrink: 0,
             background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.3)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            overflow: 'hidden',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
           }}>
             {accountLogo ? (
               <img src={accountLogo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             ) : (
-              <Shield style={{ width: '16px', height: '16px', color: '#C9A84C' }} />
+              <Shield style={{ width: '15px', height: '15px', color: '#C9A84C' }} />
             )}
           </div>
-          <div>
-            <p style={{ fontSize: '13px', fontWeight: 700, color: '#E2C060', letterSpacing: '0.02em', lineHeight: 1.2 }}>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ fontSize: '12px', fontWeight: 700, color: '#E2C060', letterSpacing: '0.02em', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {accountName || 'Luxury Shield'}
             </p>
-            <p style={{ fontSize: '10px', color: 'rgba(240,236,227,0.3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '1px' }}>
+            <p style={{ fontSize: '9px', color: 'rgba(240,236,227,0.3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '1px' }}>
               CRM {isAdmin ? '· Admin' : ''}
             </p>
           </div>
         </div>
+
+        {/* ── ACCOUNT SWITCHER (collapsible) ── */}
+        {isAdmin && (
+          <div>
+            {/* Parent account + toggle */}
+            <div onClick={() => setAccountsOpen(!accountsOpen)} style={{
+              display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 8px',
+              borderRadius: '8px', cursor: 'pointer', transition: 'all 0.15s',
+              background: accountsOpen ? 'rgba(201,168,76,0.06)' : 'transparent',
+            }}
+              onMouseEnter={e => { if (!accountsOpen) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)' }}
+              onMouseLeave={e => { if (!accountsOpen) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
+            >
+              <Building2 style={{ width: '12px', height: '12px', color: '#C9A84C', flexShrink: 0 }} />
+              <span style={{ flex: 1, fontSize: '11px', fontWeight: 600, color: 'rgba(240,236,227,0.5)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {parentAccount?.name || 'Luxury Shield'}
+              </span>
+              <ChevronDown style={{
+                width: '12px', height: '12px', color: 'rgba(240,236,227,0.3)',
+                transform: accountsOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 0.2s',
+              }} />
+            </div>
+
+            {/* Sub-accounts dropdown */}
+            {accountsOpen && (
+              <div style={{ paddingLeft: '4px', marginTop: '2px' }}>
+                {subAccounts.map(sub => (
+                  <Link key={sub.id} href={`/accounts?sub=${sub.slug}`} onClick={onNavigate} style={{ textDecoration: 'none' }}>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px 6px 20px',
+                      borderRadius: '6px', cursor: 'pointer', transition: 'all 0.12s',
+                    }}
+                      onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)'}
+                      onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}
+                    >
+                      {sub.logo_url ? (
+                        <img src={sub.logo_url} alt="" style={{ width: '14px', height: '14px', borderRadius: '4px', objectFit: 'cover' }} />
+                      ) : (
+                        <Circle style={{ width: '8px', height: '8px', color: 'rgba(240,236,227,0.2)', fill: 'rgba(240,236,227,0.2)' }} />
+                      )}
+                      <span style={{ fontSize: '11px', color: 'rgba(240,236,227,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {sub.name}
+                      </span>
+                      <span style={{ fontSize: '8px', padding: '1px 5px', borderRadius: '100px', background: 'rgba(255,255,255,0.04)', color: 'rgba(240,236,227,0.25)', marginLeft: 'auto', flexShrink: 0, textTransform: 'capitalize' }}>
+                        {sub.plan}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+
+                {/* Add sub-account button */}
+                <Link href="/accounts?tab=subs&create=true" onClick={onNavigate} style={{ textDecoration: 'none' }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 8px 6px 18px',
+                    borderRadius: '6px', cursor: 'pointer', marginTop: '2px',
+                  }}
+                    onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = 'rgba(201,168,76,0.04)'}
+                    onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}
+                  >
+                    <Plus style={{ width: '10px', height: '10px', color: 'rgba(201,168,76,0.5)' }} />
+                    <span style={{ fontSize: '10px', color: 'rgba(201,168,76,0.5)', fontWeight: 500 }}>Nueva sub-cuenta</span>
+                  </div>
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Nav label */}
-      <div style={{ padding: '20px 20px 8px' }}>
+      {/* ── NAV LABEL ── */}
+      <div style={{ padding: '14px 20px 6px' }}>
         <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(240,236,227,0.22)' }}>
           Navegacion
         </p>
       </div>
 
-      {/* Nav items */}
+      {/* ── NAV ITEMS ── */}
       <nav style={{ flex: 1, padding: '0 12px', display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
         {NAV.filter(n => !n.admin || isAdmin).map(({ href, icon: Icon, label, badge }) => {
           const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
           return (
             <Link key={href} href={href} onClick={onNavigate} style={{ textDecoration: 'none' }}>
-              <div
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '10px',
-                  padding: '10px 12px', borderRadius: '10px', cursor: 'pointer',
-                  background: active ? 'rgba(201,168,76,0.1)' : 'transparent',
-                  border: active ? '1px solid rgba(201,168,76,0.22)' : '1px solid transparent',
-                  color: active ? '#E2C060' : 'rgba(240,236,227,0.45)',
-                  fontSize: '13px', fontWeight: active ? 600 : 400,
-                  transition: 'all 0.15s', position: 'relative',
-                }}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '10px',
+                padding: '9px 12px', borderRadius: '10px', cursor: 'pointer',
+                background: active ? 'rgba(201,168,76,0.1)' : 'transparent',
+                border: active ? '1px solid rgba(201,168,76,0.22)' : '1px solid transparent',
+                color: active ? '#E2C060' : 'rgba(240,236,227,0.45)',
+                fontSize: '13px', fontWeight: active ? 600 : 400,
+                transition: 'all 0.15s', position: 'relative',
+              }}
                 onMouseEnter={e => {
-                  if (!active) {
-                    const el = e.currentTarget as HTMLDivElement
-                    el.style.background = 'rgba(255,255,255,0.04)'
-                    el.style.color = 'rgba(240,236,227,0.82)'
-                    el.style.border = '1px solid rgba(255,255,255,0.07)'
-                  }
+                  if (!active) { const el = e.currentTarget as HTMLDivElement; el.style.background = 'rgba(255,255,255,0.04)'; el.style.color = 'rgba(240,236,227,0.82)'; el.style.border = '1px solid rgba(255,255,255,0.07)' }
                 }}
                 onMouseLeave={e => {
-                  if (!active) {
-                    const el = e.currentTarget as HTMLDivElement
-                    el.style.background = 'transparent'
-                    el.style.color = 'rgba(240,236,227,0.45)'
-                    el.style.border = '1px solid transparent'
-                  }
+                  if (!active) { const el = e.currentTarget as HTMLDivElement; el.style.background = 'transparent'; el.style.color = 'rgba(240,236,227,0.45)'; el.style.border = '1px solid transparent' }
                 }}
               >
-                {active && (
-                  <div style={{
-                    position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
-                    width: '3px', height: '18px', background: '#C9A84C',
-                    borderRadius: '0 3px 3px 0', marginLeft: '-12px',
-                  }} />
-                )}
+                {active && <div style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: '3px', height: '18px', background: '#C9A84C', borderRadius: '0 3px 3px 0', marginLeft: '-12px' }} />}
                 <Icon style={{ width: '16px', height: '16px', flexShrink: 0, opacity: active ? 1 : 0.7 }} />
                 <span style={{ flex: 1, letterSpacing: '0.01em' }}>{label}</span>
                 {active && <ChevronRight style={{ width: '12px', height: '12px', opacity: 0.5 }} />}
-                {badge && (
-                  <span style={{
-                    background: '#f97316', color: 'white', fontSize: '10px', fontWeight: 700,
-                    borderRadius: '100px', padding: '1px 6px', minWidth: '18px', textAlign: 'center',
-                  }}>{badge}</span>
-                )}
+                {badge && <span style={{ background: '#f97316', color: 'white', fontSize: '10px', fontWeight: 700, borderRadius: '100px', padding: '1px 6px', minWidth: '18px', textAlign: 'center' }}>{badge}</span>}
               </div>
             </Link>
           )
         })}
       </nav>
 
-      {/* Divider */}
+      {/* ── DIVIDER ── */}
       <div style={{ margin: '0 20px', borderTop: '1px solid rgba(255,255,255,0.05)' }} />
 
-      {/* Agent Card */}
-      <div style={{ padding: '16px 16px 20px' }}>
+      {/* ── AGENT CARD ── */}
+      <div style={{ padding: '12px 16px 16px' }}>
         <div style={{
           background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)',
-          borderRadius: '12px', padding: '12px 14px',
+          borderRadius: '12px', padding: '10px 12px',
           display: 'flex', alignItems: 'center', gap: '10px',
         }}>
           <div style={{
-            width: '34px', height: '34px', borderRadius: '50%', flexShrink: 0,
+            width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
             background: 'linear-gradient(135deg, #C9A84C, #8B6E2E)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '12px', fontWeight: 800, color: '#07080A',
+            fontSize: '11px', fontWeight: 800, color: '#07080A',
             boxShadow: '0 2px 8px rgba(201,168,76,0.3)',
           }}>{initials}</div>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <p style={{ fontSize: '13px', fontWeight: 600, color: '#F0ECE3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <p style={{ fontSize: '12px', fontWeight: 600, color: '#F0ECE3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {user?.name || 'Agent'}
             </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
               <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#34d399', display: 'inline-block' }} />
-              <p style={{ fontSize: '10px', color: '#C9A84C', fontWeight: 600, textTransform: 'capitalize' }}>{user?.role || 'Agent'} · {user?.plan || 'Free'}</p>
+              <p style={{ fontSize: '9px', color: '#C9A84C', fontWeight: 600, textTransform: 'capitalize' }}>{user?.role} · {user?.plan}</p>
             </div>
           </div>
           <button onClick={logout} title="Cerrar sesion" style={{
-            background: 'none', border: 'none', cursor: 'pointer', padding: '6px',
+            background: 'none', border: 'none', cursor: 'pointer', padding: '5px',
             color: 'rgba(240,236,227,0.3)', transition: 'color 0.2s', flexShrink: 0,
           }}
             onMouseEnter={e => (e.currentTarget.style.color = '#f87171')}
             onMouseLeave={e => (e.currentTarget.style.color = 'rgba(240,236,227,0.3)')}
           >
-            <LogOut style={{ width: '14px', height: '14px' }} />
+            <LogOut style={{ width: '13px', height: '13px' }} />
           </button>
         </div>
       </div>
