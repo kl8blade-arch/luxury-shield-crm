@@ -798,6 +798,18 @@ export async function POST(req: NextRequest) {
       return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
     }
 
+    // ══════════════════════════════════════════════
+    // AGENT ONBOARDING — New agents setting up CRM via WhatsApp
+    // ══════════════════════════════════════════════
+    try {
+      const { handleAgentOnboarding } = await import('@/lib/agent-onboarding')
+      const handled = await handleAgentOnboarding(from, body, mediaUrl || undefined, mediaType || undefined)
+      if (handled) {
+        console.log(`[ONBOARDING] Handled message from ${from}`)
+        return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
+      }
+    } catch (e: any) { console.error('[ONBOARDING] Error:', e.message) }
+
     // Handle audio/media messages
     const isAudio = numMedia > 0 && (mediaType.includes('audio') || mediaType.includes('ogg') || mediaType.includes('mpeg') || mediaType.includes('mp4') || mediaUrl.includes('audio'))
 

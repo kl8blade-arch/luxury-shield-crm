@@ -7,6 +7,8 @@ import {
   UserCheck, Package, ChevronRight, BarChart3, Brain, LogOut,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
 
 const NAV = [
   { href: '/dashboard',  icon: LayoutDashboard, label: 'Dashboard',      badge: null, admin: false },
@@ -30,6 +32,17 @@ const NAV = [
 export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const pathname = usePathname()
   const { user, logout, isAdmin } = useAuth()
+  const [accountLogo, setAccountLogo] = useState<string | null>(null)
+  const [accountName, setAccountName] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!user?.account_id) return
+    supabase.from('accounts').select('logo_url, name, brand_color').eq('id', user.account_id).single()
+      .then(({ data }) => {
+        if (data?.logo_url) setAccountLogo(data.logo_url)
+        if (data?.name && !isAdmin) setAccountName(data.name)
+      })
+  }, [user?.account_id, isAdmin])
 
   const initials = user?.name
     ? user.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
@@ -51,12 +64,17 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
             width: '36px', height: '36px', borderRadius: '10px', flexShrink: 0,
             background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.3)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
+            overflow: 'hidden',
           }}>
-            <Shield style={{ width: '16px', height: '16px', color: '#C9A84C' }} />
+            {accountLogo ? (
+              <img src={accountLogo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <Shield style={{ width: '16px', height: '16px', color: '#C9A84C' }} />
+            )}
           </div>
           <div>
             <p style={{ fontSize: '13px', fontWeight: 700, color: '#E2C060', letterSpacing: '0.02em', lineHeight: 1.2 }}>
-              Luxury Shield
+              {accountName || 'Luxury Shield'}
             </p>
             <p style={{ fontSize: '10px', color: 'rgba(240,236,227,0.3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '1px' }}>
               CRM {isAdmin ? '· Admin' : ''}
