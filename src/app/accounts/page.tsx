@@ -110,14 +110,57 @@ export default function AccountsPage() {
             })
           }
         } else {
-          // Fallback: if no templates for this industry, create a generic Sophia
           await supabase.from('sophia_agents').insert({
             name: 'SophiaGeneral', agent_type: 'product_expert', purpose: `Agente de ventas para ${newSub.industry}`,
-            system_prompt: `Eres Sophia, una agente de ventas experta en ${newSub.industry}. Hablas espanol natural, eres empática y consultiva. Tu objetivo es entender las necesidades del lead, educar sobre las soluciones disponibles, y guiar hacia el siguiente paso sin presionar.`,
-            trigger_keywords: [newSub.industry, 'venta', 'producto', 'precio', 'informacion'],
+            system_prompt: `Eres Sophia, una agente de ventas experta en ${newSub.industry}. Hablas espanol natural, eres empatica y consultiva.`,
+            trigger_keywords: [newSub.industry, 'venta', 'producto', 'precio'],
             active: true, account_id: newAccount.id,
           })
         }
+      }
+
+      // Create industry-specific base skills for the new account
+      const industrySkills: Record<string, { name: string; desc: string; prompt: string }[]> = {
+        seguros: [
+          { name: 'ventas_seguros', desc: 'Tecnicas de venta de seguros', prompt: 'Venta consultiva de seguros. Preguntar necesidades antes de presentar. Educacion > presion. Manejar objeciones con empatia.' },
+          { name: 'objeciones_seguros', desc: 'Manejo de objeciones de seguros', prompt: 'OBJECIONES: "Es caro"→mostrar costo de NO tener seguro. "Ya tengo"→comparar cobertura. "No necesito"→escenario de emergencia. "Pensarlo"→clarificar duda real.' },
+        ],
+        dropshipping: [
+          { name: 'product_research', desc: 'Investigacion de productos winning', prompt: 'CRITERIOS: Margen >50%, peso <2kg, wow factor, $15-60 precio. Validar en TikTok Creative Center, Google Trends. Analizar competencia en ads.' },
+          { name: 'ads_optimization', desc: 'Optimizacion de campanas de ads', prompt: 'TESTING: $20-50/dia, 3-5 creatives, kill si no hay venta en 48h. SCALING: duplicar si ROAS >2x por 3 dias. Nuevo creative cada 3-5 dias.' },
+          { name: 'store_conversion', desc: 'Optimizacion de conversion de tienda', prompt: 'CONVERSION: Shipping gratis >$35, upsells, exit popup, trust badges, reviews. Product page: 5+ fotos, video, beneficios > caracteristicas.' },
+        ],
+        realtor: [
+          { name: 'lead_qualification', desc: 'Calificacion de leads inmobiliarios', prompt: 'PREGUNTAS: Compra o venta? Presupuesto? Zona? Habitaciones? Primera vez? Pre-aprobado? Timeline? CALIFICAR: Hot (pre-aprobado+timeline), Warm (buscando activo), Cold (solo mirando).' },
+          { name: 'objections_realtor', desc: 'Objeciones inmobiliarias', prompt: 'OBJECIONES: "Mercado caro"→precios suben, esperar cuesta mas. "No tengo down"→FHA 3.5%. "Quiero comparar"→preparar numeros reales. "Solo miro"→mostrar propiedades sin compromiso.' },
+        ],
+        infoproductos: [
+          { name: 'launch_strategy', desc: 'Estrategia de lanzamiento', prompt: 'EMBUDO: Lead magnet→Webinar→Oferta→Upsell. LANZAMIENTO: Pre-launch 30d→Warmup 14d→Carrito 5-7d→Cierre. METRICAS: Open >30%, CTR >5%, Conv webinar 8-15%.' },
+          { name: 'content_pillars', desc: 'Pilares de contenido', prompt: 'FORMULA: 40% educativo, 30% inspiracional, 20% personal, 10% venta. REPURPOSING: 1 video→5 shorts→3 posts→1 email→1 thread.' },
+        ],
+        inversiones: [
+          { name: 'risk_assessment', desc: 'Evaluacion de riesgo', prompt: 'PERFILES: Conservador (55+, 40% bonds), Moderado (35-55, 50% ETFs), Agresivo (25-35, 40% growth). REGLA: Emergency fund primero. DISCLAIMER siempre.' },
+          { name: 'portfolio_basics', desc: 'Fundamentos de portafolio', prompt: 'PRINCIPIANTE: VOO+VTI (60%), BND (20%), VXUS (10%), growth (10%). RULE: 15% del ingreso minimo. DCA mensual. No timing the market.' },
+        ],
+        autos: [
+          { name: 'car_sales', desc: 'Tecnicas de venta automotriz', prompt: 'PROCESO: Necesidad→Opciones→Test drive→Numeros→Cierre. OBJECIONES: "Solo miro"→que tipo te interesa? "Caro"→financiamiento desde $250/mes. CIERRE: "Si los numeros funcionan hoy, te lo llevas?"' },
+          { name: 'financing_options', desc: 'Opciones de financiamiento', prompt: 'TIPOS: Banco (3-7%), Credit Union (2.5-5%), In-house (8-15%). CREDITO: Prime 720+, Near 620+, Sub 500+. PRODUCTOS: GAP, warranty, tire protection.' },
+        ],
+        multinivel: [
+          { name: 'team_building', desc: 'Construccion de equipo', prompt: 'PROSPECCION: Lista 100, redes sociales, eventos. INVITACION: "Tengo un proyecto que podria interesarte. 15 minutos?" DUPLICACION: Sistema simple replicable en 48h.' },
+          { name: 'retention_mlm', desc: 'Retencion de distribuidores', prompt: 'CAUSAS ABANDONO: Falta resultados, rechazo, confusion, sin soporte. PREVENCION: Check-in semanal, celebrar victorias, training continuo.' },
+        ],
+      }
+
+      const skillsForIndustry = industrySkills[newSub.industry] || []
+      for (const skill of skillsForIndustry) {
+        await supabase.from('sophia_skills').insert({
+          name: `${newSub.industry}_${skill.name}`,
+          description: skill.desc,
+          prompt_injection: skill.prompt,
+          active: true,
+          account_id: newAccount.id,
+        })
       }
     }
 

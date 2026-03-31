@@ -26,12 +26,25 @@ export default function SophiaOSPage() {
       agentQuery = agentQuery.is('account_id', null)
     }
 
+    // When viewing sub-account: show only that account's data (empty for new accounts)
+    // When viewing main: show global data (account_id IS NULL)
+    const isSubView = isViewingSubAccount && activeAccount?.id
+    const acFilter = (q: any) => isSubView ? q.eq('account_id', activeAccount!.id) : q.is('account_id', null)
+
     const [{ data: m }, { data: s }, { data: k }, { data: a }, { data: src }] = await Promise.all([
-      supabase.from('sophia_memory').select('*').eq('active', true).order('importance', { ascending: false }),
-      supabase.from('sophia_skills').select('*').order('active', { ascending: false }),
-      supabase.from('sophia_knowledge').select('*').eq('active', true).order('created_at', { ascending: false }),
+      isSubView
+        ? supabase.from('sophia_memory').select('*').eq('active', true).eq('account_id', activeAccount!.id).order('importance', { ascending: false })
+        : supabase.from('sophia_memory').select('*').eq('active', true).order('importance', { ascending: false }),
+      isSubView
+        ? supabase.from('sophia_skills').select('*').eq('account_id', activeAccount!.id).order('active', { ascending: false })
+        : supabase.from('sophia_skills').select('*').order('active', { ascending: false }),
+      isSubView
+        ? supabase.from('sophia_knowledge').select('*').eq('active', true).eq('account_id', activeAccount!.id).order('created_at', { ascending: false })
+        : supabase.from('sophia_knowledge').select('*').eq('active', true).order('created_at', { ascending: false }),
       agentQuery,
-      supabase.from('sophia_training_sources').select('*').order('created_at', { ascending: false }).limit(20),
+      isSubView
+        ? supabase.from('sophia_training_sources').select('*').eq('account_id', activeAccount!.id).order('created_at', { ascending: false }).limit(20)
+        : supabase.from('sophia_training_sources').select('*').order('created_at', { ascending: false }).limit(20),
     ])
     setMemories(m || []); setSkills(s || []); setKnowledge(k || []); setAgents(a || []); setSources(src || [])
     setLoading(false)
