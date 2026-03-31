@@ -21,15 +21,15 @@ export default function DashboardPage() {
   const [leads, setLeads] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
-  const { user } = useAuth()
+  const { user, activeAccount, isViewingSubAccount } = useAuth()
 
-  useEffect(() => { if (user) loadData() }, [user])
+  useEffect(() => { if (user) loadData() }, [user, activeAccount?.id])
   useEffect(() => { const c = () => setIsMobile(window.innerWidth < 768); c(); window.addEventListener('resize', c); return () => window.removeEventListener('resize', c) }, [])
 
   async function loadData() {
     setLoading(true)
     try {
-      const s = (q: any) => scopeQuery(q, user)
+      const s = (q: any) => scopeQuery(q, user, 'agent_id', activeAccount?.id)
       const [{ count: total }, { count: newL }, { count: ready }, { count: reminders }, { count: closed }, { count: cross }, { data: agent }, { data: scores }, { data: recent }] = await Promise.all([
         s(supabase.from('leads').select('*', { count: 'exact', head: true })),
         s(supabase.from('leads').select('*', { count: 'exact', head: true }).eq('stage', 'new')),
@@ -63,7 +63,8 @@ export default function DashboardPage() {
         {/* Header */}
         <div style={{ marginBottom: '36px' }}>
           <p style={{ color: 'rgba(201,168,76,0.5)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.2em', marginBottom: '8px' }}>{greeting.toUpperCase()}</p>
-          <h1 style={{ fontFamily: '"DM Serif Display",serif', fontSize: isMobile ? '32px' : '44px', color: '#F0ECE3', margin: 0, lineHeight: 1 }}>{user?.name || 'Dashboard'}</h1>
+          <h1 style={{ fontFamily: '"DM Serif Display",serif', fontSize: isMobile ? '32px' : '44px', color: '#F0ECE3', margin: 0, lineHeight: 1 }}>{isViewingSubAccount ? activeAccount?.name : (user?.name || 'Dashboard')}</h1>
+          {isViewingSubAccount && <p style={{ color: '#34d399', fontSize: '12px', fontWeight: 600, marginTop: '4px' }}>Sub-cuenta · {activeAccount?.industry}</p>}
           <p style={{ color: 'rgba(240,236,227,0.3)', fontSize: '13px', marginTop: '8px' }}>
             {now.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </p>

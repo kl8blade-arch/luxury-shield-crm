@@ -16,7 +16,7 @@ export default function LeadsPageWrapper() {
 
 function LeadsPage() {
   const searchParams = useSearchParams()
-  const { user } = useAuth()
+  const { user, activeAccount } = useAuth()
   const [leads, setLeads] = useState<Lead[]>([])
   const [filtered, setFiltered] = useState<Lead[]>([])
   const [selected, setSelected] = useState<Lead | null>(null)
@@ -67,7 +67,7 @@ function LeadsPage() {
   async function loadLeads() {
     setLoading(true)
     const q = supabase.from('leads').select('*').order('created_at', { ascending: false })
-    const { data } = await scopeQuery(q, user)
+    const { data } = await scopeQuery(q, user, 'agent_id', activeAccount?.id)
     setLeads(data || []); setLoading(false)
   }
 

@@ -16,6 +16,14 @@ interface User {
   profile_photo?: string | null
 }
 
+interface ActiveAccount {
+  id: string
+  name: string
+  slug: string
+  industry: string
+  logo_url?: string | null
+}
+
 interface AuthContextType {
   user: User | null
   loading: boolean
@@ -27,6 +35,9 @@ interface AuthContextType {
   isAdmin: boolean
   trialDaysLeft: number | null
   isTrialExpired: boolean
+  activeAccount: ActiveAccount | null
+  switchAccount: (account: ActiveAccount | null) => void
+  isViewingSubAccount: boolean
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -40,6 +51,9 @@ const AuthContext = createContext<AuthContextType>({
   isAdmin: false,
   trialDaysLeft: null,
   isTrialExpired: false,
+  activeAccount: null,
+  switchAccount: () => {},
+  isViewingSubAccount: false,
 })
 
 export const useAuth = () => useContext(AuthContext)
@@ -49,8 +63,21 @@ const PUBLIC_ROUTES = ['/login', '/register', '/l']
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [activeAccount, setActiveAccount] = useState<ActiveAccount | null>(null)
   const router = useRouter()
   const pathname = usePathname()
+
+  const isViewingSubAccount = activeAccount !== null
+
+  function switchAccount(account: ActiveAccount | null) {
+    setActiveAccount(account)
+    if (account) {
+      sessionStorage.setItem('ls_active_account', JSON.stringify(account))
+    } else {
+      sessionStorage.removeItem('ls_active_account')
+    }
+    router.push('/dashboard')
+  }
 
   useEffect(() => {
     try {
@@ -72,6 +99,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           })
         }
       }
+    } catch {}
+    // Restore active account from session
+    try {
+      const stored = sessionStorage.getItem('ls_active_account')
+      if (stored) setActiveAccount(JSON.parse(stored))
     } catch {}
     setLoading(false)
   }, [])
@@ -206,7 +238,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = user?.role === 'admin'
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, loginWithGoogle, verify2FA, logout, isAdmin, trialDaysLeft, isTrialExpired }}>
+    <AuthContext.Provider value={{ user, loading, login, register, loginWithGoogle, verify2FA, logout, isAdmin, trialDaysLeft, isTrialExpired, activeAccount, switchAccount, isViewingSubAccount }}>
       {children}
     </AuthContext.Provider>
   )

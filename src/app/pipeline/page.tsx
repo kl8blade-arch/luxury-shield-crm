@@ -9,7 +9,7 @@ import { scopeQuery } from '@/lib/use-scoped-query'
 const COLS = Object.entries(STAGE_META).filter(([k]) => k !== 'unqualified')
 
 export default function PipelinePage() {
-  const { user } = useAuth()
+  const { user, activeAccount } = useAuth()
   const [leads, setLeads] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<any>(null)
@@ -60,7 +60,7 @@ export default function PipelinePage() {
 
   async function loadLeads() {
     const q = supabase.from('leads').select('*').order('created_at', { ascending: false })
-    const { data } = await scopeQuery(q, user)
+    const { data } = await scopeQuery(q, user, 'agent_id', activeAccount?.id)
     setLeads(data || []); setLoading(false)
   }
 

@@ -33,7 +33,7 @@ const NAV = [
 
 export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const pathname = usePathname()
-  const { user, logout, isAdmin } = useAuth()
+  const { user, logout, isAdmin, activeAccount, switchAccount, isViewingSubAccount } = useAuth()
   const [accountLogo, setAccountLogo] = useState<string | null>(null)
   const [accountName, setAccountName] = useState<string | null>(null)
   const [parentAccount, setParentAccount] = useState<any>(null)
@@ -94,11 +94,11 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
             )}
           </div>
           <div style={{ minWidth: 0 }}>
-            <p style={{ fontSize: '12px', fontWeight: 700, color: '#E2C060', letterSpacing: '0.02em', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {accountName || 'Luxury Shield'}
+            <p style={{ fontSize: '12px', fontWeight: 700, color: isViewingSubAccount ? '#34d399' : '#E2C060', letterSpacing: '0.02em', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {isViewingSubAccount ? activeAccount?.name : (accountName || 'Luxury Shield')}
             </p>
             <p style={{ fontSize: '9px', color: 'rgba(240,236,227,0.3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '1px' }}>
-              CRM {isAdmin ? '· Admin' : ''}
+              {isViewingSubAccount ? `Sub-cuenta · ${activeAccount?.industry || 'CRM'}` : `CRM ${isAdmin ? '· Admin' : ''}`}
             </p>
           </div>
         </div>
@@ -129,29 +129,44 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
             {/* Sub-accounts dropdown */}
             {accountsOpen && (
               <div style={{ paddingLeft: '4px', marginTop: '2px' }}>
-                {subAccounts.map(sub => (
-                  <Link key={sub.id} href={`/accounts?sub=${sub.slug}`} onClick={onNavigate} style={{ textDecoration: 'none' }}>
-                    <div style={{
+                {/* Back to main account button (when viewing sub) */}
+                {isViewingSubAccount && (
+                  <div onClick={() => { switchAccount(null); onNavigate?.() }} style={{
+                    display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 8px 6px 16px',
+                    borderRadius: '6px', cursor: 'pointer', marginBottom: '4px',
+                    background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)',
+                  }}>
+                    <span style={{ fontSize: '10px', color: '#C9A84C' }}>&larr;</span>
+                    <span style={{ fontSize: '10px', color: '#C9A84C', fontWeight: 600 }}>Volver a cuenta principal</span>
+                  </div>
+                )}
+
+                {subAccounts.map(sub => {
+                  const isActive = activeAccount?.id === sub.id
+                  return (
+                    <div key={sub.id} onClick={() => { switchAccount({ id: sub.id, name: sub.name, slug: sub.slug, industry: sub.industry || 'seguros', logo_url: sub.logo_url }); onNavigate?.() }} style={{
                       display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px 6px 20px',
                       borderRadius: '6px', cursor: 'pointer', transition: 'all 0.12s',
+                      background: isActive ? 'rgba(52,211,153,0.06)' : 'transparent',
+                      border: isActive ? '1px solid rgba(52,211,153,0.15)' : '1px solid transparent',
                     }}
-                      onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)'}
-                      onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}
+                      onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)' }}
+                      onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
                     >
                       {sub.logo_url ? (
                         <img src={sub.logo_url} alt="" style={{ width: '14px', height: '14px', borderRadius: '4px', objectFit: 'cover' }} />
                       ) : (
-                        <Circle style={{ width: '8px', height: '8px', color: 'rgba(240,236,227,0.2)', fill: 'rgba(240,236,227,0.2)' }} />
+                        <Circle style={{ width: '8px', height: '8px', color: isActive ? '#34d399' : 'rgba(240,236,227,0.2)', fill: isActive ? '#34d399' : 'rgba(240,236,227,0.2)' }} />
                       )}
-                      <span style={{ fontSize: '11px', color: 'rgba(240,236,227,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: '11px', color: isActive ? '#34d399' : 'rgba(240,236,227,0.4)', fontWeight: isActive ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {sub.name}
                       </span>
-                      <span style={{ fontSize: '8px', padding: '1px 5px', borderRadius: '100px', background: 'rgba(255,255,255,0.04)', color: 'rgba(240,236,227,0.25)', marginLeft: 'auto', flexShrink: 0, textTransform: 'capitalize' }}>
+                      <span style={{ fontSize: '8px', padding: '1px 5px', borderRadius: '100px', background: isActive ? 'rgba(52,211,153,0.1)' : 'rgba(255,255,255,0.04)', color: isActive ? '#34d399' : 'rgba(240,236,227,0.25)', marginLeft: 'auto', flexShrink: 0, textTransform: 'capitalize' }}>
                         {sub.plan}
                       </span>
                     </div>
-                  </Link>
-                ))}
+                  )
+                })}
 
                 {/* Add sub-account button */}
                 <Link href="/accounts?tab=subs&create=true" onClick={onNavigate} style={{ textDecoration: 'none' }}>

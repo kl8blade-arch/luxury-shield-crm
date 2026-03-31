@@ -37,7 +37,7 @@ export default function AccountsPage() {
   const [showProduct, setShowProduct] = useState(false)
   const [selectedSub, setSelectedSub] = useState<any>(null)
   const [tab, setTab] = useState<'overview' | 'subs' | 'products' | 'features' | 'plans'>('overview')
-  const [newSub, setNewSub] = useState({ name: '', slug: '', plan: 'starter', features: {} as Record<string, boolean> })
+  const [newSub, setNewSub] = useState({ name: '', slug: '', plan: 'starter', industry: 'seguros', cloneAgents: true, features: {} as Record<string, boolean> })
   const [newProduct, setNewProduct] = useState({ name: '', carrier: '', product_type: 'dental', description: '', states: '' })
   const [isMobile, setIsMobile] = useState(false)
 
@@ -64,18 +64,45 @@ export default function AccountsPage() {
     plan.features.forEach(f => { features[f] = true })
     Object.entries(newSub.features).forEach(([k, v]) => { features[k] = v })
 
-    await supabase.from('accounts').insert({
+    const { data: newAccount } = await supabase.from('accounts').insert({
       name: newSub.name,
       slug: newSub.slug.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
       parent_account_id: account.id,
       account_type: 'single',
       plan: newSub.plan,
+      industry: newSub.industry,
       max_sub_accounts: 0,
       max_leads: plan.leads,
       max_agents: plan.agents,
       features,
-    })
-    setNewSub({ name: '', slug: '', plan: 'starter', features: {} })
+    }).select().single()
+
+    // Clone agents from parent OR create industry-specific agents
+    if (newAccount) {
+      if (newSub.cloneAgents) {
+        // Clone sophia_agents from parent account (copy their prompts, skills, knowledge)
+        const { data: parentAgents } = await supabase.from('sophia_agents').select('*').eq('active', true)
+        for (const agent of parentAgents || []) {
+          await supabase.from('sophia_agents').insert({
+            name: agent.name, agent_type: agent.agent_type, description: agent.description,
+            system_prompt: agent.system_prompt, trigger_keywords: agent.trigger_keywords,
+            active: true, account_id: newAccount.id,
+          })
+        }
+      } else {
+        // Create agents from industry templates
+        const { data: templates } = await supabase.from('industry_agent_templates').select('*').eq('industry', newSub.industry)
+        for (const tmpl of templates || []) {
+          await supabase.from('sophia_agents').insert({
+            name: tmpl.agent_name, agent_type: tmpl.agent_type, description: tmpl.description,
+            system_prompt: tmpl.system_prompt, trigger_keywords: tmpl.trigger_keywords,
+            active: true, account_id: newAccount.id,
+          })
+        }
+      }
+    }
+
+    setNewSub({ name: '', slug: '', plan: 'starter', industry: 'seguros', cloneAgents: true, features: {} })
     setShowCreate(false)
     load()
   }
@@ -288,6 +315,56 @@ export default function AccountsPage() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
                         <input placeholder="Nombre de la agencia" value={newSub.name} onChange={e => setNewSub({ ...newSub, name: e.target.value })} style={inp} />
                         <input placeholder="URL slug (ej: miami-dental)" value={newSub.slug} onChange={e => setNewSub({ ...newSub, slug: e.target.value })} style={inp} />
+                      </div>
+
+                      {/* Industry selector */}
+                      <p style={{ color: 'rgba(201,168,76,0.6)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', marginBottom: '10px' }}>INDUSTRIA</p>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '20px' }}>
+                        {[
+                          { key: 'seguros', label: 'Seguros', icon: '🛡️', color: '#C9A84C' },
+                          { key: 'realtor', label: 'Bienes Raices', icon: '🏠', color: '#60a5fa' },
+                          { key: 'hotseller', label: 'Hot Seller', icon: '🔥', color: '#f97316' },
+                          { key: 'infoproductos', label: 'Infoproductos', icon: '📚', color: '#a78bfa' },
+                          { key: 'inversiones', label: 'Inversiones', icon: '📈', color: '#34d399' },
+                          { key: 'autos', label: 'Autos', icon: '🚗', color: '#ef4444' },
+                          { key: 'multinivel', label: 'Multinivel', icon: '🌐', color: '#06b6d4' },
+                        ].map(ind => (
+                          <div key={ind.key} onClick={() => setNewSub({ ...newSub, industry: ind.key })}
+                            style={{
+                              padding: '12px', borderRadius: '12px', cursor: 'pointer', textAlign: 'center',
+                              background: newSub.industry === ind.key ? `${ind.color}10` : 'rgba(255,255,255,0.015)',
+                              border: `1px solid ${newSub.industry === ind.key ? ind.color + '40' : 'rgba(255,255,255,0.05)'}`,
+                              transition: 'all 0.15s',
+                            }}>
+                            <span style={{ fontSize: '22px', display: 'block', marginBottom: '4px' }}>{ind.icon}</span>
+                            <span style={{ fontSize: '11px', fontWeight: newSub.industry === ind.key ? 700 : 400, color: newSub.industry === ind.key ? ind.color : 'rgba(240,236,227,0.4)' }}>{ind.label}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Clone vs fresh agents */}
+                      <p style={{ color: 'rgba(201,168,76,0.6)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', marginBottom: '10px' }}>AGENTES IA</p>
+                      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+                        <div onClick={() => setNewSub({ ...newSub, cloneAgents: true })}
+                          style={{
+                            flex: 1, padding: '14px', borderRadius: '12px', cursor: 'pointer', textAlign: 'center',
+                            background: newSub.cloneAgents ? 'rgba(201,168,76,0.08)' : 'rgba(255,255,255,0.015)',
+                            border: `1px solid ${newSub.cloneAgents ? 'rgba(201,168,76,0.3)' : 'rgba(255,255,255,0.05)'}`,
+                          }}>
+                          <span style={{ fontSize: '18px', display: 'block', marginBottom: '4px' }}>📋</span>
+                          <span style={{ fontSize: '12px', fontWeight: newSub.cloneAgents ? 700 : 400, color: newSub.cloneAgents ? '#C9A84C' : 'rgba(240,236,227,0.4)', display: 'block' }}>Clonar de principal</span>
+                          <span style={{ fontSize: '10px', color: 'rgba(240,236,227,0.25)', marginTop: '4px', display: 'block' }}>Copia agentes, memoria, skills y conocimiento</span>
+                        </div>
+                        <div onClick={() => setNewSub({ ...newSub, cloneAgents: false })}
+                          style={{
+                            flex: 1, padding: '14px', borderRadius: '12px', cursor: 'pointer', textAlign: 'center',
+                            background: !newSub.cloneAgents ? 'rgba(52,211,153,0.08)' : 'rgba(255,255,255,0.015)',
+                            border: `1px solid ${!newSub.cloneAgents ? 'rgba(52,211,153,0.3)' : 'rgba(255,255,255,0.05)'}`,
+                          }}>
+                          <span style={{ fontSize: '18px', display: 'block', marginBottom: '4px' }}>✨</span>
+                          <span style={{ fontSize: '12px', fontWeight: !newSub.cloneAgents ? 700 : 400, color: !newSub.cloneAgents ? '#34d399' : 'rgba(240,236,227,0.4)', display: 'block' }}>Empezar de cero</span>
+                          <span style={{ fontSize: '10px', color: 'rgba(240,236,227,0.25)', marginTop: '4px', display: 'block' }}>Agentes pre-configurados para {newSub.industry}</span>
+                        </div>
                       </div>
 
                       <p style={{ color: 'rgba(201,168,76,0.6)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', marginBottom: '10px' }}>PLAN BASE</p>
