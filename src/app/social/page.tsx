@@ -240,6 +240,7 @@ Formato: lista clara, sin JSON. Habla en espanol.` }]
           <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.2em', color: 'rgba(24,119,242,0.6)', marginBottom: '6px' }}>SOCIAL INTELLIGENCE</p>
           <h1 style={{ fontFamily: '"DM Serif Display",serif', fontSize: isMobile ? '32px' : '44px', color: '#F0ECE3', margin: 0, lineHeight: 1 }}>Centro Social</h1>
           <p style={{ color: 'rgba(240,236,227,0.35)', fontSize: '13px', marginTop: '8px' }}>Escanea, genera contenido, y domina cada red social con IA</p>
+          <a href="/social/connect" style={{ display: 'inline-block', marginTop: '10px', padding: '8px 20px', borderRadius: '10px', background: 'linear-gradient(135deg, #1877F2, #0A66C2)', color: '#fff', fontSize: '12px', fontWeight: 700, textDecoration: 'none', boxShadow: '0 4px 16px rgba(24,119,242,0.3)' }}>Conectar redes sociales &rarr;</a>
         </div>
 
         {/* Tabs */}
