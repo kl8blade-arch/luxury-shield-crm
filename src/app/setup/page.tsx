@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
+import FileUpload from '@/components/FileUpload'
 
 const PRODUCT_OPTIONS = [
   { key: 'dental', label: 'Dental (DVH Plus)', icon: '🦷', color: '#60a5fa' },
@@ -39,14 +40,6 @@ export default function SetupPage() {
 
   function toggleProduct(key: string) {
     setProducts(prev => prev.includes(key) ? prev.filter(p => p !== key) : [...prev, key])
-  }
-
-  function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => setLogoPreview(reader.result as string)
-    reader.readAsDataURL(file)
   }
 
   async function handleFinish() {
@@ -121,19 +114,20 @@ export default function SetupPage() {
                   <div>
                     <label style={labelStyle}>Logo de tu agencia</label>
                     <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
-                      <label style={{
-                        width: '72px', height: '72px', borderRadius: '16px', cursor: 'pointer',
-                        background: logoPreview ? 'none' : 'rgba(201,168,76,0.04)',
-                        border: `2px dashed ${logoPreview ? 'rgba(52,211,153,0.3)' : 'rgba(201,168,76,0.2)'}`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0,
-                      }}>
-                        {logoPreview ? (
-                          <img src={logoPreview} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        ) : (
-                          <span style={{ fontSize: '24px', opacity: 0.4 }}>📷</span>
-                        )}
-                        <input type="file" accept="image/*" onChange={handleLogoUpload} style={{ display: 'none' }} />
-                      </label>
+                      <FileUpload accept="image/*" onFile={(_, dataUrl) => dataUrl && setLogoPreview(dataUrl)}>
+                        <div style={{
+                          width: '72px', height: '72px', borderRadius: '16px',
+                          background: logoPreview ? 'none' : 'rgba(201,168,76,0.04)',
+                          border: `2px dashed ${logoPreview ? 'rgba(52,211,153,0.3)' : 'rgba(201,168,76,0.2)'}`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0,
+                        }}>
+                          {logoPreview ? (
+                            <img src={logoPreview} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            <span style={{ fontSize: '24px', opacity: 0.4 }}>📷</span>
+                          )}
+                        </div>
+                      </FileUpload>
                       <div>
                         <p style={{ fontSize: '12px', color: 'rgba(240,236,227,0.5)', margin: 0 }}>
                           {logoPreview ? 'Logo cargado. Toca para cambiar.' : 'Toca para subir tu logo (PNG, JPG)'}

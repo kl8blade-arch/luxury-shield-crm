@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/design'
 import { useAuth } from '@/contexts/AuthContext'
+import FileUpload from '@/components/FileUpload'
 
 type Tab = 'perfil' | 'seguridad' | 'licencias' | 'redes' | 'ia' | 'notificaciones' | 'integraciones'
 
@@ -132,14 +133,6 @@ export default function SettingsPage() {
     setSaving(false)
   }
 
-  function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => setProfilePhoto(reader.result as string)
-    reader.readAsDataURL(file)
-  }
-
   function toggleState(st: string) {
     setLicensedStates(prev => prev.includes(st) ? prev.filter(s => s !== st) : [...prev, st])
   }
@@ -211,19 +204,20 @@ export default function SettingsPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '560px' }}>
                 {/* Avatar + photo upload */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <label style={{ cursor: 'pointer', position: 'relative' }}>
-                    <div style={{
-                      width: '80px', height: '80px', borderRadius: '20px', overflow: 'hidden',
-                      background: profilePhoto ? 'none' : 'linear-gradient(135deg, #C9A84C, #8B6E2E)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '24px', fontWeight: 800, color: '#07080A',
-                      boxShadow: '0 4px 20px rgba(201,168,76,0.3)',
-                    }}>
-                      {profilePhoto ? <img src={profilePhoto} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials}
+                  <FileUpload accept="image/*" onFile={(_, dataUrl) => dataUrl && setProfilePhoto(dataUrl)}>
+                    <div style={{ position: 'relative' }}>
+                      <div style={{
+                        width: '80px', height: '80px', borderRadius: '20px', overflow: 'hidden',
+                        background: profilePhoto ? 'none' : 'linear-gradient(135deg, #C9A84C, #8B6E2E)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '24px', fontWeight: 800, color: '#07080A',
+                        boxShadow: '0 4px 20px rgba(201,168,76,0.3)',
+                      }}>
+                        {profilePhoto ? <img src={profilePhoto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials}
+                      </div>
+                      <div style={{ position: 'absolute', bottom: -4, right: -4, width: '24px', height: '24px', borderRadius: '50%', background: '#C9A84C', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>📷</div>
                     </div>
-                    <div style={{ position: 'absolute', bottom: -4, right: -4, width: '24px', height: '24px', borderRadius: '50%', background: '#C9A84C', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>📷</div>
-                    <input type="file" accept="image/*" onChange={handlePhotoUpload} style={{ display: 'none' }} />
-                  </label>
+                  </FileUpload>
                   <div>
                     <p style={{ fontSize: '18px', fontWeight: 700, color: '#F0ECE3', margin: 0 }}>{agent.name}</p>
                     <p style={{ fontSize: '12px', color: '#C9A84C', fontWeight: 600, margin: '2px 0 0', textTransform: 'capitalize' }}>{agent.role} · {agent.plan}</p>

@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/design'
+import FileUpload from '@/components/FileUpload'
 
 const CATEGORIES = [
   { key: 'all', label: 'Todos' },
@@ -103,16 +104,11 @@ export default function MarketplacePage() {
     setSubmitting(false)
   }
 
-  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      const dataUrl = reader.result as string
+  function handleFileUpload(file: File, dataUrl?: string) {
+    if (dataUrl) {
       setPhotoPreview(dataUrl)
       setBuildAnswer(dataUrl)
     }
-    reader.readAsDataURL(file)
   }
 
   // Resume a build that was left incomplete
@@ -270,16 +266,15 @@ export default function MarketplacePage() {
                       </div>
                     ) : null}
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      <label style={{
-                        flex: 1, padding: '16px', borderRadius: '12px', textAlign: 'center', cursor: 'pointer',
+                      <FileUpload accept="image/*" onFile={handleFileUpload} style={{
+                        flex: 1, padding: '16px', borderRadius: '12px', textAlign: 'center',
                         background: 'rgba(201,168,76,0.04)', border: '2px dashed rgba(201,168,76,0.2)',
                         color: '#C9A84C', fontSize: '13px', fontWeight: 600, transition: 'all 0.2s',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                       }}>
                         <span style={{ fontSize: '20px' }}>📸</span>
                         <span>{photoPreview ? 'Cambiar foto' : 'Seleccionar de galeria'}</span>
-                        <input type="file" accept="image/*" onChange={handleFileUpload} style={{ display: 'none' }} />
-                      </label>
+                      </FileUpload>
                       <button onClick={() => { setBuildAnswer('saltar'); setPhotoPreview(null); submitAnswer() }}
                         style={{ padding: '12px 20px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(240,236,227,0.4)', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                         Saltar
