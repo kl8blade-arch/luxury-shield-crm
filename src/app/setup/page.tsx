@@ -1,12 +1,10 @@
 'use client'
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
-import FileUpload from '@/components/FileUpload'
 
 const PRODUCT_OPTIONS = [
-  { key: 'dental', label: 'Dental (DVH Plus)', icon: '🦷', color: '#60a5fa' },
+  { key: 'dental', label: 'Dental', icon: '🦷', color: '#60a5fa' },
   { key: 'aca', label: 'ACA / Obamacare', icon: '🏥', color: '#34d399' },
   { key: 'vida', label: 'Vida / IUL', icon: '💰', color: '#C9A84C' },
   { key: 'medicare', label: 'Medicare', icon: '🏛️', color: '#a78bfa' },
@@ -18,21 +16,20 @@ const PRODUCT_OPTIONS = [
 
 export default function SetupPage() {
   const { user } = useAuth()
-  const router = useRouter()
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
 
-  // Step 1 — Personal info
-  const [agentName, setAgentName] = useState(user?.name || '')
-  const [phone, setPhone] = useState('')
+  // Pre-fill from registration
   const [companyName, setCompanyName] = useState('')
   const [agencyUrl, setAgencyUrl] = useState('')
+  const [noWebsite, setNoWebsite] = useState(false)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
 
-  // Step 2 — Products
+  // Products
   const [products, setProducts] = useState<string[]>([])
 
-  // Step 3 — Preferences
+  // Preferences
   const [language, setLanguage] = useState('es')
   const [states, setStates] = useState('')
 
@@ -42,130 +39,138 @@ export default function SetupPage() {
     setProducts(prev => prev.includes(key) ? prev.filter(p => p !== key) : [...prev, key])
   }
 
+  function handleLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => setLogoPreview(reader.result as string)
+    reader.readAsDataURL(file)
+    e.target.value = '' // reset
+  }
+
   async function handleFinish() {
     if (!user) return
     setLoading(true)
 
-    const agentUpdate: any = {
-      name: agentName || user.name,
-      phone: phone || undefined,
+    const update: any = {
       company_name: companyName || null,
-      agency_url: agencyUrl || null,
-      products: products,
+      agency_url: noWebsite ? null : (agencyUrl || null),
+      products,
       licensed_states: states.split(',').map(s => s.trim()).filter(Boolean),
       onboarding_complete: true,
       wa_onboarding_step: 'done',
     }
-    if (logoPreview) agentUpdate.profile_photo = logoPreview
+    if (logoPreview) update.profile_photo = logoPreview
 
-    await supabase.from('agents').update(agentUpdate).eq('id', user.id)
+    await supabase.from('agents').update(update).eq('id', user.id)
 
-    // Also update account logo if exists
-    if (user.account_id && logoPreview) {
-      await supabase.from('accounts').update({ logo_url: logoPreview, name: companyName || undefined }).eq('id', user.account_id)
+    if (user.account_id) {
+      const accUpdate: any = {}
+      if (logoPreview) accUpdate.logo_url = logoPreview
+      if (companyName) accUpdate.name = companyName
+      if (Object.keys(accUpdate).length) await supabase.from('accounts').update(accUpdate).eq('id', user.account_id)
     }
 
-    // Update local storage
     const updated = { ...user, onboarding_complete: true }
     localStorage.setItem('ls_auth', JSON.stringify(updated))
     window.location.href = '/dashboard'
   }
 
-  const inputStyle = {
-    width: '100%', padding: '14px 18px', borderRadius: '12px', fontSize: '15px',
-    fontFamily: '"Outfit",sans-serif', background: 'rgba(255,255,255,0.03)',
-    border: '1px solid rgba(255,255,255,0.08)', color: '#F0ECE3', outline: 'none',
-    boxSizing: 'border-box' as const,
-  }
-  const labelStyle = { display: 'block', fontSize: '11px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: 'rgba(240,236,227,0.35)', marginBottom: '8px' }
+  const inp: React.CSSProperties = { width: '100%', padding: '14px 18px', borderRadius: '12px', fontSize: '15px', fontFamily: '"Outfit",sans-serif', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: '#F0ECE3', outline: 'none', boxSizing: 'border-box' }
+  const lbl: React.CSSProperties = { display: 'block', fontSize: '11px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(240,236,227,0.35)', marginBottom: '8px' }
 
   return (
     <>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700&family=Outfit:wght@300;400;500;600;700&display=swap');`}</style>
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#050507', fontFamily: '"Outfit",sans-serif', position: 'relative', overflow: 'hidden' }}>
-
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#050507', fontFamily: '"Outfit",sans-serif', position: 'relative', overflow: 'hidden', padding: '24px 16px' }}>
         <div style={{ position: 'absolute', top: '-20%', left: '-10%', width: '600px', height: '600px', background: 'radial-gradient(circle, rgba(201,168,76,0.05) 0%, transparent 60%)', pointerEvents: 'none' }} />
+
+        {/* Hidden file input */}
+        <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleLogoFile} style={{ display: 'none' }} />
 
         <div style={{ width: '520px', maxWidth: '94vw', position: 'relative', zIndex: 1 }}>
           {/* Header */}
-          <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-            <h1 style={{ fontFamily: '"Cormorant Garamond",serif', fontSize: '32px', fontWeight: 300, color: '#F0ECE3', margin: '0 0 8px' }}>Configura tu CRM</h1>
-            <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)' }}>Paso {step} de {totalSteps}</p>
-            {/* Progress bar */}
-            <div style={{ width: '200px', height: '4px', background: 'rgba(255,255,255,0.06)', borderRadius: '2px', margin: '16px auto 0', overflow: 'hidden' }}>
-              <div style={{ width: `${(step / totalSteps) * 100}%`, height: '100%', background: 'linear-gradient(90deg, #C9A84C, #34d399)', borderRadius: '2px', transition: 'width 0.4s ease' }} />
+          <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+            <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.2em', color: 'rgba(201,168,76,0.5)', marginBottom: '8px' }}>PASO {step} DE {totalSteps}</p>
+            <h1 style={{ fontFamily: '"Cormorant Garamond",serif', fontSize: '30px', fontWeight: 300, color: '#F0ECE3', margin: '0 0 8px' }}>Configura tu CRM</h1>
+            <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)' }}>Hola {user?.name?.split(' ')[0] || ''}! Solo unos detalles mas.</p>
+            {/* Progress */}
+            <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', marginTop: '16px' }}>
+              {[1,2,3].map(i => (
+                <div key={i} style={{ width: '60px', height: '4px', borderRadius: '2px', background: step >= i ? 'linear-gradient(90deg, #C9A84C, #34d399)' : 'rgba(255,255,255,0.06)', transition: 'all 0.3s' }} />
+              ))}
             </div>
           </div>
 
-          <div style={{
-            background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.06)',
-            borderRadius: '20px', padding: '36px 32px',
-            backdropFilter: 'blur(20px)', boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
-          }}>
+          <div style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '20px', padding: '32px 28px', backdropFilter: 'blur(20px)', boxShadow: '0 24px 64px rgba(0,0,0,0.4)' }}>
 
-            {/* STEP 1: Personal info */}
+            {/* ═══ STEP 1: Agency info ═══ */}
             {step === 1 && (
               <div>
-                <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#F0ECE3', margin: '0 0 4px' }}>Informacion personal</h2>
-                <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)', marginBottom: '24px' }}>Datos basicos de tu perfil y agencia</p>
+                <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#F0ECE3', margin: '0 0 4px' }}>Tu agencia</h2>
+                <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)', marginBottom: '24px' }}>Personaliza tu CRM con tu marca</p>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  {/* Logo upload */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {/* Logo */}
                   <div>
-                    <label style={labelStyle}>Logo de tu agencia</label>
+                    <label style={lbl}>Logo <span style={{ opacity: 0.5 }}>(opcional)</span></label>
                     <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
-                      <FileUpload accept="image/*" onFile={(_, dataUrl) => dataUrl && setLogoPreview(dataUrl)}>
-                        <div style={{
-                          width: '72px', height: '72px', borderRadius: '16px',
-                          background: logoPreview ? 'none' : 'rgba(201,168,76,0.04)',
-                          border: `2px dashed ${logoPreview ? 'rgba(52,211,153,0.3)' : 'rgba(201,168,76,0.2)'}`,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0,
-                        }}>
-                          {logoPreview ? (
-                            <img src={logoPreview} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          ) : (
-                            <span style={{ fontSize: '24px', opacity: 0.4 }}>📷</span>
-                          )}
-                        </div>
-                      </FileUpload>
+                      <div onClick={() => fileRef.current?.click()} style={{
+                        width: '72px', height: '72px', borderRadius: '16px', cursor: 'pointer',
+                        background: logoPreview ? 'none' : 'rgba(201,168,76,0.04)',
+                        border: `2px dashed ${logoPreview ? 'rgba(52,211,153,0.3)' : 'rgba(201,168,76,0.2)'}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0,
+                        transition: 'all 0.2s',
+                      }}>
+                        {logoPreview ? (
+                          <img src={logoPreview} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          <span style={{ fontSize: '24px', opacity: 0.4 }}>📷</span>
+                        )}
+                      </div>
                       <div>
-                        <p style={{ fontSize: '12px', color: 'rgba(240,236,227,0.5)', margin: 0 }}>
-                          {logoPreview ? 'Logo cargado. Toca para cambiar.' : 'Toca para subir tu logo (PNG, JPG)'}
-                        </p>
-                        <p style={{ fontSize: '10px', color: 'rgba(240,236,227,0.25)', margin: '4px 0 0' }}>Aparecera en tu CRM y landing pages</p>
+                        <button onClick={() => fileRef.current?.click()} style={{
+                          padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
+                          background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.2)',
+                          color: '#C9A84C', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '4px', display: 'block',
+                        }}>
+                          {logoPreview ? 'Cambiar logo' : 'Subir logo'}
+                        </button>
+                        <p style={{ fontSize: '10px', color: 'rgba(240,236,227,0.25)', margin: 0 }}>PNG, JPG. Aparecera en tu CRM.</p>
                       </div>
                     </div>
                   </div>
 
+                  {/* Company name */}
                   <div>
-                    <label style={labelStyle}>Tu nombre completo *</label>
-                    <input type="text" value={agentName} onChange={e => setAgentName(e.target.value)}
-                      placeholder="Juan Perez" required style={inputStyle} />
+                    <label style={lbl}>Nombre de tu agencia <span style={{ opacity: 0.5 }}>(opcional)</span></label>
+                    <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Ej: Miami Insurance Group" style={inp} />
                   </div>
+
+                  {/* URL with "no tengo" option */}
                   <div>
-                    <label style={labelStyle}>Telefono de contacto *</label>
-                    <input type="tel" value={phone} onChange={e => setPhone(e.target.value)}
-                      placeholder="+1 (786) 555-0000" required style={inputStyle} />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Nombre de tu agencia <span style={{ opacity: 0.5 }}>(si tienes)</span></label>
-                    <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)}
-                      placeholder="Miami Insurance Group" style={inputStyle} />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>URL de tu agencia <span style={{ opacity: 0.5 }}>(si tienes)</span></label>
-                    <input type="url" value={agencyUrl} onChange={e => setAgencyUrl(e.target.value)}
-                      placeholder="https://miagencia.com" style={inputStyle} />
+                    <label style={lbl}>Pagina web</label>
+                    {noWebsite ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 18px', borderRadius: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <span style={{ fontSize: '13px', color: 'rgba(240,236,227,0.35)' }}>No tengo pagina web</span>
+                        <button onClick={() => setNoWebsite(false)} style={{ marginLeft: 'auto', fontSize: '11px', color: '#C9A84C', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>Agregar URL</button>
+                      </div>
+                    ) : (
+                      <div>
+                        <input type="url" value={agencyUrl} onChange={e => setAgencyUrl(e.target.value)} placeholder="https://miagencia.com" style={inp} />
+                        <button onClick={() => { setNoWebsite(true); setAgencyUrl('') }} style={{ fontSize: '11px', color: 'rgba(240,236,227,0.3)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', marginTop: '6px', padding: 0 }}>No tengo pagina web</button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             )}
 
-            {/* STEP 2: Products */}
+            {/* ═══ STEP 2: Products ═══ */}
             {step === 2 && (
               <div>
-                <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#F0ECE3', margin: '0 0 4px' }}>Que productos vendes?</h2>
-                <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)', marginBottom: '24px' }}>Selecciona todos los que apliquen. Sophia se configurara para ayudarte con estos.</p>
+                <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#F0ECE3', margin: '0 0 4px' }}>Que vendes?</h2>
+                <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)', marginBottom: '24px' }}>Sophia se configura segun tus productos</p>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
                   {PRODUCT_OPTIONS.map(p => {
@@ -177,27 +182,26 @@ export default function SetupPage() {
                         border: `1px solid ${selected ? p.color + '40' : 'rgba(255,255,255,0.06)'}`,
                         transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '12px',
                       }}>
-                        <span style={{ fontSize: '24px' }}>{p.icon}</span>
-                        <div>
-                          <p style={{ fontSize: '13px', fontWeight: 600, color: selected ? p.color : '#F0ECE3', margin: 0 }}>{p.label}</p>
-                        </div>
-                        {selected && <span style={{ marginLeft: 'auto', color: p.color, fontSize: '16px' }}>&#10003;</span>}
+                        <span style={{ fontSize: '22px' }}>{p.icon}</span>
+                        <span style={{ fontSize: '13px', fontWeight: selected ? 600 : 400, color: selected ? p.color : '#F0ECE3' }}>{p.label}</span>
+                        {selected && <span style={{ marginLeft: 'auto', color: p.color, fontSize: '14px' }}>&#10003;</span>}
                       </div>
                     )
                   })}
                 </div>
+                {products.length === 0 && <p style={{ fontSize: '11px', color: 'rgba(240,236,227,0.25)', textAlign: 'center', marginTop: '12px' }}>Selecciona al menos uno para continuar</p>}
               </div>
             )}
 
-            {/* STEP 3: Preferences */}
+            {/* ═══ STEP 3: Preferences ═══ */}
             {step === 3 && (
               <div>
-                <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#F0ECE3', margin: '0 0 4px' }}>Preferencias</h2>
-                <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)', marginBottom: '24px' }}>Ultimos detalles para personalizar tu experiencia</p>
+                <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#F0ECE3', margin: '0 0 4px' }}>Ultimos detalles</h2>
+                <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)', marginBottom: '24px' }}>Personaliza la experiencia de Sophia</p>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   <div>
-                    <label style={labelStyle}>Idioma principal de tus clientes</label>
+                    <label style={lbl}>Idioma principal de tus clientes</label>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
                       {[
                         { key: 'es', label: 'Espanol', flag: '🇪🇸' },
@@ -207,10 +211,10 @@ export default function SetupPage() {
                       ].map(l => (
                         <div key={l.key} onClick={() => setLanguage(l.key)} style={{
                           padding: '12px', borderRadius: '10px', cursor: 'pointer', textAlign: 'center',
-                          background: language === l.key ? 'rgba(201,168,76,0.08)' : 'rgba(255,255,255,0.02)',
-                          border: `1px solid ${language === l.key ? 'rgba(201,168,76,0.3)' : 'rgba(255,255,255,0.06)'}`,
+                          background: language === l.key ? 'rgba(201,168,76,0.06)' : 'rgba(255,255,255,0.02)',
+                          border: `1px solid ${language === l.key ? 'rgba(201,168,76,0.25)' : 'rgba(255,255,255,0.06)'}`,
                         }}>
-                          <span style={{ fontSize: '20px' }}>{l.flag}</span>
+                          <span style={{ fontSize: '18px' }}>{l.flag}</span>
                           <p style={{ fontSize: '12px', color: language === l.key ? '#C9A84C' : 'rgba(240,236,227,0.4)', margin: '4px 0 0', fontWeight: language === l.key ? 600 : 400 }}>{l.label}</p>
                         </div>
                       ))}
@@ -218,59 +222,58 @@ export default function SetupPage() {
                   </div>
 
                   <div>
-                    <label style={labelStyle}>Estados donde vendes <span style={{ opacity: 0.5 }}>(separados por coma)</span></label>
-                    <input type="text" value={states} onChange={e => setStates(e.target.value)}
-                      placeholder="FL, TX, CA, NY" style={inputStyle} />
+                    <label style={lbl}>Estados donde vendes <span style={{ opacity: 0.5 }}>(opcional)</span></label>
+                    <input type="text" value={states} onChange={e => setStates(e.target.value)} placeholder="FL, TX, CA, NY" style={inp} />
                   </div>
                 </div>
 
                 {/* Summary */}
-                <div style={{ marginTop: '20px', padding: '16px', borderRadius: '12px', background: 'rgba(52,211,153,0.04)', border: '1px solid rgba(52,211,153,0.15)' }}>
-                  <p style={{ fontSize: '11px', fontWeight: 700, color: '#34d399', letterSpacing: '0.1em', margin: '0 0 8px' }}>TU CRM INCLUYE:</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    {[
-                      'Sophia IA vendiendo por WhatsApp 24/7',
-                      `${products.length} producto${products.length !== 1 ? 's' : ''} configurado${products.length !== 1 ? 's' : ''}`,
-                      'Pipeline inteligente + lead scoring',
-                      'Coaching en tiempo real',
-                      '7 dias de prueba gratis',
-                    ].map(f => (
-                      <div key={f} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                        <span style={{ color: '#34d399', fontSize: '12px' }}>&#10003;</span>
-                        <span style={{ fontSize: '12px', color: 'rgba(240,236,227,0.5)' }}>{f}</span>
-                      </div>
-                    ))}
-                  </div>
+                <div style={{ marginTop: '20px', padding: '16px', borderRadius: '12px', background: 'rgba(52,211,153,0.03)', border: '1px solid rgba(52,211,153,0.12)' }}>
+                  <p style={{ fontSize: '11px', fontWeight: 700, color: '#34d399', letterSpacing: '0.1em', margin: '0 0 8px' }}>TU CRM INCLUYE</p>
+                  {[
+                    'Sophia IA vendiendo 24/7 por WhatsApp',
+                    `${products.length} producto${products.length !== 1 ? 's' : ''} configurado${products.length !== 1 ? 's' : ''}`,
+                    'Pipeline inteligente + Lead scoring',
+                    'Coaching en tiempo real',
+                  ].map(f => (
+                    <div key={f} style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '4px' }}>
+                      <span style={{ color: '#34d399', fontSize: '11px' }}>&#10003;</span>
+                      <span style={{ fontSize: '12px', color: 'rgba(240,236,227,0.45)' }}>{f}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
 
-            {/* Navigation buttons */}
+            {/* Navigation */}
             <div style={{ display: 'flex', gap: '10px', marginTop: '28px' }}>
               {step > 1 && (
                 <button onClick={() => setStep(s => s - 1)} style={{
                   flex: 1, padding: '14px', borderRadius: '12px', fontSize: '14px', fontWeight: 500,
                   fontFamily: 'inherit', background: 'none', border: '1px solid rgba(255,255,255,0.08)',
-                  color: 'rgba(240,236,227,0.5)', cursor: 'pointer',
+                  color: 'rgba(240,236,227,0.4)', cursor: 'pointer',
                 }}>Atras</button>
               )}
               {step < totalSteps ? (
-                <button onClick={() => setStep(s => s + 1)} disabled={step === 1 && !agentName}
-                  style={{
-                    flex: 2, padding: '14px', borderRadius: '12px', fontSize: '14px', fontWeight: 700,
-                    fontFamily: 'inherit', letterSpacing: '0.03em',
-                    background: 'linear-gradient(135deg, #C9A84C, #A8893A)', color: '#050507',
-                    border: 'none', cursor: 'pointer', boxShadow: '0 8px 32px rgba(201,168,76,0.2)',
-                  }}>Siguiente</button>
+                <button onClick={() => {
+                  if (step === 2 && products.length === 0) return
+                  setStep(s => s + 1)
+                }} disabled={step === 2 && products.length === 0} style={{
+                  flex: 2, padding: '14px', borderRadius: '12px', fontSize: '14px', fontWeight: 700,
+                  fontFamily: 'inherit', letterSpacing: '0.02em',
+                  background: (step === 2 && products.length === 0) ? 'rgba(201,168,76,0.15)' : 'linear-gradient(135deg, #C9A84C, #A8893A)',
+                  color: (step === 2 && products.length === 0) ? 'rgba(240,236,227,0.3)' : '#050507',
+                  border: 'none', cursor: (step === 2 && products.length === 0) ? 'not-allowed' : 'pointer',
+                  boxShadow: (step === 2 && products.length === 0) ? 'none' : '0 4px 16px rgba(201,168,76,0.2)',
+                }}>Siguiente</button>
               ) : (
-                <button onClick={handleFinish} disabled={loading}
-                  style={{
-                    flex: 2, padding: '14px', borderRadius: '12px', fontSize: '14px', fontWeight: 700,
-                    fontFamily: 'inherit', letterSpacing: '0.03em',
-                    background: loading ? 'rgba(52,211,153,0.3)' : 'linear-gradient(135deg, #34d399, #059669)',
-                    color: '#050507', border: 'none', cursor: loading ? 'wait' : 'pointer',
-                    boxShadow: '0 8px 32px rgba(52,211,153,0.2)',
-                  }}>{loading ? 'Configurando...' : 'Lanzar mi CRM'}</button>
+                <button onClick={handleFinish} disabled={loading} style={{
+                  flex: 2, padding: '14px', borderRadius: '12px', fontSize: '14px', fontWeight: 700,
+                  fontFamily: 'inherit', letterSpacing: '0.02em',
+                  background: loading ? 'rgba(52,211,153,0.3)' : 'linear-gradient(135deg, #34d399, #059669)',
+                  color: '#050507', border: 'none', cursor: loading ? 'wait' : 'pointer',
+                  boxShadow: '0 4px 16px rgba(52,211,153,0.2)',
+                }}>{loading ? 'Configurando...' : 'Lanzar mi CRM'}</button>
               )}
             </div>
           </div>
