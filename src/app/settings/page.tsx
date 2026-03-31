@@ -87,7 +87,9 @@ export default function SettingsPage() {
       setNotifs({ notify_whatsapp: config.notify_whatsapp ?? true, notify_email: config.notify_email ?? false, score_alert_threshold: config.score_alert_threshold ?? 70 })
     }
 
-    setIntegrations({ twilio: true, supabase: true, anthropic: true, stripe: false })
+    // Check Stripe
+    const stripeOk = await fetch('/api/stripe/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(r => r.status !== 503).catch(() => false)
+    setIntegrations({ twilio: true, supabase: true, anthropic: true, stripe: stripeOk })
 
     // Load sub-accounts if admin
     if (user?.role === 'admin') {
@@ -544,7 +546,7 @@ export default function SettingsPage() {
                   { name: 'Twilio (WhatsApp)', icon: '📱', connected: true, desc: 'Mensajes WhatsApp' },
                   { name: 'Supabase', icon: '🗄️', connected: true, desc: 'Base de datos' },
                   { name: 'Claude (Anthropic)', icon: '🤖', connected: true, desc: 'Sophia IA' },
-                  { name: 'Stripe', icon: '💳', connected: false, desc: 'Pagos' },
+                  { name: 'Stripe', icon: '💳', connected: integrations.stripe, desc: 'Pagos' },
                   { name: 'OpenAI Whisper', icon: '🎤', connected: true, desc: 'Audio a texto' },
                 ].map(i => (
                   <div key={i.name} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '16px', borderRadius: '14px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
