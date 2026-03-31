@@ -154,13 +154,47 @@ export async function handleMasterMessage(from: string, body: string, mediaUrl?:
     return
   }
 
+  // Helper: send + save to conversation history
+  async function sendAndLog(msg: string) {
+    await sendWhatsApp(from, msg)
+    await supabase.from('conversations').insert({ lead_phone: from, message: msg, direction: 'outbound', created_at: new Date().toISOString() })
+  }
+
   let text = body
+  // Save incoming message to history
+  await supabase.from('conversations').insert({ lead_phone: from, message: text, direction: 'inbound', created_at: new Date().toISOString() })
 
   // ══════════════════════════════════════════════
-  // DETECT INTENT — Now includes CRM actions
+  // LOAD CONVERSATION HISTORY — for context
+  // ══════════════════════════════════════════════
+  const { data: recentHistory } = await supabase
+    .from('conversations')
+    .select('message, direction, created_at')
+    .or(`lead_id.is.null`)
+    .order('created_at', { ascending: false })
+    .limit(12)
+
+  // Also check master-specific messages (stored as lead_id = null or via phone)
+  const { data: masterHistory } = await supabase
+    .from('conversations')
+    .select('message, direction, created_at')
+    .ilike('lead_phone', `%${from.replace(/\D/g, '').slice(-10)}%`)
+    .order('created_at', { ascending: false })
+    .limit(12)
+
+  const history = (masterHistory || recentHistory || []).reverse()
+  const historyText = history.map(h =>
+    `${h.direction === 'inbound' ? 'Carlos' : 'Sophia'}: ${h.message}`
+  ).join('\n')
+
+  // ══════════════════════════════════════════════
+  // DETECT INTENT — Now includes CRM actions + history context
   // ══════════════════════════════════════════════
   const intentText = await callClaude(
-    `Detecta la intencion del maestro. Devuelve SOLO JSON:
+    `Detecta la intencion del maestro. CONTEXTO de la conversacion reciente:
+${historyText || '(sin historial)'}
+
+Devuelve SOLO JSON:
 {"action":"schedule"|"reminder"|"find_lead"|"pipeline_status"|"daily_summary"|"commissions"|"send_campaign"|"learn"|"remember"|"forget"|"set_skill"|"show_memory"|"show_skills"|"test_sophia"|"chat",
 "topic":string|null,"content":string|null,"skill_name":string|null,"skill_active":boolean|null,
 "lead_name":string|null,"lead_phone":string|null,"date":string|null,"time":string|null,"event_title":string|null,"reminder_type":string|null}
@@ -255,7 +289,7 @@ Acciones Sophia:
       const dateFormatted = eventDate.toLocaleDateString('es-ES', { weekday: 'long', month: 'long', day: 'numeric' })
       const timeFormatted = eventDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
 
-      await sendWhatsApp(from,
+      await sendAndLog(
         `📅 Listo! Cita agendada:\n\n` +
         `📌 ${title}\n` +
         `🗓️ ${dateFormatted}\n` +
@@ -307,7 +341,7 @@ Acciones Sophia:
       const dateFormatted = reminderDate.toLocaleDateString('es-ES', { weekday: 'long', month: 'long', day: 'numeric' })
       const timeFormatted = reminderDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
 
-      await sendWhatsApp(from,
+      await sendAndLog(
         `⏰ Recordatorio creado!\n\n` +
         `📌 ${intent.content || intent.reminder_type || 'Seguimiento'} ${intent.lead_name || ''}\n` +
         `🗓️ ${dateFormatted} a las ${timeFormatted}\n` +
@@ -328,12 +362,12 @@ Acciones Sophia:
         .limit(5)
 
       if (!leads?.length) {
-        await sendWhatsApp(from, `🔍 No encontre leads con "${searchTerm}". Intenta con otro nombre, telefono o estado.`)
+        await sendAndLog(`🔍 No encontre leads con "${searchTerm}". Intenta con otro nombre, telefono o estado.`)
       } else {
         const list = leads.map((l, i) =>
           `${i + 1}. *${l.name}* — ${l.phone}\n   ${l.state || '?'} | ${l.insurance_type || '?'} | Score: ${l.score || 0} | ${l.stage}${l.purchased_products?.length ? '\n   Ya tiene: ' + l.purchased_products.join(', ') : ''}`
         ).join('\n\n')
-        await sendWhatsApp(from, `🔍 Encontre ${leads.length} lead${leads.length > 1 ? 's' : ''}:\n\n${list}`)
+        await sendAndLog(`🔍 Encontre ${leads.length} lead${leads.length > 1 ? 's' : ''}:\n\n${list}`)
       }
       break
     }
@@ -368,7 +402,7 @@ Acciones Sophia:
       report += `\n⏰ Recordatorios pendientes: *${reminders || 0}*`
       report += `\n\n💼 Total activos: *${totalActive}*`
 
-      await sendWhatsApp(from, report)
+      await sendAndLog(report)
       break
     }
 
@@ -408,7 +442,7 @@ Acciones Sophia:
         recentLeads.forEach((l: any) => { report += `• ${l.name} — ${l.stage} (score: ${l.score || 0})\n` })
       }
 
-      await sendWhatsApp(from, report)
+      await sendAndLog(report)
       break
     }
 
@@ -432,7 +466,7 @@ Acciones Sophia:
         })
       }
 
-      await sendWhatsApp(from, report)
+      await sendAndLog(report)
       break
     }
 
@@ -442,47 +476,47 @@ Acciones Sophia:
     case 'learn': {
       const content = intent.content || text
       await supabase.from('sophia_knowledge').insert({ title: intent.topic || 'general', content, source_type: 'text', source_name: 'Maestro', embedding_summary: content.substring(0, 200), tags: [intent.topic || 'master'], active: true })
-      await sendWhatsApp(from, `✅ Aprendido.\n📚 Tema: ${intent.topic || 'general'}`)
+      await sendAndLog(`✅ Aprendido.\n📚 Tema: ${intent.topic || 'general'}`)
       break
     }
     case 'remember': {
       const content = intent.content || text
       await supabase.from('sophia_memory').insert({ category: 'instruction', key: `instruccion_${Date.now()}`, value: content, source: 'master', importance: 8 })
-      await sendWhatsApp(from, `🧠 Guardado en memoria:\n"${content}"`)
+      await sendAndLog(`🧠 Guardado en memoria:\n"${content}"`)
       break
     }
     case 'forget': {
       const topic = intent.topic || intent.content || text
       await supabase.from('sophia_memory').update({ active: false }).ilike('value', `%${topic}%`)
       await supabase.from('sophia_knowledge').update({ active: false }).ilike('content', `%${topic}%`)
-      await sendWhatsApp(from, `🗑️ Olvidado: "${topic}"`)
+      await sendAndLog(`🗑️ Olvidado: "${topic}"`)
       break
     }
     case 'set_skill': {
       const name = intent.skill_name || ''
       const active = intent.skill_active ?? true
       const { data } = await supabase.from('sophia_skills').update({ active }).ilike('name', `%${name}%`).select()
-      if (!data?.length) await sendWhatsApp(from, `⚠️ Skill "${name}" no encontrado.`)
-      else await sendWhatsApp(from, `${active ? '✅' : '⏸️'} Skill "${data[0].name}" ${active ? 'activado' : 'desactivado'}.`)
+      if (!data?.length) await sendAndLog(`⚠️ Skill "${name}" no encontrado.`)
+      else await sendAndLog(`${active ? '✅' : '⏸️'} Skill "${data[0].name}" ${active ? 'activado' : 'desactivado'}.`)
       break
     }
     case 'show_memory': {
       const { data } = await supabase.from('sophia_memory').select('value, category, importance').eq('active', true).order('importance', { ascending: false }).limit(10)
       const list = data?.map(m => `• [${m.category}] ${m.value.substring(0, 80)}`).join('\n') || 'Vacia'
-      await sendWhatsApp(from, `🧠 Mi memoria:\n\n${list}`)
+      await sendAndLog(`🧠 Mi memoria:\n\n${list}`)
       break
     }
     case 'show_skills': {
       const { data } = await supabase.from('sophia_skills').select('name, description, active').order('active', { ascending: false })
       const list = data?.map(s => `${s.active ? '✅' : '⏸️'} *${s.name}*: ${s.description}`).join('\n') || 'Sin skills'
-      await sendWhatsApp(from, `⚡ Mis skills:\n\n${list}`)
+      await sendAndLog(`⚡ Mis skills:\n\n${list}`)
       break
     }
     case 'test_sophia': {
       const scenario = intent.content || 'lead de FL interesado en dental'
       const { data: skills } = await supabase.from('sophia_skills').select('prompt_injection').eq('active', true)
       const response = await callClaude(`Eres Sophia de Luxury Shield Insurance. ${skills?.map(s => s.prompt_injection).join('\n')}`, `[SIMULACION - ${scenario}] Hola, quiero informacion sobre seguro`, 'claude-haiku-4-5-20251001', 400)
-      await sendWhatsApp(from, `🧪 Test (${scenario}):\n\n${response}`)
+      await sendAndLog(`🧪 Test (${scenario}):\n\n${response}`)
       break
     }
 
@@ -493,10 +527,9 @@ Acciones Sophia:
       const [{ data: memory }, { data: knowledge }, { data: agentKnowledge }] = await Promise.all([
         supabase.from('sophia_memory').select('value, category').eq('active', true).order('importance', { ascending: false }).limit(10),
         supabase.from('sophia_knowledge').select('title, content').eq('active', true).order('created_at', { ascending: false }).limit(5),
-        supabase.from('sophia_agents').select('name, system_prompt').eq('active', true),
+        supabase.from('sophia_agents').select('name, system_prompt').eq('active', true).is('account_id', null),
       ])
 
-      // Get quick pipeline stats for context
       const { count: totalLeads } = await supabase.from('leads').select('*', { count: 'exact', head: true }).not('stage', 'in', '("closed_won","closed_lost","unqualified")')
       const { count: pendingReminders } = await supabase.from('reminders').select('*', { count: 'exact', head: true }).eq('status', 'pending')
 
@@ -504,33 +537,63 @@ Acciones Sophia:
       const knowledgeText = knowledge?.map(k => `[${k.title}]: ${k.content?.substring(0, 300)}`).join('\n') || ''
       const agentsText = agentKnowledge?.map(a => `${a.name}`).join(', ') || 'ninguno'
 
-      const response = await callClaude(
-        `Eres Sophia, la mano derecha de Carlos Silva en Luxury Shield Insurance.
+      const systemPrompt = `Eres Sophia, la mano derecha de Carlos Silva en Luxury Shield Insurance.
 Habla como colega de confianza — directo, sin rodeos.
 NO uses **bold** ni headers. Solo texto plano natural.
 Responde en maximo 4-5 oraciones.
 
-IMPORTANTE — TIENES ACCESO AL CRM:
-- Puedes agendar citas (dile "ya la agendo" si te lo pide)
-- Puedes crear recordatorios
-- Puedes buscar leads
-- Puedes ver el pipeline
-- Si Carlos te pide algo del CRM, HAZLO. No preguntes "en que sistema" ni "en que calendario". TU ERES EL SISTEMA.
+CRITICO — MANTENER CONTEXTO:
+- Recuerdas TODA la conversacion anterior. Si Carlos dijo "cita con Lina a las 2:50" hace 2 mensajes, lo recuerdas.
+- Si te pide "recuerdamelo 3 minutos antes", sabes que se refiere a la cita que acabas de agendar.
+- NUNCA preguntes "con quien?" o "que cita?" si ya se hablo de eso en los mensajes anteriores.
+- Si hay ambiguedad, usa el contexto reciente para resolverla.
 
-ESTADO ACTUAL DEL CRM:
-- ${totalLeads || 0} leads activos en pipeline
-- ${pendingReminders || 0} recordatorios pendientes
-- Agentes IA activos: ${agentsText}
+TIENES ACCESO AL CRM:
+- Agendar citas, crear recordatorios, buscar leads, ver pipeline
+- Si Carlos te pide algo del CRM, HAZLO. No preguntes "en que sistema". TU ERES EL SISTEMA.
+- Si te pide corregir algo que acabas de hacer, corrigelo sin pedir mas datos.
 
-CONOCIMIENTO:
-${knowledgeText}
+CRM: ${totalLeads || 0} leads activos, ${pendingReminders || 0} recordatorios, agentes: ${agentsText}
 
-INSTRUCCIONES DE CARLOS:
-${memoryText}`,
-        text,
-        'claude-haiku-4-5-20251001',
-        600
-      )
+${knowledgeText ? 'CONOCIMIENTO:\n' + knowledgeText : ''}
+${memoryText ? 'INSTRUCCIONES:\n' + memoryText : ''}`
+
+      // Build multi-turn conversation from history
+      const messages: { role: 'user' | 'assistant'; content: string }[] = []
+      for (const h of history) {
+        const role = h.direction === 'inbound' ? 'user' as const : 'assistant' as const
+        if (h.message?.trim()) {
+          if (messages.length > 0 && messages[messages.length - 1].role === role) {
+            messages[messages.length - 1].content += '\n' + h.message.trim()
+          } else {
+            messages.push({ role, content: h.message.trim() })
+          }
+        }
+      }
+      // Add current message
+      if (messages.length > 0 && messages[messages.length - 1].role === 'user') {
+        messages[messages.length - 1].content += '\n' + text
+      } else {
+        messages.push({ role: 'user', content: text })
+      }
+      // Ensure first is user
+      while (messages.length > 0 && messages[0].role === 'assistant') messages.shift()
+
+      // Call Claude with full conversation history
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 600, system: systemPrompt, messages }),
+      })
+      let response = ''
+      if (res.ok) {
+        const d = await res.json()
+        response = d.content?.[0]?.text || ''
+      }
+      if (!response) response = 'Disculpa, no pude procesar tu mensaje. Intenta de nuevo.'
+
+      // Save outbound to history (inbound already saved at top)
+      await supabase.from('conversations').insert({ lead_phone: from, message: response, direction: 'outbound', created_at: new Date().toISOString() })
       await sendWhatsApp(from, response)
     }
   }
