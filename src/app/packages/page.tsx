@@ -81,6 +81,7 @@ function PackagesPage() {
           price: totalPrice,
           leadCount: plan.leads || 9999,
           packageId: plan.key,
+          agentId: user?.id,
         }),
       })
       const data = await res.json()

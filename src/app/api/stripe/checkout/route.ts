@@ -1,18 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
+import Stripe from 'stripe'
 
 export async function POST(req: NextRequest) {
   try {
     const stripeKey = process.env.STRIPE_SECRET_KEY
     if (!stripeKey) {
-      return NextResponse.json({ error: 'Stripe no esta configurado. Contacta al administrador para activar los pagos.' }, { status: 503 })
+      return NextResponse.json({ error: 'Stripe no esta configurado. Contacta al administrador.' }, { status: 503 })
     }
 
-    const Stripe = (await import('stripe')).default
-    const stripe = new Stripe(stripeKey, { apiVersion: '2025-03-31.basil' as any })
+    const stripe = new Stripe(stripeKey)
     const { packageId, packageName, price, leadCount, agentId } = await req.json()
 
-    if (!packageName || !price || !leadCount) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    if (!packageName || !price) {
+      return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 })
     }
 
     const origin = req.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'https://luxury-shield-crm.vercel.app'
@@ -25,8 +25,8 @@ export async function POST(req: NextRequest) {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: `Paquete ${packageName}`,
-              description: `${leadCount} leads calificados para tu negocio`,
+              name: `Plan ${packageName} — Luxury Shield CRM`,
+              description: packageName.includes('IA') ? 'Suscripcion mensual con creditos de IA incluidos' : `Suscripcion mensual ${packageName}`,
             },
             unit_amount: Math.round(price * 100),
           },
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       metadata: {
         packageId: packageId || '',
         packageName,
-        leadCount: String(leadCount),
+        leadCount: String(leadCount || 0),
         agentId: agentId || '',
       },
       success_url: `${origin}/packages?success=true`,
