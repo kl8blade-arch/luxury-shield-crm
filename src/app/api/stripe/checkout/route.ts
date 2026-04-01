@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
       params.append('subscription_data[trial_period_days]', String(trialDays))
       params.append('subscription_data[metadata][packageId]', packageId || '')
       params.append('subscription_data[metadata][agentId]', agentId || '')
-      params.append('success_url', `${origin}/setup?payment=success`)
+      params.append('success_url', `${origin}/onboarding/addons?agent_id=${agentId}&plan=${packageId}&payment=success`)
       params.append('cancel_url', `${origin}/register?payment=cancelled`)
     } else {
       params.append('success_url', `${origin}/packages?success=true`)
