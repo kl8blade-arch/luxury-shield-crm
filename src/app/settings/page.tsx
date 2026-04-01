@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/design'
 import { useAuth } from '@/contexts/AuthContext'
-import FileUpload from '@/components/FileUpload'
+import { useRef } from 'react'
 
 type Tab = 'perfil' | 'seguridad' | 'licencias' | 'redes' | 'pipeline' | 'subcuentas' | 'vinculadas' | 'ia' | 'notificaciones' | 'integraciones'
 
@@ -27,6 +27,7 @@ export default function SettingsPage() {
   const [isMobile, setIsMobile] = useState(false)
 
   // Profile
+  const photoInputRef = useRef<HTMLInputElement>(null)
   const [agent, setAgent] = useState<any>(null)
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null)
 
@@ -242,25 +243,30 @@ export default function SettingsPage() {
             {tab === 'perfil' && agent && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '560px' }}>
                 {/* Avatar + photo upload */}
+                <input ref={photoInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={e => {
+                  const file = e.target.files?.[0]; if (!file) return
+                  const reader = new FileReader()
+                  reader.onload = () => setProfilePhoto(reader.result as string)
+                  reader.readAsDataURL(file); e.target.value = ''
+                }} style={{ display: 'none' }} />
+
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <FileUpload accept="image/*" onFile={(_, dataUrl) => dataUrl && setProfilePhoto(dataUrl)}>
-                    <div style={{ position: 'relative' }}>
-                      <div style={{
-                        width: '80px', height: '80px', borderRadius: '20px', overflow: 'hidden',
-                        background: profilePhoto ? 'none' : 'linear-gradient(135deg, #C9A84C, #8B6E2E)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '24px', fontWeight: 800, color: '#07080A',
-                        boxShadow: '0 4px 20px rgba(201,168,76,0.3)',
-                      }}>
-                        {profilePhoto ? <img src={profilePhoto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials}
-                      </div>
-                      <div style={{ position: 'absolute', bottom: -4, right: -4, width: '24px', height: '24px', borderRadius: '50%', background: '#C9A84C', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>📷</div>
+                  <div onClick={() => photoInputRef.current?.click()} style={{ position: 'relative', cursor: 'pointer' }}>
+                    <div style={{
+                      width: '80px', height: '80px', borderRadius: '20px', overflow: 'hidden',
+                      background: profilePhoto ? 'none' : 'linear-gradient(135deg, #C9A84C, #8B6E2E)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '24px', fontWeight: 800, color: '#07080A',
+                      boxShadow: '0 4px 20px rgba(201,168,76,0.3)',
+                    }}>
+                      {profilePhoto ? <img src={profilePhoto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials}
                     </div>
-                  </FileUpload>
+                    <div style={{ position: 'absolute', bottom: -4, right: -4, width: '24px', height: '24px', borderRadius: '50%', background: '#C9A84C', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>📷</div>
+                  </div>
                   <div>
                     <p style={{ fontSize: '18px', fontWeight: 700, color: '#F0ECE3', margin: 0 }}>{agent.name}</p>
                     <p style={{ fontSize: '12px', color: '#C9A84C', fontWeight: 600, margin: '2px 0 0', textTransform: 'capitalize' }}>{agent.role} · {agent.plan}</p>
-                    <p style={{ fontSize: '11px', color: 'rgba(240,236,227,0.25)', margin: '2px 0 0' }}>Toca la foto para cambiar</p>
+                    <button onClick={() => photoInputRef.current?.click()} style={{ fontSize: '11px', color: 'rgba(240,236,227,0.4)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: '2px 0', textDecoration: 'underline' }}>Cambiar foto</button>
                   </div>
                 </div>
 
