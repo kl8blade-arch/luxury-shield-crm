@@ -319,12 +319,12 @@ export default function RegisterPage() {
                   )}
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '16px' }}>
-                    <div><label style={lbl}>Nombre completo *</label><input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Juan Perez" required style={inp} onFocus={focus} onBlur={blur} /></div>
-                    <div><label style={lbl}>Email *</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="juan@email.com" required style={inp} onFocus={focus} onBlur={blur} /></div>
-                    <div><label style={lbl}>Telefono (WhatsApp) *</label><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 (786) 555-0000" required style={inp} onFocus={focus} onBlur={blur} /><p style={{ fontSize: '10px', color: 'rgba(240,236,227,0.2)', marginTop: '4px' }}>Enviaremos un codigo de verificacion a este numero</p></div>
+                    <div><label style={lbl}>Nombre completo *</label><input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Juan Perez" required autoComplete="name" name="name" id="name" style={inp} onFocus={focus} onBlur={blur} /></div>
+                    <div><label style={lbl}>Email *</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="juan@email.com" required autoComplete="email" name="email" id="email" style={inp} onFocus={focus} onBlur={blur} /></div>
+                    <div><label style={lbl}>Telefono (WhatsApp) *</label><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 (786) 555-0000" required autoComplete="tel" name="phone" id="phone" style={inp} onFocus={focus} onBlur={blur} /><p style={{ fontSize: '10px', color: 'rgba(240,236,227,0.2)', marginTop: '4px' }}>Este sera tu numero para recibir leads</p></div>
                     <div>
                       <label style={lbl}>Contrasena *</label>
-                      <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Min 8 caracteres, mayus, minus, num, especial" required style={{ ...inp, borderColor: password && !pwValid ? 'rgba(239,68,68,0.3)' : password && pwValid ? 'rgba(52,211,153,0.3)' : undefined }} onFocus={focus} onBlur={blur} />
+                      <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Min 8 caracteres, mayus, minus, num, especial" required autoComplete="new-password" name="password" id="password" style={{ ...inp, borderColor: password && !pwValid ? 'rgba(239,68,68,0.3)' : password && pwValid ? 'rgba(52,211,153,0.3)' : undefined }} onFocus={focus} onBlur={blur} />
                       {/* Password strength */}
                       {password && (
                         <div style={{ marginTop: '8px' }}>
