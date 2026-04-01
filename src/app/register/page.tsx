@@ -36,8 +36,10 @@ function RegisterInner() {
   // Single step: create account + go to Stripe immediately
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!pwValid) { setError('La contrasena no cumple los requisitos'); return }
+    if (!name.trim()) { setError('Nombre requerido'); return }
+    if (!email.trim()) { setError('Email requerido'); return }
     if (!phone.trim()) { setError('Telefono obligatorio'); return }
+    if (!pwValid) { setError('La contrasena debe tener: 8+ caracteres, mayuscula, minuscula, numero y caracter especial'); return }
     setLoading(true); setError(''); setStep('processing')
 
     // 1. Create account
@@ -204,11 +206,11 @@ function RegisterInner() {
 
                   {error && <div style={{ padding: '10px 14px', borderRadius: '10px', marginBottom: '16px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', fontSize: '13px', color: '#fca5a5', textAlign: 'center' }}>{error}</div>}
 
-                  <button type="submit" disabled={loading || !pwValid} style={{
+                  <button type="submit" disabled={loading} style={{
                     width: '100%', padding: '15px', borderRadius: '14px', fontSize: '15px', fontWeight: 700, fontFamily: 'inherit',
-                    background: pwValid ? 'linear-gradient(135deg, #34d399, #059669)' : 'rgba(52,211,153,0.15)',
-                    color: pwValid ? '#050507' : 'rgba(240,236,227,0.3)', border: 'none',
-                    cursor: pwValid ? 'pointer' : 'not-allowed', boxShadow: pwValid ? '0 8px 32px rgba(52,211,153,0.2)' : 'none',
+                    background: (name && email && phone && pwValid) ? 'linear-gradient(135deg, #34d399, #059669)' : 'rgba(52,211,153,0.15)',
+                    color: (name && email && phone && pwValid) ? '#050507' : 'rgba(240,236,227,0.3)', border: 'none',
+                    cursor: loading ? 'wait' : 'pointer', boxShadow: (name && email && phone && pwValid) ? '0 8px 32px rgba(52,211,153,0.2)' : 'none',
                   }}>
                     {loading ? 'Creando...' : 'Crear cuenta y pagar'}
                   </button>
