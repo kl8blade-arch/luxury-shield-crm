@@ -34,6 +34,15 @@ export async function callAI(options: AICallOptions): Promise<AIResponse> {
   // Admin bypasses everything
   const isAdmin = agentId === ADMIN_ID || !agentId
 
+  // 0. Check if AI is blocked for this agent
+  if (!isAdmin && agentId) {
+    const { data: blockCheck } = await supabase.from('agents').select('ai_blocked').eq('id', agentId).single()
+    if (blockCheck?.ai_blocked) {
+      console.log(`[AI] Agent ${agentId} AI is BLOCKED`)
+      return { text: '', inputTokens: 0, outputTokens: 0, cost: 0 }
+    }
+  }
+
   // 1. Rate limiting + token check (non-admin only)
   if (!isAdmin && agentId) {
     try {
@@ -41,6 +50,10 @@ export async function callAI(options: AICallOptions): Promise<AIResponse> {
       const rateResult = await checkRateLimit(agentId, 1000)
       if (!rateResult.allowed) {
         console.log(`[AI] Rate limited: agent=${agentId} reason=${rateResult.reason}`)
+        // If no balance, block AI
+        if (rateResult.reason === 'no_balance') {
+          blockAgentAI(agentId, 'tokens_depleted').catch(() => {})
+        }
         return { text: '', inputTokens: 0, outputTokens: 0, cost: 0 }
       }
     } catch (e: any) { console.error('[RATE-LIMIT]', e.message) }
@@ -113,6 +126,41 @@ export async function callAI(options: AICallOptions): Promise<AIResponse> {
   }
 
   return { text, inputTokens, outputTokens, cost }
+}
+
+/**
+ * Block an agent's AI when tokens depleted
+ */
+export async function blockAgentAI(agentId: string, reason: 'tokens_depleted' | 'payment_failed' | 'security') {
+  await supabase.from('agents').update({ ai_blocked: true, ai_blocked_reason: reason, ai_blocked_at: new Date().toISOString() }).eq('id', agentId)
+  await supabase.from('tenant_security_events').insert({ agent_id: agentId, event_type: 'ai_blocked', details: { reason } })
+
+  // Notify agent via WhatsApp
+  const { data: agent } = await supabase.from('agents').select('phone, name').eq('id', agentId).single()
+  if (agent?.phone) {
+    const TWILIO_SID = process.env.TWILIO_ACCOUNT_SID
+    const TWILIO_TOKEN = process.env.TWILIO_AUTH_TOKEN
+    const TWILIO_FROM = process.env.TWILIO_WHATSAPP_FROM
+    if (TWILIO_SID && TWILIO_TOKEN && TWILIO_FROM) {
+      const cleanPhone = agent.phone.startsWith('+') ? agent.phone : `+1${agent.phone.replace(/\D/g, '')}`
+      const msgs: Record<string, string> = {
+        tokens_depleted: `⚠️ *Tus tokens de IA se agotaron*\n\nSophia pauso sus respuestas automaticas.\nTu CRM sigue funcionando — puedes ver leads y conversaciones.\n\n💳 Recarga en: luxury-shield-crm.vercel.app/packages`,
+        payment_failed: `⚠️ *Problema con tu pago*\n\nNo pudimos procesar el cobro. Sophia esta pausada.\n\n💳 Actualiza tu metodo de pago en: luxury-shield-crm.vercel.app/packages`,
+        security: `⚠️ Tu cuenta fue pausada por seguridad. Contacta soporte.`,
+      }
+      await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`, {
+        method: 'POST', headers: { 'Authorization': `Basic ${Buffer.from(`${TWILIO_SID}:${TWILIO_TOKEN}`).toString('base64')}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ From: `whatsapp:${TWILIO_FROM}`, To: `whatsapp:${cleanPhone}`, Body: msgs[reason] || msgs.tokens_depleted }).toString(),
+      })
+    }
+  }
+}
+
+/**
+ * Unblock AI when tokens are recharged
+ */
+export async function unblockAgentAI(agentId: string) {
+  await supabase.from('agents').update({ ai_blocked: false, ai_blocked_reason: null, ai_blocked_at: null }).eq('id', agentId)
 }
 
 /**
