@@ -38,6 +38,7 @@ export default function RegisterPage() {
   const [pendingAgentId, setPendingAgentId] = useState('')
   const [phoneHint, setPhoneHint] = useState('')
   const [verifyCode, setVerifyCode] = useState('')
+  const [sentVia, setSentVia] = useState('whatsapp')
   const { register: authRegister, loginWithGoogle } = useAuth()
 
   // Password strength indicators
@@ -79,6 +80,7 @@ export default function RegisterPage() {
     if (data.pending_verification) {
       setPendingAgentId(data.agentId)
       setPhoneHint(data.phone_hint)
+      setSentVia(data.sent_via || 'whatsapp')
       setStep('verify')
     }
     setLoading(false)
@@ -381,7 +383,7 @@ export default function RegisterPage() {
 
                   <h2 style={{ fontFamily: '"Cormorant Garamond",serif', fontSize: '24px', fontWeight: 400, color: '#F0ECE3', margin: '0 0 8px' }}>Verifica tu telefono</h2>
                   <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)', marginBottom: '24px' }}>
-                    Enviamos un codigo de 6 digitos por WhatsApp a <span style={{ color: '#34d399', fontWeight: 600 }}>{phoneHint}</span>
+                    Enviamos un codigo de 6 digitos por {sentVia === 'sms' ? 'SMS' : 'WhatsApp'} a <span style={{ color: '#34d399', fontWeight: 600 }}>{phoneHint}</span>
                   </p>
 
                   <input type="text" value={verifyCode} onChange={e => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}

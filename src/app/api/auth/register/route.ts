@@ -107,24 +107,54 @@ export async function POST(req: NextRequest) {
       expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 min
     })
 
-    // Send code via WhatsApp
+    // Send code via WhatsApp (with SMS fallback)
     const cleanPhone = phone.trim().startsWith('+') ? phone.trim() : `+1${phone.trim().replace(/\D/g, '')}`
+    let codeSent = false
+    let sentVia = 'none'
+
     if (TWILIO_SID && TWILIO_TOKEN && TWILIO_FROM) {
       const auth = `Basic ${Buffer.from(`${TWILIO_SID}:${TWILIO_TOKEN}`).toString('base64')}`
-      await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`, {
-        method: 'POST',
-        headers: { 'Authorization': auth, 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          From: `whatsapp:${TWILIO_FROM}`, To: `whatsapp:${cleanPhone}`,
-          Body: `🔐 *Luxury Shield CRM*\n\nTu codigo de verificacion es:\n\n*${verifyCode}*\n\nExpira en 10 minutos. Si no solicitaste esto, ignora este mensaje.`,
-        }).toString(),
-      })
+      const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`
+
+      // Try WhatsApp first
+      try {
+        const waRes = await fetch(twilioUrl, {
+          method: 'POST', headers: { 'Authorization': auth, 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            From: `whatsapp:${TWILIO_FROM}`, To: `whatsapp:${cleanPhone}`,
+            Body: `🔐 *Luxury Shield CRM*\n\nTu codigo de verificacion es:\n\n*${verifyCode}*\n\nExpira en 10 minutos.`,
+          }).toString(),
+        })
+        const waData = await waRes.json()
+        if (waData.sid && !waData.error_code) { codeSent = true; sentVia = 'whatsapp' }
+        else { console.log('[REGISTER] WhatsApp failed:', waData.error_code, waData.error_message) }
+      } catch {}
+
+      // Fallback: SMS if WhatsApp failed
+      if (!codeSent) {
+        try {
+          const smsRes = await fetch(twilioUrl, {
+            method: 'POST', headers: { 'Authorization': auth, 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              From: TWILIO_FROM!, To: cleanPhone,
+              Body: `Luxury Shield CRM: Tu codigo es ${verifyCode}. Expira en 10 min.`,
+            }).toString(),
+          })
+          const smsData = await smsRes.json()
+          if (smsData.sid && !smsData.error_code) { codeSent = true; sentVia = 'sms' }
+          else { console.log('[REGISTER] SMS failed:', smsData.error_code, smsData.error_message) }
+        } catch {}
+      }
     }
+
+    console.log(`[REGISTER] Code ${verifyCode} sent via ${sentVia} to ${cleanPhone}`)
 
     return NextResponse.json({
       pending_verification: true,
       agentId: newAgentId,
       phone_hint: cleanPhone.replace(/(.{4})(.*)(.{2})/, '$1****$3'),
+      sent_via: sentVia,
+      code_sent: codeSent,
     })
   } catch (err: any) {
     console.error('Register error:', err)
