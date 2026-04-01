@@ -80,8 +80,17 @@ export async function callAI(options: AICallOptions): Promise<AIResponse> {
     }
   }
 
+  // 2.5. Check for active fine-tuned model (for sophia_whatsapp calls)
+  let activeModel = model
+  if (feature === 'sophia_whatsapp') {
+    try {
+      const { data: ftJob } = await supabase.from('fine_tuning_jobs').select('provider_model_id').eq('is_active', true).eq('status', 'succeeded').single()
+      if (ftJob?.provider_model_id) activeModel = ftJob.provider_model_id
+    } catch {}
+  }
+
   // 3. Call Claude
-  const body: any = { model, max_tokens: maxTokens, messages }
+  const body: any = { model: activeModel, max_tokens: maxTokens, messages }
   if (system) body.system = system
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
