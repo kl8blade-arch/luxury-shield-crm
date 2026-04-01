@@ -76,13 +76,10 @@ export async function POST(req: NextRequest) {
 
 async function generateLandingHTML(template: any, data: any): Promise<string> {
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 4000,
-        messages: [{ role: 'user', content: `Genera una landing page HTML completa, profesional y moderna para un agente de seguros.
+    const { callAI } = await import('@/lib/token-tracker')
+    const result = await callAI({
+      feature: 'landing_builder', model: 'claude-haiku-4-5-20251001', maxTokens: 4000,
+      messages: [{ role: 'user', content: `Genera una landing page HTML completa, profesional y moderna para un agente de seguros.
 Categoría: ${template.category}
 Template: ${template.name}
 
@@ -105,16 +102,12 @@ REGLAS:
 - El formulario debe incluir campo oculto: fuente=landing_${template.category}
 
 Devuelve SOLO el HTML completo, sin explicaciones ni backticks.` }],
-      }),
     })
 
-    if (res.ok) {
-      const d = await res.json()
-      let html = d.content?.[0]?.text || ''
-      html = html.replace(/```html\n?|\n?```/g, '').trim()
-      return html
-    }
-    return '<html><body><h1>Landing en construcción</h1></body></html>'
+    let html = result.text || ''
+    html = html.replace(/```html\n?|\n?```/g, '').trim()
+    if (html) return html
+    return '<html><body><h1>Landing en construccion</h1></body></html>'
   } catch {
     return '<html><body><h1>Landing en construcción</h1></body></html>'
   }

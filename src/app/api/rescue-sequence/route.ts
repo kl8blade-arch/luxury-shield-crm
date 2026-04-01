@@ -8,24 +8,9 @@ const supabase = createClient(
 
 async function generateMessage(prompt: string): Promise<string> {
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY!,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 200,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    })
-    if (res.ok) {
-      const d = await res.json()
-      return d.content?.[0]?.text || ''
-    }
-    return ''
+    const { callAI } = await import('@/lib/token-tracker')
+    const result = await callAI({ feature: 'other', model: 'claude-haiku-4-5-20251001', maxTokens: 200, messages: [{ role: 'user', content: prompt }] })
+    return result.text || ''
   } catch { return '' }
 }
 

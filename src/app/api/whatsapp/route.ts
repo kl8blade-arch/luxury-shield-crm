@@ -155,26 +155,13 @@ async function generateSummaryForCarlos(history: any[]): Promise<string> {
       `${c.direction === 'inbound' ? 'Cliente' : 'Sophia'}: ${c.message}`
     ).join('\n')
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY!,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 300,
-        system: 'Resume en 5 bullets cortos esta conversación de ventas de seguros. Incluye: qué necesita el cliente, objeciones que tuvo, qué le interesó más, nivel de urgencia. Responde SOLO los bullets, sin introducción.',
-        messages: [{ role: 'user', content: convoText }],
-      }),
+    const { callAI } = await import('@/lib/token-tracker')
+    const result = await callAI({
+      feature: 'other', model: 'claude-haiku-4-5-20251001', maxTokens: 300,
+      system: 'Resume en 5 bullets cortos esta conversacion de ventas de seguros. Incluye: que necesita el cliente, objeciones, que le intereso, urgencia. SOLO bullets.',
+      messages: [{ role: 'user', content: convoText }],
     })
-
-    if (res.ok) {
-      const data = await res.json()
-      return data.content?.[0]?.text || 'Resumen no disponible'
-    }
-    return 'Resumen no disponible'
+    return result.text || 'Resumen no disponible'
   } catch {
     return 'Resumen no disponible'
   }
@@ -495,36 +482,20 @@ async function handleAgentMessage(agent: any, message: string, agentPhone: strin
   )
 
   try {
-    // Parse agent message with Claude
-    const parseRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY!,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 200,
-        system: `Eres un parser de reportes de ventas. El agente envió: "${message}"
-Devuelve SOLO un JSON sin texto adicional:
-{"accion":"vendido"|"perdido"|"seguimiento"|"no_califica"|"desconocido","lead_referencia":string|null,"monto":number|null,"motivo":string|null,"fecha_seguimiento":string|null,"notas":string}
-Ejemplos:
-- "vendido 500 María la de Florida" → {"accion":"vendido","lead_referencia":"María","monto":500,"motivo":null,"fecha_seguimiento":null,"notas":"cliente de Florida"}
-- "perdido precio para Juan" → {"accion":"perdido","lead_referencia":"Juan","monto":null,"motivo":"precio","fecha_seguimiento":null,"notas":""}
-- "llamo a Pedro mañana 3pm" → {"accion":"seguimiento","lead_referencia":"Pedro","monto":null,"motivo":null,"fecha_seguimiento":"mañana 3pm","notas":""}
-- "cerré a la señora por 350" → {"accion":"vendido","lead_referencia":null,"monto":350,"motivo":null,"fecha_seguimiento":null,"notas":"la señora"}`,
-        messages: [{ role: 'user', content: message }],
-      }),
+    // Parse agent message with Claude via centralized tracker
+    const { callAI } = await import('@/lib/token-tracker')
+    const parseResult = await callAI({
+      feature: 'other', model: 'claude-haiku-4-5-20251001', maxTokens: 200,
+      system: `Eres un parser de reportes de ventas. El agente envio: "${message}"
+Devuelve SOLO JSON: {"accion":"vendido"|"perdido"|"seguimiento"|"no_califica"|"desconocido","lead_referencia":string|null,"monto":number|null,"motivo":string|null,"fecha_seguimiento":string|null,"notas":string}`,
+      messages: [{ role: 'user', content: message }],
     })
 
     let parsed: any = { accion: 'desconocido' }
-    if (parseRes.ok) {
-      const data = await parseRes.json()
-      const text = data.content?.[0]?.text || ''
+    if (parseResult.text) {
       try {
-        parsed = JSON.parse(text.replace(/```json?\n?|\n?```/g, '').trim())
-      } catch { console.error('[Agent Parser] JSON parse failed:', text) }
+        parsed = JSON.parse(parseResult.text.replace(/```json?\n?|\n?```/g, '').trim())
+      } catch { console.error('[Agent Parser] JSON parse failed:', parseResult.text) }
     }
 
     console.log('[Agent Parser] Parsed:', parsed)
@@ -637,15 +608,12 @@ Ejemplos:
       // Schedule referral followup for 48h later (System 3)
       const in48h = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
       try {
-        const refRes = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01' },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5-20251001', max_tokens: 150,
-            messages: [{ role: 'user', content: `Eres Sophia de Luxury Shield. ${firstName} activó su plan DVH hace 2 días. Escribe un mensaje de seguimiento de máximo 4 líneas que: pregunte cómo se siente con su nuevo plan, mencione naturalmente que si conoce a alguien sin cobertura dental hay un beneficio especial. NO uses 'referido' ni 'comisión'. Usa 'si conoces a alguien que lo necesite...'. Que suene como amiga. Responde SOLO el mensaje.` }],
-          }),
+        const { callAI: callAIRef } = await import('@/lib/token-tracker')
+        const refResult = await callAIRef({
+          feature: 'other', model: 'claude-haiku-4-5-20251001', maxTokens: 150,
+          messages: [{ role: 'user', content: `Eres Sophia de Luxury Shield. ${firstName} activo su plan DVH hace 2 dias. Escribe seguimiento de max 4 lineas: pregunta como se siente, menciona "si conoces a alguien que lo necesite...". Suena como amiga. SOLO el mensaje.` }],
         })
-        const refMsg = refRes.ok ? (await refRes.json()).content?.[0]?.text : ''
+        const refMsg = refResult.text || ''
         await supabase.from('reminders').insert({
           lead_id: lead.id, lead_phone: lead.phone,
           message_text: refMsg || `Hola ${firstName} 😊 ¿Cómo te va con tu nuevo plan? Si conoces a alguien que lo necesite, hay algo especial para ti 💙`,
@@ -1358,25 +1326,16 @@ Escribe el comando o dime que necesitas 👇`
       let bc: any = { nombre: lead.name, estado: lead.state, familia: '', telefono: from, color, nivel_interes: 8, argumento_ganador: 'Cobertura dental', objecion_probable: 'Ninguna', contraargumento: '', dias_considerando: 1, como_abrir: `Hola, soy de Luxury Shield. Tu color es ${color}.`, estado_emocional: 'curioso', resumen: 'Lead interesado en plan dental' }
 
       try {
-        const bcRes = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': process.env.ANTHROPIC_API_KEY!,
-            'anthropic-version': '2023-06-01',
-          },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 400,
-            system: `Analiza esta conversación entre Sophia y un lead. Devuelve SOLO JSON:
-{"nombre":"string","estado":"string","familia":"string","telefono":"string","color":"string","nivel_interes":number(1-10),"argumento_ganador":"qué le resonó más","objecion_probable":"la objeción más probable","contraargumento":"mejor respuesta a esa objeción","dias_considerando":number,"como_abrir":"frase exacta para abrir la llamada","estado_emocional":"ansioso|curioso|desconfiado|convencido|indeciso","resumen":"2 líneas máximo"}`,
-            messages: [{ role: 'user', content: convoText }],
-          }),
+        const { callAI: callAIBC } = await import('@/lib/token-tracker')
+        const bcResult = await callAIBC({
+          agentId: lead?.agent_id, accountId: lead?.account_id,
+          feature: 'sophia_whatsapp', model: 'claude-haiku-4-5-20251001', maxTokens: 400,
+          system: `Analiza esta conversacion. Devuelve SOLO JSON: {"nombre":"","estado":"","familia":"","nivel_interes":0,"argumento_ganador":"","objecion_probable":"","contraargumento":"","como_abrir":"","estado_emocional":"","resumen":""}`,
+          messages: [{ role: 'user', content: convoText }],
+          leadId: lead?.id,
         })
-        if (bcRes.ok) {
-          const d = await bcRes.json()
-          const t = d.content?.[0]?.text || ''
-          try { bc = { ...bc, ...JSON.parse(t.replace(/```json?\n?|\n?```/g, '').trim()) } } catch {}
+        if (bcResult.text) {
+          try { bc = { ...bc, ...JSON.parse(bcResult.text.replace(/```json?\n?|\n?```/g, '').trim()) } } catch {}
         }
       } catch {}
 

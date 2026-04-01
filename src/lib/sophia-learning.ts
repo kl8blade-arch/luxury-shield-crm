@@ -34,26 +34,16 @@ export async function learnFromClosedDeal(
       `${m.direction === 'inbound' ? 'Lead' : 'Sophia'}: ${m.message}`
     ).join('\n')
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': anthropicKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 400,
-        system: `Analiza esta conversación ganada de ventas de seguros. Devuelve SOLO JSON:
-{"argumentos_ganadores":["lista de argumentos que funcionaron"],"objeciones_superadas":[{"objecion":"...","respuesta":"..."}],"fase_de_cierre":number,"perfil_lead":{"estado":"","familia":"","ultima_visita_dentista":"","tenia_seguro":false,"objecion_principal":""},"frase_clave":"mensaje exacto de Sophia que desbloqueó el cierre"}`,
-        messages: [{ role: 'user', content: convoText }],
-      }),
+    const { callAI } = await import('@/lib/token-tracker')
+    const result = await callAI({
+      feature: 'other', model: 'claude-haiku-4-5-20251001', maxTokens: 400,
+      system: `Analiza esta conversacion ganada. Devuelve SOLO JSON: {"argumentos_ganadores":[],"objeciones_superadas":[{"objecion":"","respuesta":""}],"fase_de_cierre":0,"perfil_lead":{},"frase_clave":""}`,
+      messages: [{ role: 'user', content: convoText }],
     })
 
-    if (!res.ok) return
+    if (!result.text) return
 
-    const data = await res.json()
-    const text = data.content?.[0]?.text || ''
+    const text = result.text
     let learning: any
     try {
       learning = JSON.parse(text.replace(/```json?\n?|\n?```/g, '').trim())

@@ -48,16 +48,14 @@ SIEMPRE devuelve entre 2-3 sugerencias cuando el agente pide qué decir. Cada me
       content: m.content,
     }))
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 400, system: systemPrompt, messages }),
+    const { callAI } = await import('@/lib/token-tracker')
+    const result = await callAI({
+      feature: 'coach_realtime', model: 'claude-haiku-4-5-20251001', maxTokens: 400,
+      system: systemPrompt, messages,
     })
 
-    if (!res.ok) return NextResponse.json({ response: 'Error al consultar al coach. Intenta de nuevo.' })
-
-    const data = await res.json()
-    return NextResponse.json({ response: data.content?.[0]?.text || 'Sin respuesta del coach.' })
+    if (!result.text) return NextResponse.json({ response: 'Error al consultar al coach. Intenta de nuevo.' })
+    return NextResponse.json({ response: result.text })
   } catch (error: any) {
     console.error('Coach chat error:', error)
     return NextResponse.json({ response: 'Error interno. Intenta de nuevo.' })

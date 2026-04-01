@@ -58,24 +58,6 @@ export default function SocialPage() {
   async function scanPlatform() {
     setGenerating(true); setScanResult('')
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '', 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 2000,
-          messages: [{ role: 'user', content: `Actua como SocialScanner. Para la plataforma ${platform.toUpperCase()}, genera un reporte de grupos/comunidades donde se habla de seguros, finanzas personales, retiro, salud dental, y productos de proteccion para el mercado latino en USA.
-
-Genera 8-10 grupos REALES que existen en ${platform} con:
-- Nombre exacto del grupo
-- URL aproximada o como buscarlo
-- Miembros estimados
-- Relevancia 0-100 para vender seguros
-- Temas principales
-- Oportunidad especifica
-- Estrategia de entrada recomendada
-
-Formato: lista clara, sin JSON. Habla en espanol.` }]
-        }),
-      })
       // Fallback: use server-side call
       const scanRes = await fetch('/api/coaching', {
         method: 'POST',
@@ -153,11 +135,7 @@ Formato: lista clara, sin JSON. Habla en espanol.` }]
     if (!genProduct) return
     setGenerating(true)
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': '', 'anthropic-version': '2023-06-01' },
-        body: '{}',
-      }).catch(() => null)
+      // Content generated from templates (no direct API call needed)
 
       // Generate content via server
       const toneMap: Record<string, string> = {

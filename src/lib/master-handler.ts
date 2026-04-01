@@ -9,14 +9,12 @@ export function isMaster(phone: string): boolean {
 }
 
 async function callClaude(system: string, user: string, model = 'claude-haiku-4-5-20251001', maxTokens = 500): Promise<string> {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] }),
+  const { callAI } = await import('@/lib/token-tracker')
+  const result = await callAI({
+    feature: 'master_command', model, maxTokens, system,
+    messages: [{ role: 'user', content: user }],
   })
-  if (!res.ok) return ''
-  const d = await res.json()
-  return d.content?.[0]?.text || ''
+  return result.text || ''
 }
 
 async function sendWhatsApp(to: string, message: string) {
@@ -61,6 +59,7 @@ export async function handleMasterMessage(from: string, body: string, mediaUrl?:
       const pdfBuffer = Buffer.from(await pdfRes.arrayBuffer())
       const pdfBase64 = pdfBuffer.toString('base64')
 
+      // PDF extraction uses direct API call (multimodal content not supported by callAI wrapper)
       const extractRes = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01' },
@@ -68,8 +67,7 @@ export async function handleMasterMessage(from: string, body: string, mediaUrl?:
           model: 'claude-haiku-4-5-20251001', max_tokens: 3000,
           messages: [{ role: 'user', content: [
             { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 } },
-            { type: 'text', text: `Analiza este documento de seguros. Devuelve SOLO JSON:
-{"category":"dental"|"aca"|"vida"|"iul"|"medicare"|"otro","carrier":"nombre","product_name":"producto","knowledge":"resumen 500 palabras","keywords":["lista"]}` }
+            { type: 'text', text: `Analiza este documento. Devuelve SOLO JSON: {"category":"dental"|"aca"|"vida"|"iul"|"medicare"|"otro","carrier":"nombre","product_name":"producto","knowledge":"resumen 500 palabras","keywords":["lista"]}` }
           ] }],
         }),
       })
@@ -579,18 +577,13 @@ ${memoryText ? 'INSTRUCCIONES:\n' + memoryText : ''}`
       // Ensure first is user
       while (messages.length > 0 && messages[0].role === 'assistant') messages.shift()
 
-      // Call Claude with full conversation history
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 600, system: systemPrompt, messages }),
+      // Call Claude with full conversation history via token tracker
+      const { callAI } = await import('@/lib/token-tracker')
+      const aiResult = await callAI({
+        feature: 'master_command', model: 'claude-haiku-4-5-20251001', maxTokens: 600,
+        system: systemPrompt, messages,
       })
-      let response = ''
-      if (res.ok) {
-        const d = await res.json()
-        response = d.content?.[0]?.text || ''
-      }
-      if (!response) response = 'Disculpa, no pude procesar tu mensaje. Intenta de nuevo.'
+      let response = aiResult.text || 'Disculpa, no pude procesar tu mensaje. Intenta de nuevo.'
 
       // Save outbound to history (inbound already saved at top)
       await supabase.from('conversations').insert({ lead_phone: from, message: response, direction: 'outbound', created_at: new Date().toISOString() })
