@@ -82,14 +82,8 @@ export default function RegisterPage() {
 
     if (data.pending_verification) {
       setPhoneHint(data.phone_hint)
-      setSentVia(data.sent_via || 'none')
       setPendingCodeServer(data.pending_code || '')
       setPendingDataServer(data.pending_data || null)
-      // If code couldn't be sent, show it on screen
-      if (!data.code_sent && data.verification_code) {
-        setShowCodeOnScreen(true)
-        setVerifyCode(data.verification_code)
-      }
       setStep('verify')
     }
     setLoading(false)
@@ -389,20 +383,15 @@ export default function RegisterPage() {
                 <div style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '20px', padding: '36px 28px', textAlign: 'center' }}>
                   <div style={{ width: '56px', height: '56px', margin: '0 auto 20px', borderRadius: '16px', background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' }}>💬</div>
 
-                  <h2 style={{ fontFamily: '"Cormorant Garamond",serif', fontSize: '24px', fontWeight: 400, color: '#F0ECE3', margin: '0 0 8px' }}>Verifica tu telefono</h2>
-                  {showCodeOnScreen ? (
-                    <div style={{ marginBottom: '20px' }}>
-                      <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)', marginBottom: '12px' }}>Tu codigo de verificacion:</p>
-                      <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.2)', textAlign: 'center' }}>
-                        <p style={{ fontSize: '32px', fontWeight: 800, color: '#C9A84C', letterSpacing: '0.3em', margin: 0, fontFamily: 'monospace' }}>{verifyCode}</p>
-                      </div>
-                      <p style={{ fontSize: '11px', color: 'rgba(240,236,227,0.25)', marginTop: '8px' }}>Ingresa este codigo abajo para confirmar</p>
+                  <h2 style={{ fontFamily: '"Cormorant Garamond",serif', fontSize: '24px', fontWeight: 400, color: '#F0ECE3', margin: '0 0 8px' }}>Confirma tu identidad</h2>
+
+                  <div style={{ marginBottom: '20px' }}>
+                    <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)', marginBottom: '12px' }}>Tu codigo de verificacion:</p>
+                    <div style={{ padding: '18px', borderRadius: '14px', background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.2)', textAlign: 'center' }}>
+                      <p style={{ fontSize: '36px', fontWeight: 800, color: '#C9A84C', letterSpacing: '0.4em', margin: 0, fontFamily: 'monospace' }}>{pendingCodeServer}</p>
                     </div>
-                  ) : (
-                    <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)', marginBottom: '24px' }}>
-                      Enviamos un codigo de 6 digitos por {sentVia === 'sms' ? 'SMS' : 'WhatsApp'} a <span style={{ color: '#34d399', fontWeight: 600 }}>{phoneHint}</span>
-                    </p>
-                  )}
+                    <p style={{ fontSize: '11px', color: 'rgba(240,236,227,0.25)', marginTop: '8px', textAlign: 'center' }}>Ingresa este codigo abajo para verificar tu cuenta</p>
+                  </div>
 
                   <input type="text" value={verifyCode} onChange={e => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     placeholder="000000" required maxLength={6} autoFocus
