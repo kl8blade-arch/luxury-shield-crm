@@ -206,18 +206,30 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
             const acc = la.owner
             const isActive = activeAccount?.id === acc?.id && activeAccount?.isLinked
             return acc ? (
-              <div key={la.id} onClick={() => { switchAccount({ id: acc.id, name: acc.name, slug: acc.slug, industry: acc.industry || '', logo_url: acc.logo_url, isLinked: true, permissions: la.permissions }); onNavigate?.() }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 8px', borderRadius: '6px',
-                  cursor: 'pointer', marginBottom: '2px', transition: 'all 0.12s',
-                  background: isActive ? 'rgba(251,191,36,0.06)' : 'transparent',
-                  border: isActive ? '1px solid rgba(251,191,36,0.15)' : '1px solid transparent',
-                }}
-                onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)' }}
-                onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
-              >
-                <span style={{ fontSize: '10px' }}>🔗</span>
-                <span style={{ fontSize: '11px', color: isActive ? '#fbbf24' : 'rgba(240,236,227,0.4)', fontWeight: isActive ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acc.name}</span>
+              <div key={la.id} style={{
+                display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 8px', borderRadius: '6px',
+                marginBottom: '2px', transition: 'all 0.12s',
+                background: isActive ? 'rgba(251,191,36,0.06)' : 'transparent',
+                border: isActive ? '1px solid rgba(251,191,36,0.15)' : '1px solid transparent',
+              }}>
+                <div onClick={() => { switchAccount({ id: acc.id, name: acc.name, slug: acc.slug, industry: acc.industry || '', logo_url: acc.logo_url, isLinked: true, permissions: la.permissions }); onNavigate?.() }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, cursor: 'pointer', overflow: 'hidden' }}
+                  onMouseEnter={e => { if (!isActive) (e.currentTarget.parentElement as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)' }}
+                  onMouseLeave={e => { if (!isActive) (e.currentTarget.parentElement as HTMLDivElement).style.background = 'transparent' }}
+                >
+                  <span style={{ fontSize: '10px' }}>🔗</span>
+                  <span style={{ fontSize: '11px', color: isActive ? '#fbbf24' : 'rgba(240,236,227,0.4)', fontWeight: isActive ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acc.name}</span>
+                </div>
+                <span onClick={async (e) => {
+                  e.stopPropagation()
+                  if (!confirm(`Desvincular ${acc.name}?`)) return
+                  await fetch('/api/linked-accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'revoke', accountId: user?.account_id, linkId: la.id }) })
+                  if (isActive) switchAccount(null)
+                  setLinkedAccounts((prev: any[]) => prev.filter((l: any) => l.id !== la.id))
+                }} title="Desvincular" style={{ cursor: 'pointer', fontSize: '10px', color: 'rgba(240,236,227,0.2)', padding: '2px 4px', borderRadius: '4px', flexShrink: 0 }}
+                  onMouseEnter={e => (e.currentTarget.style.color = '#f87171')}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'rgba(240,236,227,0.2)')}
+                >✕</span>
               </div>
             ) : null
           })}
