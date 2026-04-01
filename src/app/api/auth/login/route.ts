@@ -21,8 +21,14 @@ export async function POST(req: NextRequest) {
 
     const agent = agents[0]
 
-    if (agent.status !== 'active') {
+    const allowedStatuses = ['active', 'verified', 'pending_payment']
+    if (!allowedStatuses.includes(agent.status)) {
       return NextResponse.json({ error: 'Cuenta desactivada. Contacta al administrador.' }, { status: 403 })
+    }
+
+    // If pending_payment, activate on login (Stripe webhook may have been delayed)
+    if (agent.status === 'pending_payment' || agent.status === 'verified') {
+      await supabase.from('agents').update({ status: 'active' }).eq('id', agent.id)
     }
 
     // If 2FA is enabled, don't return full user yet — require TOTP verification
