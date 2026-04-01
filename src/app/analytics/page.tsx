@@ -98,6 +98,18 @@ export default function AnalyticsPage() {
     const { data: msgs } = await supabase.from('conversations').select('created_at').eq('direction', 'inbound').gte('created_at', weekAgo)
     if (msgs) { const hours = Array(24).fill(0); for (const m of msgs) { hours[new Date(m.created_at).getHours()]++ }; setHeatmap(hours) }
 
+    // Load winning arguments from collective_patterns
+    const { data: winPatterns } = await supabase.from('collective_patterns')
+      .select('pattern_title, confidence_score, instance_count')
+      .eq('outcome', 'closed').order('confidence_score', { ascending: false }).limit(5)
+    setTopArgs((winPatterns || []).map(p => ({ arg: p.pattern_title, count: p.instance_count })))
+
+    // Load common objections from collective_patterns
+    const { data: objPatterns } = await supabase.from('collective_patterns')
+      .select('pattern_title, confidence_score, instance_count')
+      .in('pattern_type', ['objection_handler', 'losing_sequence']).order('instance_count', { ascending: false }).limit(5)
+    setTopObjs((objPatterns || []).map(p => ({ obj: p.pattern_title, count: p.instance_count })))
+
     setLoading(false)
   }, [])
 
@@ -298,6 +310,36 @@ export default function AnalyticsPage() {
               })}
             </div>
             <p style={{ color: C.textMuted, fontSize: '11px', marginTop: '10px' }}>Mejor hora para campañas: <span style={{ color: C.gold, fontWeight: 700 }}>{peakHour}:00</span> · Click en una hora para ver leads</p>
+          </div>
+          {/* Winning arguments + Objections */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '16px' }}>
+            {/* Winning arguments */}
+            <div style={{ ...CARD, padding: '20px', borderRadius: '16px' }}>
+              <h3 style={{ color: C.text, fontSize: '14px', fontWeight: 700, margin: '0 0 14px' }}>💪 Argumentos Ganadores</h3>
+              {topArgs.length === 0 ? (
+                <p style={{ color: C.textMuted, fontSize: '12px' }}>Se generan automaticamente del aprendizaje federado. Ejecuta un batch para ver datos.</p>
+              ) : topArgs.map((a: any, i: number) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                  <span style={{ width: '20px', height: '20px', borderRadius: '6px', background: 'rgba(52,211,153,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: '#34d399', fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
+                  <span style={{ flex: 1, fontSize: '12px', color: C.textDim, lineHeight: 1.3 }}>{a.arg}</span>
+                  <span style={{ fontSize: '11px', color: '#34d399', fontWeight: 700, flexShrink: 0 }}>{a.count}x</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Common objections */}
+            <div style={{ ...CARD, padding: '20px', borderRadius: '16px' }}>
+              <h3 style={{ color: C.text, fontSize: '14px', fontWeight: 700, margin: '0 0 14px' }}>🛡️ Objeciones Frecuentes</h3>
+              {topObjs.length === 0 ? (
+                <p style={{ color: C.textMuted, fontSize: '12px' }}>Se generan del analisis de conversaciones perdidas. Ejecuta un batch en Aprendizaje IA.</p>
+              ) : topObjs.map((o: any, i: number) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                  <span style={{ width: '20px', height: '20px', borderRadius: '6px', background: 'rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: '#f87171', fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
+                  <span style={{ flex: 1, fontSize: '12px', color: C.textDim, lineHeight: 1.3 }}>{o.obj}</span>
+                  <span style={{ fontSize: '11px', color: '#f87171', fontWeight: 700, flexShrink: 0 }}>{o.count}x</span>
+                </div>
+              ))}
+            </div>
           </div>
         </>
       )}

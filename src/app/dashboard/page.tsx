@@ -14,6 +14,7 @@ const CARDS = [
   { key: 'avg_score', label: 'Score promedio', color: '#f472b6', icon: '⭐' },
   { key: 'crossselling', label: 'Cross-selling', color: '#e879f9', icon: '💰' },
   { key: 'tokens', label: 'Tokens IA', color: '#C9A84C', icon: '🛡️' },
+  { key: 'patterns', label: 'Patrones IA', color: '#a78bfa', icon: '🧠' },
 ]
 
 export default function DashboardPage() {
@@ -44,7 +45,9 @@ export default function DashboardPage() {
       const sc = (scores || []).map((l: any) => l.score).filter(Boolean)
       const avg = sc.length ? Math.round(sc.reduce((a: number, b: number) => a + b, 0) / sc.length) : 0
       const tokensRemaining = Math.max(0, (agent?.tokens_limit || 0) + (agent?.tokens_extra || 0) - (agent?.tokens_used || 0))
-      setStats({ total_leads: total || 0, new_leads: newL || 0, ready_to_buy: ready || 0, pending_reminders: reminders || 0, tokens: tokensRemaining, closed_won: closed || 0, avg_score: avg, crossselling: cross || 0 })
+      // Get pattern count
+      const { count: patternCount } = await supabase.from('collective_patterns').select('*', { count: 'exact', head: true })
+      setStats({ total_leads: total || 0, new_leads: newL || 0, ready_to_buy: ready || 0, pending_reminders: reminders || 0, tokens: tokensRemaining, closed_won: closed || 0, avg_score: avg, crossselling: cross || 0, patterns: patternCount || 0 })
       setLeads(recent || [])
     } catch (e) { console.error(e) }
     setLoading(false)
@@ -92,6 +95,15 @@ export default function DashboardPage() {
             </div>
           ))}
         </div>
+
+        {/* Quick actions for admin */}
+        {isViewingSubAccount ? null : (
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
+            <a href="/sophia-os/learning" style={{ padding: '10px 20px', borderRadius: '10px', background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)', color: '#a78bfa', fontSize: '12px', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}>🧠 Aprendizaje IA</a>
+            <a href="/sophia-os" style={{ padding: '10px 20px', borderRadius: '10px', background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.2)', color: '#C9A84C', fontSize: '12px', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}>⚡ Sophia OS</a>
+            <a href="/training" style={{ padding: '10px 20px', borderRadius: '10px', background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.2)', color: '#60a5fa', fontSize: '12px', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}>📊 Training Data</a>
+          </div>
+        )}
 
         {/* Recent leads */}
         <div style={{ background: 'rgba(255,255,255,0.012)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: '18px', overflow: 'hidden' }}>
