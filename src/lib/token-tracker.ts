@@ -34,15 +34,16 @@ export async function callAI(options: AICallOptions): Promise<AIResponse> {
   // Admin bypasses everything
   const isAdmin = agentId === ADMIN_ID || !agentId
 
-  // 1. Check tokens (non-admin only)
+  // 1. Rate limiting + token check (non-admin only)
   if (!isAdmin && agentId) {
-    const { data: agent } = await supabase.from('agents').select('tokens_used, tokens_limit, tokens_extra, role, uses_own_ai_keys, anthropic_api_key').eq('id', agentId).single()
-    if (agent && agent.role !== 'admin') {
-      const remaining = (agent.tokens_limit || 0) + (agent.tokens_extra || 0) - (agent.tokens_used || 0)
-      if (remaining <= 0) {
+    try {
+      const { checkRateLimit } = await import('@/lib/rate-limiter')
+      const rateResult = await checkRateLimit(agentId, 1000)
+      if (!rateResult.allowed) {
+        console.log(`[AI] Rate limited: agent=${agentId} reason=${rateResult.reason}`)
         return { text: '', inputTokens: 0, outputTokens: 0, cost: 0 }
       }
-    }
+    } catch (e: any) { console.error('[RATE-LIMIT]', e.message) }
   }
 
   // 2. Get API key (agent's own encrypted key → decrypt, or platform managed)
@@ -100,6 +101,15 @@ export async function callAI(options: AICallOptions): Promise<AIResponse> {
       tokens_input: inputTokens, tokens_output: outputTokens, cost_usd: cost,
       conversation_type: feature,
     })
+
+    // Record in rate limiter counters
+    try {
+      const { recordTokensUsed } = await import('@/lib/rate-limiter')
+      await recordTokensUsed(agentId, inputTokens + outputTokens)
+    } catch {}
+
+    // Anomaly detection (async, don't block response)
+    import('@/lib/anomaly-detector').then(m => m.checkForAnomaly(agentId)).catch(() => {})
   }
 
   return { text, inputTokens, outputTokens, cost }

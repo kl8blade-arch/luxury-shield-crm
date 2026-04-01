@@ -12,6 +12,14 @@
     {
       "path": "/api/daily-token-report",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/expire-trials",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cleanup-rate-counters",
+      "schedule": "0 */2 * * *"
     }
   ]
 }

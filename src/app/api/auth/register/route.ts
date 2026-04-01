@@ -63,6 +63,16 @@ export async function POST(req: NextRequest) {
     const pwError = validatePassword(password)
     if (pwError) return NextResponse.json({ error: pwError }, { status: 400 })
 
+    // Trial abuse protection
+    try {
+      const { checkTrialEligibility } = await import('@/lib/trial-guard')
+      const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || 'unknown'
+      const eligibility = await checkTrialEligibility(email.toLowerCase(), phone.trim(), ip)
+      if (!eligibility.eligible) {
+        return NextResponse.json({ error: eligibility.message || 'No elegible para trial' }, { status: 403 })
+      }
+    } catch (e: any) { console.error('[TRIAL-GUARD]', e.message) }
+
     // Register agent (status = pending, NOT active — trial NOT started yet)
     const { data, error } = await supabase.rpc('register_agent', {
       p_name: name.trim(),
@@ -82,6 +92,13 @@ export async function POST(req: NextRequest) {
 
     // Set status to pending (not active until phone verified)
     await supabase.from('agents').update({ status: 'pending', trial_ends_at: null }).eq('id', newAgentId)
+
+    // Record trial signup for abuse prevention
+    try {
+      const { recordTrialSignup } = await import('@/lib/trial-guard')
+      const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+      await recordTrialSignup(newAgentId, email.toLowerCase(), phone.trim(), ip)
+    } catch {}
 
     // Generate 6-digit verification code
     const verifyCode = String(Math.floor(100000 + Math.random() * 900000))

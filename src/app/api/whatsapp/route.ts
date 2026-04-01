@@ -665,12 +665,33 @@ export async function POST(req: NextRequest) {
     const numMedia = parseInt(formData.get('NumMedia') as string || '0')
     const mediaType = formData.get('MediaContentType0') as string || ''
 
-    // Validate Twilio signature (basic: check AccountSid)
+    // ══════════════════════════════════════════════
+    // SECURITY: Validate Twilio + deduplicate
+    // ══════════════════════════════════════════════
     const accountSid = formData.get('AccountSid') as string || ''
     if (accountSid && accountSid !== TWILIO_SID) {
       console.error(`[SECURITY] Invalid AccountSid: ${accountSid}`)
+      // Log security event
+      try {
+        await supabase.from('tenant_security_events').insert({
+          event_type: 'invalid_webhook_signature', details: { account_sid: accountSid, ip: req.headers.get('x-forwarded-for') || 'unknown' },
+        })
+        await supabase.from('webhook_request_log').insert({ from_number: from, signature_valid: false, rejected_reason: 'invalid_account_sid' })
+      } catch {}
       return new NextResponse('Forbidden', { status: 403 })
     }
+
+    // Deduplication: prevent processing same message twice (Twilio retries)
+    const { createHash } = await import('crypto')
+    const bodyHash = createHash('sha256').update(`${from}:${body}:${mediaUrl}:${Date.now().toString().slice(0, -4)}`).digest('hex')
+    try {
+      const { data: existing } = await supabase.from('webhook_request_log').select('processed').eq('body_hash', bodyHash).single()
+      if (existing?.processed) {
+        console.log(`[DEDUP] Already processed: ${bodyHash.slice(0, 12)}`)
+        return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
+      }
+      await supabase.from('webhook_request_log').insert({ from_number: from, signature_valid: true, body_hash: bodyHash })
+    } catch {}
 
     console.log(`[TWILIO RAW] From: ${from} | Body: "${body}" | MediaUrl: ${mediaUrl ? 'yes' : 'no'} | NumMedia: ${numMedia} | Type: ${mediaType}`)
 
