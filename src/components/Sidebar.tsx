@@ -29,6 +29,7 @@ const NAV = [
   { href: '/tools',      icon: Settings,        label: 'Herramientas',    badge: null, admin: false },
   { href: '/training',   icon: Brain,           label: 'SophiaModel',     badge: null, admin: true },
   { href: '/accounts',   icon: Building2,       label: 'Mi Cuenta',       badge: null, admin: true },
+  { href: '/admin',      icon: Shield,          label: 'Admin Panel',     badge: null, admin: true },
   { href: '/sophia-os',  icon: Shield,          label: 'Sophia OS',       badge: null, admin: true },
   { href: '/settings',   icon: Settings,        label: 'Configuracion',   badge: null, admin: false },
 ]

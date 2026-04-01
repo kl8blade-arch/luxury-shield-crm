@@ -1,8 +1,8 @@
 /**
  * Applies agent/role scoping to a Supabase query.
- * Admin viewing main account sees all.
- * Admin viewing sub-account sees only that account's data.
- * Agent sees only their own.
+ * Admin viewing sub-account → scope to that account.
+ * Admin viewing own dashboard → scope to admin's own account.
+ * Agent → scope to their own data.
  */
 export function scopeQuery(
   query: any,
@@ -11,18 +11,20 @@ export function scopeQuery(
   activeAccountId?: string | null,
 ) {
   if (!user) return query
-  // Admin viewing a sub-account — scope to that account
+  // Admin viewing a specific sub/linked account
   if (user.role === 'admin' && activeAccountId) {
     return query.eq('account_id', activeAccountId)
   }
-  // Admin viewing main — sees all
-  if (user.role === 'admin') return query
+  // Admin viewing own dashboard — scope to OWN account (not all accounts)
+  if (user.role === 'admin' && user.account_id) {
+    return query.eq('account_id', user.account_id)
+  }
   // Agent sees their own
   return query.eq(field, user.id)
 }
 
 /**
- * Scope by account_id — for sub-account isolation
+ * Scope by account_id
  */
 export function scopeByAccount(
   query: any,
@@ -33,7 +35,6 @@ export function scopeByAccount(
   if (user.role === 'admin' && activeAccountId) {
     return query.eq('account_id', activeAccountId)
   }
-  if (user.role === 'admin') return query
   if (user.account_id) return query.eq('account_id', user.account_id)
   return query.eq('agent_id', user.id)
 }
