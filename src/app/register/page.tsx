@@ -102,9 +102,8 @@ export default function RegisterPage() {
     if (!res.ok) { setError(data.error); setLoading(false); return }
 
     if (data.verified && data.user) {
-      localStorage.setItem('ls_auth', JSON.stringify(data.user))
-
-      // Go to Stripe to register card (7-day free trial)
+      // DON'T save to localStorage yet — AuthContext would redirect to /login
+      // Save user data temporarily, redirect to Stripe FIRST
       const planData = PLANS.find(p => p.key === selectedPlan)
       try {
         const stripeRes = await fetch('/api/stripe/checkout', {
@@ -119,8 +118,15 @@ export default function RegisterPage() {
           }),
         })
         const stripeData = await stripeRes.json()
-        if (stripeData.url) { window.location.href = stripeData.url; return }
+        if (stripeData.url) {
+          // Save user ONLY right before redirecting to Stripe (page unloads)
+          localStorage.setItem('ls_auth', JSON.stringify(data.user))
+          window.location.href = stripeData.url
+          return
+        }
       } catch {}
+      // Fallback: save and go to packages
+      localStorage.setItem('ls_auth', JSON.stringify(data.user))
       window.location.href = '/packages'
     }
     setLoading(false)
