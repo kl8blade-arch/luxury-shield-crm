@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/contexts/AuthContext'
 import { C } from '@/lib/design'
 import EventModal from '@/components/EventModal'
 
@@ -16,6 +17,7 @@ const DAYS = ['D', 'L', 'M', 'Mi', 'J', 'V', 'S']
 const DAYS_FULL = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB']
 
 export default function CalendarPage() {
+  const { user } = useAuth()
   const [events, setEvents] = useState<any[]>([])
   const [current, setCurrent] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
@@ -33,13 +35,15 @@ export default function CalendarPage() {
   const today = new Date().toISOString().split('T')[0]
 
   const loadEvents = useCallback(async () => {
+    if (!user) return
     setLoading(true)
     const start = new Date(year, month, 1).toISOString()
     const end = new Date(year, month + 1, 0, 23, 59, 59).toISOString()
-    const { data } = await supabase.from('calendar_events').select('*').gte('start_time', start).lte('start_time', end).eq('status', 'scheduled').order('start_time')
+    // Calendar is strictly personal — each user only sees their own events
+    const { data } = await supabase.from('calendar_events').select('*').eq('agent_id', user.id).gte('start_time', start).lte('start_time', end).eq('status', 'scheduled').order('start_time')
     setEvents(data || [])
     setLoading(false)
-  }, [year, month])
+  }, [year, month, user])
 
   useEffect(() => { loadEvents() }, [loadEvents])
 
@@ -283,7 +287,7 @@ export default function CalendarPage() {
                               )}
                               <div style={{ display: 'flex', gap: '6px' }}>
                                 <button onClick={e => { e.stopPropagation(); setEditEvent(ev); setShowModal(true) }} style={{ flex: 1, padding: '8px', borderRadius: '8px', fontSize: '11px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)', color: '#C9A84C' }}>Editar</button>
-                                <button onClick={async e => { e.stopPropagation(); await supabase.from('calendar_events').update({ status: 'cancelled' }).eq('id', ev.id); loadEvents(); setSelectedEvent(null) }} style={{ flex: 1, padding: '8px', borderRadius: '8px', fontSize: '11px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)', color: '#fca5a5' }}>Cancelar</button>
+                                <button onClick={async e => { e.stopPropagation(); if (user) await supabase.from('calendar_events').update({ status: 'cancelled' }).eq('id', ev.id).eq('agent_id', user.id); loadEvents(); setSelectedEvent(null) }} style={{ flex: 1, padding: '8px', borderRadius: '8px', fontSize: '11px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)', color: '#fca5a5' }}>Cancelar</button>
                               </div>
                             </div>
                           )}

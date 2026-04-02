@@ -45,12 +45,14 @@ export default function SocialPage() {
   useEffect(() => { loadData() }, [tab])
 
   async function loadData() {
+    if (!user) return
     setLoading(true)
-    const [{ data: c }, { data: g }, { data: t }] = await Promise.all([
-      supabase.from('social_content').select('*').order('created_at', { ascending: false }).limit(20),
-      supabase.from('social_groups').select('*').order('relevance_score', { ascending: false }).limit(30),
-      supabase.from('social_trends').select('*').order('detected_at', { ascending: false }).limit(20),
-    ])
+    let cQuery = supabase.from('social_content').select('*').order('created_at', { ascending: false }).limit(20)
+    let gQuery = supabase.from('social_groups').select('*').order('relevance_score', { ascending: false }).limit(30)
+    let tQuery = supabase.from('social_trends').select('*').order('detected_at', { ascending: false }).limit(20)
+    // Scope to user's own content (or legacy null)
+    cQuery = cQuery.or(`agent_id.eq.${user.id},agent_id.is.null`)
+    const [{ data: c }, { data: g }, { data: t }] = await Promise.all([cQuery, gQuery, tQuery])
     setContent(c || []); setGroups(g || []); setTrends(t || [])
     setLoading(false)
   }
@@ -135,67 +137,30 @@ export default function SocialPage() {
     if (!genProduct) return
     setGenerating(true)
     try {
-      // Content generated from templates (no direct API call needed)
+      const res = await fetch('/api/social/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product: genProduct,
+          platform: genPlatform,
+          contentType: genType,
+          tone: genTone,
+          agentId: user?.id,
+          accountId: user?.account_id,
+        }),
+      })
 
-      // Generate content via server
-      const toneMap: Record<string, string> = {
-        curiosidad: 'Genera CURIOSIDAD sin vender. Usa curiosity gap, datos sorprendentes, historias parciales.',
-        educativo: 'Comparte conocimiento valioso de forma simple. Tips, datos, comparaciones.',
-        testimonial: 'Cuenta una historia en primera persona (ficticia pero realista) sobre los beneficios.',
-        controversial: 'Cuestiona lo que la gente cree saber. "Lo que tu financial advisor no te dice..."',
-        urgencia: 'Genera sentido de urgencia. Open enrollment, deadline, precios subiendo.',
-      }
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error generando contenido')
 
-      // For now, generate locally with preset templates
-      const templates: Record<string, Record<string, string[]>> = {
-        facebook: {
-          post: [
-            `🤔 Pregunta seria: cuantos de ustedes tienen 401k y saben EXACTAMENTE cuanto van a pagar de impuestos cuando se retiren?\n\nHice los numeros la semana pasada y casi me da un infarto. Si quieren que les haga el calculo gratis, comenten "YO" y les mando DM.`,
-            `Mi vecina de 42 anos acaba de ensenarme su plan de retiro. En 20 anos va a tener acceso a $340,000 TAX FREE. Yo con mi 401k del trabajo no llego ni a eso despues de impuestos.\n\nAlguien sabe de esta estrategia? Me dijo que no es ni Roth ni 401k...`,
-            `DATO: El 78% de las familias latinas en USA no tienen seguro dental. Y una emergencia dental cuesta entre $800-$2,000.\n\nHay planes desde $0 la primera visita. Si quieren info comenten 👇`,
-          ],
-          group_post: [
-            `Buenos dias grupo! Tengo una pregunta: alguno de ustedes ha comparado su 401k contra otras opciones de retiro? Estoy investigando y encontre algo interesante que quiero compartir si hay interes.`,
-            `Admin espero que sea ok preguntar: alguien aqui tiene seguro dental privado (no del trabajo)? Estoy buscando opciones para mi familia de 4 y quiero saber que les ha funcionado.`,
-          ],
-        },
-        instagram: {
-          story: [
-            `📊 Tu 401k despues de impuestos:\n$500,000 ahorrados\n-35% impuestos\n= $325,000 reales\n\n¿Sabias que hay una forma de llegar a $340K y pagar $0 en impuestos? 🤯\n\nDM "RETIRO" para info`,
-            `POV: Descubres que llevas 15 anos perdiendo dinero en tu plan de retiro 💀\n\nSwipe para ver los numeros ➡️`,
-          ],
-          reel: [
-            `Hook: "Si tienes 401k del trabajo NECESITAS ver esto"\nBody: 3 razones por las que tu 401k es una trampa fiscal:\n1. Pagas impuestos sobre TODO cuando retiras\n2. Te OBLIGAN a sacar a los 73\n3. Si mueres, tu familia paga impuestos\n\nHay una alternativa legal. Link en bio 📌`,
-          ],
-        },
-        tiktok: {
-          reel: [
-            `STORYTIME: Mi tia tenia $300k en el 401k. Se retiro. El gobierno le quito $90k en impuestos. Se quedo con $210k. Mi tio uso OTRA estrategia. $250k. $0 en impuestos. Mismo dinero, $40k mas en el bolsillo. Comenten IUL si quieren saber 👀`,
-            `3 cosas que tu dentista no te dice:\n1. Una emergencia dental cuesta $800-$2,000\n2. Hay planes desde $0 la primera visita\n3. Tu familia de 4 puede tener cobertura por $45/mes\n\nSave this 📌`,
-          ],
-        },
-        linkedin: {
-          post: [
-            `Despues de 10 anos trabajando en seguros, descubri que la mayoria de mis clientes high-earners estan dejando dinero sobre la mesa.\n\nNo es por falta de ahorro. Es por la ESTRUCTURA de su plan de retiro.\n\nUn ajuste en la estrategia puede significar $50K-$200K mas en retirement income.\n\nSi eres profesional ganando $80K+ y quieres una evaluacion gratuita de tu plan actual, envia un DM. Sin compromiso, solo numeros.`,
-          ],
-        },
-        twitter: {
-          thread: [
-            `🧵 HILO: Por que tu 401k es la mayor trampa fiscal que existe (y que hacer)\n\n1/ Metes dinero PRE-TAX. Suena bien, verdad? El problema es cuando lo sacas...\n\n2/ A los 65+ retiras y pagas 22-37% de impuestos sobre TODO. Si tienes $500K, pierdes hasta $185K.\n\n3/ A los 73 te OBLIGAN a sacar (RMD). No importa si no necesitas el dinero.\n\n4/ Hay una alternativa: crece tax-deferred, sacas tax-free, sin RMD, con death benefit. Legal y aprobado por el IRS.\n\n5/ No es Roth (tiene limite de $7K/ano y limite de ingreso). Es otra cosa.\n\nDM si quieres saber 📩`,
-          ],
-        },
-      }
-
-      const platformTemplates = templates[genPlatform] || templates.facebook
-      const typeTemplates = platformTemplates[genType] || platformTemplates[Object.keys(platformTemplates)[0]] || ['Contenido de prueba']
-      const selected = typeTemplates[Math.floor(Math.random() * typeTemplates.length)]
-
-      // Save to content queue
+      // Save AI-generated content to queue
       await supabase.from('social_content').insert({
         platform: genPlatform, content_type: genType,
-        content: selected, product: genProduct,
+        content: data.content, product: genProduct,
         curiosity_hook: genTone, status: 'draft',
-        hashtags: [`#${genProduct}`, `#${genPlatform}`, '#latinos', '#usa'],
+        hashtags: data.hashtags || [`#${genProduct}`, `#${genPlatform}`],
+        agent_id: user?.id || null,
+        account_id: user?.account_id || null,
       })
 
       loadData()
@@ -258,6 +223,22 @@ export default function SocialPage() {
               ))}
             </div>
 
+            {/* Niche selector for scanner */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: 'rgba(240,236,227,0.3)', marginBottom: '6px', letterSpacing: '0.1em' }}>NICHO A ESCANEAR</label>
+              <select value={genProduct} onChange={e => setGenProduct(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', fontSize: '13px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: '#F0ECE3', fontFamily: 'inherit' }}>
+                <option value="">Todos los nichos</option>
+                <option value="dental">Seguro Dental</option>
+                <option value="iul">IUL / Vida</option>
+                <option value="aca">ACA / Obamacare</option>
+                <option value="medicare">Medicare</option>
+                <option value="bienes_raices">Bienes Raices</option>
+                <option value="dropshipping">Dropshipping</option>
+                <option value="infoproductos">Infoproductos / Cursos</option>
+                <option value="inversion">Inversiones</option>
+              </select>
+            </div>
+
             <button onClick={scanPlatform} disabled={generating} style={{
               width: '100%', padding: '16px', borderRadius: '14px', fontSize: '15px', fontWeight: 700, fontFamily: 'inherit',
               background: generating ? 'rgba(24,119,242,0.2)' : `linear-gradient(135deg, ${currentPlatform?.color || '#60a5fa'}, ${currentPlatform?.color || '#60a5fa'}CC)`,
@@ -279,13 +260,24 @@ export default function SocialPage() {
                 <div>
                   <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: 'rgba(240,236,227,0.3)', marginBottom: '6px', letterSpacing: '0.1em' }}>PRODUCTO</label>
                   <select value={genProduct} onChange={e => setGenProduct(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', fontSize: '13px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: '#F0ECE3', fontFamily: 'inherit' }}>
-                    <option value="">Seleccionar...</option>
-                    <option value="dental">Seguro Dental</option>
-                    <option value="iul">IUL / Vida</option>
-                    <option value="aca">ACA / Obamacare</option>
-                    <option value="medicare">Medicare</option>
-                    <option value="realtor">Bienes Raices</option>
-                    <option value="inversion">Inversiones</option>
+                    <option value="">Seleccionar nicho...</option>
+                    <optgroup label="Seguros">
+                      <option value="dental">Seguro Dental</option>
+                      <option value="iul">IUL / Vida</option>
+                      <option value="aca">ACA / Obamacare</option>
+                      <option value="medicare">Medicare</option>
+                    </optgroup>
+                    <optgroup label="Real Estate">
+                      <option value="bienes_raices">Bienes Raices</option>
+                      <option value="realtor">Realtor / Agente</option>
+                    </optgroup>
+                    <optgroup label="E-Commerce">
+                      <option value="dropshipping">Dropshipping</option>
+                      <option value="infoproductos">Infoproductos / Cursos</option>
+                    </optgroup>
+                    <optgroup label="Finanzas">
+                      <option value="inversion">Inversiones</option>
+                    </optgroup>
                   </select>
                 </div>
                 <div>

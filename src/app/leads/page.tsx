@@ -25,6 +25,18 @@ function LeadsPage() {
   const [loading, setLoading] = useState(true)
   const [focused, setFocused] = useState(false)
   const [filterLabel, setFilterLabel] = useState('')
+  const [showNewLead, setShowNewLead] = useState(false)
+  const [newLead, setNewLead] = useState({
+    name: '', phone: '', email: '', state: '', insurance_type: 'dental', notes: '',
+    city: '', zip_code: '', country: 'US', age: '', gender: '', marital_status: '',
+    children: '', occupation: '', income_range: '', industry: '',
+    referral_source: '', preferred_language: 'es', preferred_contact: 'whatsapp',
+    budget_range: '', decision_timeline: '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [exporting, setExporting] = useState(false)
+  const [showMoreFields, setShowMoreFields] = useState(false)
 
   useEffect(() => { if (user) loadLeads() }, [user])
 
@@ -88,6 +100,94 @@ function LeadsPage() {
     if (selected?.id === id) setSelected(p => p ? { ...p, contact_attempts: v } : null)
   }
 
+  const emptyLead = {
+    name: '', phone: '', email: '', state: '', insurance_type: 'dental', notes: '',
+    city: '', zip_code: '', country: 'US', age: '', gender: '', marital_status: '',
+    children: '', occupation: '', income_range: '', industry: '',
+    referral_source: '', preferred_language: 'es', preferred_contact: 'whatsapp',
+    budget_range: '', decision_timeline: '',
+  }
+
+  async function createLead() {
+    if (!user || !newLead.name.trim()) return
+    setSaving(true)
+    setSaveError('')
+    try {
+      const payload: Record<string, any> = {
+        name: newLead.name.trim(),
+        phone: newLead.phone.trim() || '',
+        email: newLead.email.trim() || null,
+        state: newLead.state.trim() || null,
+        insurance_type: newLead.insurance_type || 'dental',
+        notes: newLead.notes.trim() || null,
+        agent_id: user.id,
+        account_id: user.account_id,
+      }
+      // Metadata
+      if (newLead.city) payload.city = newLead.city.trim()
+      if (newLead.zip_code) payload.zip_code = newLead.zip_code.trim()
+      if (newLead.country) payload.country = newLead.country.trim()
+      if (newLead.age) payload.age = newLead.age
+      if (newLead.gender) payload.gender = newLead.gender
+      if (newLead.marital_status) payload.marital_status = newLead.marital_status
+      if (newLead.children) payload.children = newLead.children
+      if (newLead.occupation) payload.occupation = newLead.occupation.trim()
+      if (newLead.income_range) payload.income_range = newLead.income_range
+      if (newLead.industry) payload.industry = newLead.industry.trim()
+      if (newLead.referral_source) payload.referral_source = newLead.referral_source.trim()
+      if (newLead.preferred_language) payload.preferred_language = newLead.preferred_language
+      if (newLead.preferred_contact) payload.preferred_contact = newLead.preferred_contact
+      if (newLead.budget_range) payload.budget_range = newLead.budget_range
+      if (newLead.decision_timeline) payload.decision_timeline = newLead.decision_timeline
+
+      const res = await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setSaveError(data.error || 'Error al crear lead')
+        setSaving(false)
+        return
+      }
+      setShowNewLead(false)
+      setShowMoreFields(false)
+      setNewLead(emptyLead)
+      setSaveError('')
+      loadLeads()
+    } catch (err: any) {
+      setSaveError(err.message || 'Error de conexion')
+    }
+    setSaving(false)
+  }
+
+  async function exportLeads() {
+    if (!user) return
+    setExporting(true)
+    try {
+      const params = new URLSearchParams({
+        agent_id: user.id,
+        account_id: user.account_id || '',
+        role: user.role,
+        format: 'csv',
+      })
+      const res = await fetch(`/api/leads?${params}`)
+      if (!res.ok) throw new Error('Error al exportar')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `leads_${new Date().toISOString().split('T')[0]}.csv`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch {}
+    setExporting(false)
+  }
+
+  const fld = { width: '100%', padding: '10px 14px', borderRadius: '10px', fontSize: '13px', background: C.surface2, border: `1px solid ${C.border}`, color: C.text, outline: 'none', fontFamily: C.font, boxSizing: 'border-box' as const }
   const inp = { background: C.surface2, border: `1px solid ${focused ? C.borderGold : C.border}`, borderRadius: '10px', color: C.text, fontSize: '13px', outline: 'none', padding: '10px 14px', transition: 'border-color 0.2s' }
 
   return (
@@ -105,9 +205,14 @@ function LeadsPage() {
                 {loading ? 'Cargando...' : filterLabel ? `${filterLabel} (${filtered.length})` : `${filtered.length} lead${filtered.length !== 1 ? 's' : ''}`}
               </p>
             </div>
-            <button style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '11px 22px', borderRadius: '10px', border: 'none', cursor: 'pointer', background: `linear-gradient(135deg, ${C.goldBright}, ${C.gold})`, color: '#07080A', fontSize: '13px', fontWeight: 700, boxShadow: '0 4px 20px rgba(201,168,76,0.3)' }}>
-              + Nuevo lead
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={exportLeads} disabled={exporting || leads.length === 0} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '11px 18px', borderRadius: '10px', border: `1px solid ${C.border}`, cursor: leads.length > 0 ? 'pointer' : 'not-allowed', background: 'rgba(255,255,255,0.02)', color: C.textDim, fontSize: '12px', fontWeight: 600, fontFamily: C.font }}>
+                {exporting ? 'Exportando...' : 'Descargar Excel'}
+              </button>
+              <button onClick={() => { setShowNewLead(true); setSaveError('') }} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '11px 22px', borderRadius: '10px', border: 'none', cursor: 'pointer', background: `linear-gradient(135deg, ${C.goldBright}, ${C.gold})`, color: '#07080A', fontSize: '13px', fontWeight: 700, boxShadow: '0 4px 20px rgba(201,168,76,0.3)', fontFamily: C.font }}>
+                + Nuevo lead
+              </button>
+            </div>
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
             <div style={{ position: 'relative', flex: 1, maxWidth: '340px' }}>
@@ -115,7 +220,7 @@ function LeadsPage() {
               <input type="text" placeholder="Buscar por nombre, teléfono, email..." value={search} onChange={e => setSearch(e.target.value)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
                 style={{ ...inp, paddingLeft: '36px', width: '100%', boxSizing: 'border-box' as const }} />
             </div>
-            <select value={stage} onChange={e => setStage(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+            <select value={stage} onChange={e => setStage(e.target.value)} style={{ ...inp, cursor: 'pointer', fontFamily: C.font }}>
               {STAGES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
           </div>
@@ -134,8 +239,7 @@ function LeadsPage() {
               </p>
               {!search && stage === 'all' && (
                 <div style={{ display: 'flex', gap: '10px' }}>
-                  <a href="https://luxuryshieldinsurance.com" target="_blank" style={{ padding: '10px 20px', borderRadius: '10px', background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.25)', color: C.gold, fontSize: '13px', fontWeight: 600 }}>Ver landing →</a>
-                  <button style={{ padding: '10px 20px', borderRadius: '10px', border: `1px solid ${C.border}`, background: 'transparent', color: C.textDim, fontSize: '13px', cursor: 'pointer' }}>+ Lead manual</button>
+                  <button onClick={() => { setShowNewLead(true); setSaveError('') }} style={{ padding: '10px 20px', borderRadius: '10px', background: `linear-gradient(135deg, ${C.goldBright}, ${C.gold})`, border: 'none', color: '#07080A', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: C.font }}>+ Crear lead manual</button>
                 </div>
               )}
             </div>
@@ -200,6 +304,196 @@ function LeadsPage() {
             setSelected(null)
           }}
         />
+      )}
+
+      {/* NEW LEAD MODAL */}
+      {showNewLead && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.75)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={() => setShowNewLead(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#0f1115', border: '1px solid rgba(255,255,255,0.11)', borderRadius: '16px', padding: '28px', width: '520px', maxWidth: '95vw', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 24px 80px rgba(0,0,0,0.8)' }}>
+            <h3 style={{ color: '#F0ECE3', fontSize: '18px', fontWeight: 700, margin: '0 0 20px', fontFamily: C.font }}>Nuevo Lead</h3>
+
+            {saveError && (
+              <div style={{ marginBottom: '14px', padding: '10px 14px', borderRadius: '10px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', fontSize: '12px', color: '#fca5a5' }}>{saveError}</div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* Basic info */}
+              <div>
+                <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'rgba(240,236,227,0.35)', marginBottom: '5px', letterSpacing: '0.1em' }}>NOMBRE *</label>
+                <input placeholder="Nombre del lead" value={newLead.name} onChange={e => setNewLead(p => ({ ...p, name: e.target.value }))} autoFocus style={fld} />
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'rgba(240,236,227,0.35)', marginBottom: '5px', letterSpacing: '0.1em' }}>TELEFONO</label>
+                  <input placeholder="+1 (786) 555-1234" value={newLead.phone} onChange={e => setNewLead(p => ({ ...p, phone: e.target.value }))} style={fld} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'rgba(240,236,227,0.35)', marginBottom: '5px', letterSpacing: '0.1em' }}>EMAIL</label>
+                  <input placeholder="email@ejemplo.com" type="email" value={newLead.email} onChange={e => setNewLead(p => ({ ...p, email: e.target.value }))} style={fld} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'rgba(240,236,227,0.35)', marginBottom: '5px', letterSpacing: '0.1em' }}>ESTADO</label>
+                  <input placeholder="FL, TX, CA..." value={newLead.state} onChange={e => setNewLead(p => ({ ...p, state: e.target.value }))} style={fld} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'rgba(240,236,227,0.35)', marginBottom: '5px', letterSpacing: '0.1em' }}>PRODUCTO / INDUSTRIA</label>
+                  <select value={newLead.insurance_type} onChange={e => setNewLead(p => ({ ...p, insurance_type: e.target.value }))} style={fld}>
+                    <option value="dental">Dental</option>
+                    <option value="iul">IUL / Vida</option>
+                    <option value="aca">ACA / Obamacare</option>
+                    <option value="medicare">Medicare</option>
+                    <option value="auto">Auto</option>
+                    <option value="hogar">Hogar</option>
+                    <option value="bienes_raices">Bienes Raices</option>
+                    <option value="infoproductos">Infoproductos</option>
+                    <option value="dropshipping">Dropshipping</option>
+                    <option value="otro">Otro</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'rgba(240,236,227,0.35)', marginBottom: '5px', letterSpacing: '0.1em' }}>NOTAS</label>
+                <textarea placeholder="Notas sobre este lead (opcional)" value={newLead.notes} onChange={e => setNewLead(p => ({ ...p, notes: e.target.value }))} rows={2} style={{ ...fld, resize: 'none' }} />
+              </div>
+
+              {/* Expandable metadata */}
+              <button type="button" onClick={() => setShowMoreFields(!showMoreFields)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '10px 14px', borderRadius: '10px', background: 'rgba(201,168,76,0.04)', border: '1px solid rgba(201,168,76,0.12)', color: '#C9A84C', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: C.font }}>
+                <span>Datos demograficos (para Sophia IA)</span>
+                <span style={{ fontSize: '14px' }}>{showMoreFields ? '−' : '+'}</span>
+              </button>
+
+              {showMoreFields && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '14px', borderRadius: '12px', background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)' }}>
+                  <p style={{ fontSize: '10px', color: 'rgba(201,168,76,0.5)', margin: '0 0 4px', letterSpacing: '0.08em' }}>Sophia usa estos datos para mejorar segmentacion y personalizar mensajes</p>
+
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'rgba(240,236,227,0.35)', marginBottom: '4px', letterSpacing: '0.1em' }}>CIUDAD</label>
+                      <input placeholder="Miami, Houston..." value={newLead.city} onChange={e => setNewLead(p => ({ ...p, city: e.target.value }))} style={fld} />
+                    </div>
+                    <div style={{ width: '100px' }}>
+                      <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'rgba(240,236,227,0.35)', marginBottom: '4px', letterSpacing: '0.1em' }}>ZIP</label>
+                      <input placeholder="33101" value={newLead.zip_code} onChange={e => setNewLead(p => ({ ...p, zip_code: e.target.value }))} style={fld} />
+                    </div>
+                    <div style={{ width: '80px' }}>
+                      <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'rgba(240,236,227,0.35)', marginBottom: '4px', letterSpacing: '0.1em' }}>EDAD</label>
+                      <input placeholder="35" type="number" value={newLead.age} onChange={e => setNewLead(p => ({ ...p, age: e.target.value }))} style={fld} />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'rgba(240,236,227,0.35)', marginBottom: '4px', letterSpacing: '0.1em' }}>GENERO</label>
+                      <select value={newLead.gender} onChange={e => setNewLead(p => ({ ...p, gender: e.target.value }))} style={fld}>
+                        <option value="">--</option>
+                        <option value="masculino">Masculino</option>
+                        <option value="femenino">Femenino</option>
+                        <option value="otro">Otro</option>
+                      </select>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'rgba(240,236,227,0.35)', marginBottom: '4px', letterSpacing: '0.1em' }}>ESTADO CIVIL</label>
+                      <select value={newLead.marital_status} onChange={e => setNewLead(p => ({ ...p, marital_status: e.target.value }))} style={fld}>
+                        <option value="">--</option>
+                        <option value="soltero">Soltero/a</option>
+                        <option value="casado">Casado/a</option>
+                        <option value="divorciado">Divorciado/a</option>
+                        <option value="viudo">Viudo/a</option>
+                        <option value="union_libre">Union libre</option>
+                      </select>
+                    </div>
+                    <div style={{ width: '80px' }}>
+                      <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'rgba(240,236,227,0.35)', marginBottom: '4px', letterSpacing: '0.1em' }}>HIJOS</label>
+                      <input placeholder="0" type="number" value={newLead.children} onChange={e => setNewLead(p => ({ ...p, children: e.target.value }))} style={fld} />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'rgba(240,236,227,0.35)', marginBottom: '4px', letterSpacing: '0.1em' }}>OCUPACION</label>
+                      <input placeholder="Ej: Enfermera, Mecanico, Dueno negocio" value={newLead.occupation} onChange={e => setNewLead(p => ({ ...p, occupation: e.target.value }))} style={fld} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'rgba(240,236,227,0.35)', marginBottom: '4px', letterSpacing: '0.1em' }}>INDUSTRIA</label>
+                      <input placeholder="Salud, Construccion, Tech..." value={newLead.industry} onChange={e => setNewLead(p => ({ ...p, industry: e.target.value }))} style={fld} />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'rgba(240,236,227,0.35)', marginBottom: '4px', letterSpacing: '0.1em' }}>RANGO INGRESO</label>
+                      <select value={newLead.income_range} onChange={e => setNewLead(p => ({ ...p, income_range: e.target.value }))} style={fld}>
+                        <option value="">--</option>
+                        <option value="0-25k">$0 - $25K</option>
+                        <option value="25k-50k">$25K - $50K</option>
+                        <option value="50k-75k">$50K - $75K</option>
+                        <option value="75k-100k">$75K - $100K</option>
+                        <option value="100k-150k">$100K - $150K</option>
+                        <option value="150k+">$150K+</option>
+                      </select>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'rgba(240,236,227,0.35)', marginBottom: '4px', letterSpacing: '0.1em' }}>PRESUPUESTO</label>
+                      <select value={newLead.budget_range} onChange={e => setNewLead(p => ({ ...p, budget_range: e.target.value }))} style={fld}>
+                        <option value="">--</option>
+                        <option value="0-50">$0 - $50/mes</option>
+                        <option value="50-100">$50 - $100/mes</option>
+                        <option value="100-200">$100 - $200/mes</option>
+                        <option value="200-500">$200 - $500/mes</option>
+                        <option value="500+">$500+/mes</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'rgba(240,236,227,0.35)', marginBottom: '4px', letterSpacing: '0.1em' }}>REFERIDO POR</label>
+                      <input placeholder="Nombre o fuente" value={newLead.referral_source} onChange={e => setNewLead(p => ({ ...p, referral_source: e.target.value }))} style={fld} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'rgba(240,236,227,0.35)', marginBottom: '4px', letterSpacing: '0.1em' }}>TIMELINE DECISION</label>
+                      <select value={newLead.decision_timeline} onChange={e => setNewLead(p => ({ ...p, decision_timeline: e.target.value }))} style={fld}>
+                        <option value="">--</option>
+                        <option value="inmediato">Inmediato</option>
+                        <option value="1_semana">1 semana</option>
+                        <option value="1_mes">1 mes</option>
+                        <option value="3_meses">3 meses</option>
+                        <option value="explorando">Solo explorando</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'rgba(240,236,227,0.35)', marginBottom: '4px', letterSpacing: '0.1em' }}>IDIOMA</label>
+                      <select value={newLead.preferred_language} onChange={e => setNewLead(p => ({ ...p, preferred_language: e.target.value }))} style={fld}>
+                        <option value="es">Espanol</option>
+                        <option value="en">English</option>
+                        <option value="pt">Portugues</option>
+                      </select>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'rgba(240,236,227,0.35)', marginBottom: '4px', letterSpacing: '0.1em' }}>CONTACTO PREFERIDO</label>
+                      <select value={newLead.preferred_contact} onChange={e => setNewLead(p => ({ ...p, preferred_contact: e.target.value }))} style={fld}>
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="sms">SMS</option>
+                        <option value="llamada">Llamada</option>
+                        <option value="email">Email</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', marginTop: '20px', justifyContent: 'flex-end' }}>
+              <button onClick={() => { setShowNewLead(false); setShowMoreFields(false) }} style={{ padding: '10px 20px', borderRadius: '10px', background: 'transparent', border: `1px solid ${C.border}`, color: 'rgba(240,236,227,0.4)', fontSize: '13px', cursor: 'pointer', fontFamily: C.font }}>Cancelar</button>
+              <button onClick={createLead} disabled={saving || !newLead.name.trim()} style={{ padding: '10px 28px', borderRadius: '10px', background: newLead.name.trim() ? `linear-gradient(135deg, ${C.goldBright}, ${C.gold})` : 'rgba(201,168,76,0.3)', color: '#07080A', fontSize: '13px', fontWeight: 700, border: 'none', cursor: newLead.name.trim() ? 'pointer' : 'not-allowed', fontFamily: C.font, boxShadow: newLead.name.trim() ? '0 4px 16px rgba(201,168,76,0.3)' : 'none' }}>{saving ? 'Guardando...' : 'Crear Lead'}</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

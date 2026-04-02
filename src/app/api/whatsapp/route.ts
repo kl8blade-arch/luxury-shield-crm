@@ -1418,6 +1418,56 @@ ${productOppsText}
       }
     }
 
+    // ── Extract metadata from conversation for Sophia learning (non-blocking) ──
+    try {
+      const msgLower = body.toLowerCase()
+      const metaUpdate: Record<string, any> = {}
+
+      // Auto-detect language from message
+      const enWords = (body.match(/\b(the|and|for|that|with|have|this|from|they|been|will|your|what|when|how|about)\b/gi) || []).length
+      const esWords = (body.match(/\b(que|para|con|por|una|los|las|del|como|esta|tiene|pero|mas|todo|hace|puede)\b/gi) || []).length
+      if (enWords > 3 && enWords > esWords * 2) metaUpdate.preferred_language = 'en'
+      else if (esWords > 3) metaUpdate.preferred_language = 'es'
+
+      // Detect family info
+      const hijosMatch = body.match(/(\d+)\s*(hijos?|children|kids|ninos?)/i)
+      if (hijosMatch && !lead.children) metaUpdate.children = parseInt(hijosMatch[1])
+
+      const edadMatch = body.match(/tengo\s*(\d{2})\s*(anos?|years?)/i) || body.match(/(\d{2})\s*(anos?|years?\s*old)/i)
+      if (edadMatch && !lead.age) metaUpdate.age = parseInt(edadMatch[1])
+
+      // Detect city/location mentions
+      const cityMatch = body.match(/(?:vivo|live|soy de|estoy en|from)\s+(?:en\s+)?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i)
+      if (cityMatch && !lead.city) metaUpdate.city = cityMatch[1]
+
+      // Detect occupation
+      const occMatch = body.match(/(?:soy|trabajo como|work as|i am a|mi trabajo es)\s+(.{3,30}?)(?:\.|,|$)/i)
+      if (occMatch && !lead.occupation) metaUpdate.occupation = occMatch[1].trim()
+
+      // Detect marital status
+      if (!lead.marital_status) {
+        if (/\b(casad[oa]|married|esposa?|husband|wife)\b/i.test(msgLower)) metaUpdate.marital_status = 'casado'
+        else if (/\b(solter[oa]|single)\b/i.test(msgLower)) metaUpdate.marital_status = 'soltero'
+        else if (/\b(divorciad[oa]|divorced)\b/i.test(msgLower)) metaUpdate.marital_status = 'divorciado'
+      }
+
+      // Accumulate insights in sophia_insights jsonb
+      const currentInsights = lead.sophia_insights || {}
+      const msgCount = (currentInsights.message_count || 0) + 1
+      metaUpdate.sophia_insights = {
+        ...currentInsights,
+        message_count: msgCount,
+        last_topic: body.substring(0, 100),
+        last_interaction: new Date().toISOString(),
+      }
+
+      if (Object.keys(metaUpdate).length > 1) {
+        await supabase.from('leads').update(metaUpdate).eq('id', lead.id)
+      }
+    } catch (metaErr) {
+      console.error('[META] Non-blocking metadata extraction error:', metaErr)
+    }
+
     // Release processing lock + return
     if (lead?.id) await supabase.from('leads').update({ sophia_processing: false }).eq('id', lead.id)
     return new NextResponse(

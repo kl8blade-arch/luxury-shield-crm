@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/contexts/AuthContext'
 import { C } from '@/lib/design'
 
 const TYPES = [
@@ -14,6 +15,7 @@ const TYPES = [
 interface Props { date?: string; event?: any; onClose: () => void; onSaved: () => void }
 
 export default function EventModal({ date, event, onClose, onSaved }: Props) {
+  const { user } = useAuth()
   const [type, setType] = useState(event?.event_type || 'work')
   const [title, setTitle] = useState(event?.title || '')
   const [eventDate, setEventDate] = useState(date || event?.start_time?.split('T')[0] || new Date().toISOString().split('T')[0])
@@ -30,9 +32,10 @@ export default function EventModal({ date, event, onClose, onSaved }: Props) {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (leadSearch.length < 2) { setLeads([]); return }
-    supabase.from('leads').select('id, name, phone, color_favorito, state').ilike('name', `%${leadSearch}%`).limit(5).then(({ data }) => setLeads(data || []))
-  }, [leadSearch])
+    if (leadSearch.length < 2 || !user) { setLeads([]); return }
+    // Only search leads belonging to this user
+    supabase.from('leads').select('id, name, phone, color_favorito, state').eq('agent_id', user.id).ilike('name', `%${leadSearch}%`).limit(5).then(({ data }) => setLeads(data || []))
+  }, [leadSearch, user])
 
   async function save() {
     if (!title) return
@@ -48,10 +51,15 @@ export default function EventModal({ date, event, onClose, onSaved }: Props) {
       lead_phone: selectedLead?.phone || null, lead_color: selectedLead?.color_favorito || null,
       notify_whatsapp: notifyWA, notify_sms: notifySMS, notify_minutes_before: notifyMins,
       created_via: 'crm', status: 'scheduled',
+      agent_id: user?.id || null,
+      account_id: user?.account_id || null,
     }
 
     if (event?.id) {
-      await supabase.from('calendar_events').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', event.id)
+      // Only update own events
+      let q = supabase.from('calendar_events').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', event.id)
+      if (user) q = q.eq('agent_id', user.id)
+      await q
     } else {
       await supabase.from('calendar_events').insert(payload)
     }

@@ -269,12 +269,15 @@ Acciones Sophia:
         if (leads?.[0]) { leadId = leads[0].id; leadPhone = leads[0].phone }
       }
 
-      // Create calendar event
+      // Create calendar event — scoped to master agent
+      const { data: masterAgent } = await supabase.from('agents').select('id, account_id').eq('phone', MASTER_CLEAN).single()
       const endDate = new Date(eventDate.getTime() + 30 * 60 * 1000) // 30 min default
       await supabase.from('calendar_events').insert({
         title, start_time: eventDate.toISOString(), end_time: endDate.toISOString(),
         event_type: 'lead_call', status: 'scheduled',
         lead_name: intent.lead_name || null, lead_phone: leadPhone,
+        agent_id: masterAgent?.id || null,
+        account_id: masterAgent?.account_id || null,
       })
 
       // Also create a reminder

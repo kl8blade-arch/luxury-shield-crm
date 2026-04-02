@@ -22,7 +22,7 @@ const NAV = [
   { href: '/agents',     icon: UserCheck,        label: 'Agentes',         badge: null, admin: true },
   { href: '/packages',   icon: Package,         label: 'Paquetes',        badge: null, admin: false },
   { href: '/campaigns',   icon: BarChart3,       label: 'Campanas',        badge: null, admin: false },
-  { href: '/social',      icon: Share2,          label: 'Social IA',       badge: null, admin: false },
+  { href: '/social',      icon: Share2,          label: 'Social IA',       badge: null, admin: true },
   { href: '/marketplace', icon: Package,         label: 'Marketplace',     badge: null, admin: false },
   { href: '/import',     icon: Upload,          label: 'Importar',        badge: null, admin: false },
   { href: '/vault',      icon: Archive,         label: 'Vault',           badge: null, admin: true },

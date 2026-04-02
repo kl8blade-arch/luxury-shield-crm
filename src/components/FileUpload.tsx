@@ -39,13 +39,13 @@ export default function FileUpload({ accept = 'image/*', onFile, children, style
   }
 
   return (
-    <div onClick={handleClick} style={{ cursor: 'pointer', ...style }}>
+    <div onClick={handleClick} style={{ cursor: 'pointer', position: 'relative', ...style }}>
       <input
         ref={inputRef}
         type="file"
         accept={accept}
         onChange={handleChange}
-        style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }}
+        style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: '1px', height: '1px', opacity: 0 }}
         tabIndex={-1}
       />
       {children}

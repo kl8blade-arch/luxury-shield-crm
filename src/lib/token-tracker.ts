@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-type TokenFeature = 'sophia_whatsapp' | 'coach_realtime' | 'training_generation' | 'audio_transcription' | 'master_command' | 'landing_builder' | 'other'
+type TokenFeature = 'sophia_whatsapp' | 'coach_realtime' | 'training_generation' | 'audio_transcription' | 'master_command' | 'landing_builder' | 'social_content' | 'other'
 
 interface AICallOptions {
   agentId?: string | null
