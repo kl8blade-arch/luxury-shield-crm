@@ -6,8 +6,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const MASTER_ADMIN_ID = 'ee0389f9-6506-4a48-a6f0-6281ade670b9'
-
 export async function POST(req: NextRequest) {
   try {
     const { lead_id, message, agent_id } = await req.json()
@@ -19,26 +17,50 @@ export async function POST(req: NextRequest) {
     // Determine which agent is sending
     const sendingAgentId = agent_id || lead.agent_id
 
-    // Admin (master) always uses master Twilio
-    if (sendingAgentId === MASTER_ADMIN_ID) {
+    // Look up the agent to check role
+    let isAdmin = false
+    if (sendingAgentId) {
+      const { data: agent } = await supabase.from('agents').select('role').eq('id', sendingAgentId).single()
+      isAdmin = agent?.role === 'admin'
+    }
+
+    if (isAdmin) {
+      // Admin (master account) — unlimited, uses master Twilio
       const sid = process.env.TWILIO_ACCOUNT_SID!
       const token = process.env.TWILIO_AUTH_TOKEN!
       const from = process.env.TWILIO_WHATSAPP_FROM!
       await sendVia(sid, token, from, lead.phone, message)
-    } else {
-      // Non-admin agent — must have their own WhatsApp config
+    } else if (sendingAgentId) {
+      // Non-admin — check for their own Twilio config
       const { getTwilioConfigForAgent } = await import('@/lib/twilio-provisioner')
       const config = await getTwilioConfigForAgent(sendingAgentId)
 
-      if (!config) {
-        return NextResponse.json({
-          error: 'whatsapp_not_configured',
-          message: 'No tienes un numero de WhatsApp configurado. Configura tu propio API o contrata nuestro plan WhatsApp Business por $20/mes con conversaciones ilimitadas.',
-          action: 'configure_whatsapp',
-        }, { status: 403 })
-      }
+      if (config) {
+        // Has their own number — send via their Twilio
+        await sendVia(config.sid, config.token, config.fromNumber, lead.phone, message)
+      } else {
+        // Check if still in trial — provision temporary via master during trial
+        const { data: agentData } = await supabase.from('agents').select('trial_ends_at, status, created_at').eq('id', sendingAgentId).single()
+        const trialEnds = agentData?.trial_ends_at ? new Date(agentData.trial_ends_at) : null
+        const isInTrial = trialEnds && trialEnds > new Date()
 
-      await sendVia(config.sid, config.token, config.fromNumber, lead.phone, message)
+        if (isInTrial) {
+          // Trial period — allow via master Twilio (temporary)
+          const sid = process.env.TWILIO_ACCOUNT_SID!
+          const token = process.env.TWILIO_AUTH_TOKEN!
+          const from = process.env.TWILIO_WHATSAPP_FROM!
+          await sendVia(sid, token, from, lead.phone, message)
+        } else {
+          // Trial expired, no config — block and upsell
+          return NextResponse.json({
+            error: 'whatsapp_not_configured',
+            message: 'Tu periodo de prueba de WhatsApp ha terminado. Para seguir enviando mensajes necesitas tu propio numero. Te lo configuramos por $20/mes con conversaciones ilimitadas.',
+            action: 'configure_whatsapp',
+          }, { status: 403 })
+        }
+      }
+    } else {
+      return NextResponse.json({ error: 'No se pudo determinar el agente' }, { status: 400 })
     }
 
     // Save to conversations

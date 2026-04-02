@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/contexts/AuthContext'
 import { C, STAGE_META, scoreColor } from '@/lib/design'
 
 interface Props { lead: any; onClose: () => void; onStageUpdate?: (id: string, stage: string) => void }
@@ -13,6 +14,7 @@ function getTempPhase(s: number) { return s >= 90 ? 5 : s >= 75 ? 4 : s >= 60 ? 
 const PHASES = ['Frío', 'Conectando', 'Calificado', 'Interesado', 'Caliente', 'Listo']
 
 export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props) {
+  const { user } = useAuth()
   const [conversations, setConversations] = useState<any[]>([])
   const [mode, setMode] = useState<Mode>((lead.conversation_mode === 'coaching' ? 'manual' : lead.conversation_mode as Mode) || 'sophia')
   const [msgInput, setMsgInput] = useState('')
@@ -180,7 +182,7 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
     setSending(true)
     setWhatsappError('')
     try {
-      const res = await fetch('/api/agent-send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lead_id: lead.id, message: msgInput.trim(), agent_id: lead.agent_id }) })
+      const res = await fetch('/api/agent-send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lead_id: lead.id, message: msgInput.trim(), agent_id: user?.id || lead.agent_id }) })
       const data = await res.json()
       if (!res.ok) {
         if (data.error === 'whatsapp_not_configured') {
