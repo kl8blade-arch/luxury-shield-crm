@@ -27,7 +27,7 @@ function LeadsPage() {
   const [filterLabel, setFilterLabel] = useState('')
   const [showNewLead, setShowNewLead] = useState(false)
   const [newLead, setNewLead] = useState({
-    name: '', phone: '', email: '', state: '', insurance_type: 'dental', notes: '',
+    name: '', phone: '', email: '', state: '', insurance_type: 'Dental', notes: '',
     city: '', zip_code: '', country: 'US', age: '', gender: '', marital_status: '',
     children: '', occupation: '', income_range: '', industry: '',
     referral_source: '', preferred_language: 'es', preferred_contact: 'whatsapp',
@@ -101,7 +101,7 @@ function LeadsPage() {
   }
 
   const emptyLead = {
-    name: '', phone: '', email: '', state: '', insurance_type: 'dental', notes: '',
+    name: '', phone: '', email: '', state: '', insurance_type: 'Dental', notes: '',
     city: '', zip_code: '', country: 'US', age: '', gender: '', marital_status: '',
     children: '', occupation: '', income_range: '', industry: '',
     referral_source: '', preferred_language: 'es', preferred_contact: 'whatsapp',
@@ -340,16 +340,18 @@ function LeadsPage() {
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'rgba(240,236,227,0.35)', marginBottom: '5px', letterSpacing: '0.1em' }}>PRODUCTO / INDUSTRIA</label>
                   <select value={newLead.insurance_type} onChange={e => setNewLead(p => ({ ...p, insurance_type: e.target.value }))} style={fld}>
-                    <option value="dental">Dental</option>
-                    <option value="iul">IUL / Vida</option>
-                    <option value="aca">ACA / Obamacare</option>
-                    <option value="medicare">Medicare</option>
-                    <option value="auto">Auto</option>
-                    <option value="hogar">Hogar</option>
-                    <option value="bienes_raices">Bienes Raices</option>
-                    <option value="infoproductos">Infoproductos</option>
-                    <option value="dropshipping">Dropshipping</option>
-                    <option value="otro">Otro</option>
+                    <option value="Dental">Dental</option>
+                    <option value="IUL">IUL / Vida</option>
+                    <option value="Vida">Vida</option>
+                    <option value="ACA">ACA / Obamacare</option>
+                    <option value="Medicare">Medicare</option>
+                    <option value="Auto">Auto</option>
+                    <option value="Hogar">Hogar</option>
+                    <option value="Bienes Raices">Bienes Raices</option>
+                    <option value="Infoproductos">Infoproductos</option>
+                    <option value="Dropshipping">Dropshipping</option>
+                    <option value="Inversiones">Inversiones</option>
+                    <option value="Otro">Otro</option>
                   </select>
                 </div>
               </div>

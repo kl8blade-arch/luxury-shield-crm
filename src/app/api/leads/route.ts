@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       phone: (phone || '').trim(),
       email: email?.trim() || null,
       state: state?.trim() || null,
-      insurance_type: insurance_type || 'dental',
+      insurance_type: insurance_type || 'Dental',
       notes: notes?.trim() || null,
       stage: 'new',
       source: 'manual',
