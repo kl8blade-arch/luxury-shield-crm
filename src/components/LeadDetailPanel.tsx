@@ -27,6 +27,7 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
   const [copyFeedback, setCopyFeedback] = useState(false)
   const [loseModal, setLoseModal] = useState(false)
   const [loseReason, setLoseReason] = useState('')
+  const [whatsappError, setWhatsappError] = useState('')
   const [coachMessages, setCoachMessages] = useState<{ role: string; content: string }[]>([
     { role: 'assistant', content: `Listo. Conozco toda la conversación con ${lead.name || 'el lead'}. Score: ${lead.score || 50}/100. ¿En qué te ayudo?` }
   ])
@@ -177,11 +178,24 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
   async function sendAgentMessage() {
     if (!msgInput.trim() || sending) return
     setSending(true)
+    setWhatsappError('')
     try {
-      await fetch('/api/agent-send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lead_id: lead.id, message: msgInput.trim() }) })
+      const res = await fetch('/api/agent-send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lead_id: lead.id, message: msgInput.trim(), agent_id: lead.agent_id }) })
+      const data = await res.json()
+      if (!res.ok) {
+        if (data.error === 'whatsapp_not_configured') {
+          setWhatsappError(data.message)
+        } else {
+          setWhatsappError(data.error || 'Error al enviar mensaje')
+        }
+        setSending(false)
+        return
+      }
       setMsgInput('')
       setTimeout(loadMessages, 500)
-    } catch {}
+    } catch (err: any) {
+      setWhatsappError(err.message || 'Error de conexion')
+    }
     setSending(false)
   }
 
@@ -373,10 +387,22 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
               <span style={{ fontSize: '10px', fontWeight: 600, color: coachEnabled ? '#a855f7' : C.textMuted }}>Coaching IA {coachLoading ? '(analizando...)' : ''}</span>
             </div>
             {mode === 'manual' && (
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <input id="agent-msg-input" value={msgInput} onChange={e => setMsgInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendAgentMessage()}
-                  placeholder="Escribe un mensaje..." style={{ flex: 1, padding: '8px 11px', borderRadius: '8px', fontSize: '12px', background: C.surface2, border: `1px solid ${C.border}`, color: C.text, outline: 'none', fontFamily: C.font }} />
-                <button onClick={sendAgentMessage} disabled={sending} style={{ padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, fontFamily: C.font, cursor: 'pointer', background: '#60a5fa', color: '#07080A', border: 'none', opacity: sending ? 0.5 : 1 }}>{sending ? '...' : '→'}</button>
+              <div>
+                {whatsappError && (
+                  <div style={{ marginBottom: '8px', padding: '10px 12px', borderRadius: '10px', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)', fontSize: '11px', lineHeight: 1.5 }}>
+                    <p style={{ color: '#fbbf24', fontWeight: 700, margin: '0 0 4px' }}>WhatsApp no configurado</p>
+                    <p style={{ color: 'rgba(240,236,227,0.5)', margin: '0 0 8px' }}>{whatsappError}</p>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <a href="/settings" style={{ padding: '5px 12px', borderRadius: '6px', background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.25)', color: '#C9A84C', fontSize: '10px', fontWeight: 700, textDecoration: 'none' }}>Configurar mi API</a>
+                      <a href="/packages" style={{ padding: '5px 12px', borderRadius: '6px', background: 'linear-gradient(135deg, #C9A84C, #A8893A)', color: '#06070B', fontSize: '10px', fontWeight: 700, textDecoration: 'none' }}>Plan WhatsApp $20/mes</a>
+                    </div>
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <input id="agent-msg-input" value={msgInput} onChange={e => setMsgInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendAgentMessage()}
+                    placeholder="Escribe un mensaje..." style={{ flex: 1, padding: '8px 11px', borderRadius: '8px', fontSize: '12px', background: C.surface2, border: `1px solid ${C.border}`, color: C.text, outline: 'none', fontFamily: C.font }} />
+                  <button onClick={sendAgentMessage} disabled={sending} style={{ padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, fontFamily: C.font, cursor: 'pointer', background: '#60a5fa', color: '#07080A', border: 'none', opacity: sending ? 0.5 : 1 }}>{sending ? '...' : '→'}</button>
+                </div>
               </div>
             )}
           </div>
