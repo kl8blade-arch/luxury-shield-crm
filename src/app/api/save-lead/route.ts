@@ -159,9 +159,13 @@ export async function POST(req: NextRequest) {
         ready_to_buy: score >= 85,
         for_crossselling: false,
         crossselling_products: CROSSSELL[insuranceType] || null,
-        utm_source: body.utm_source || null,
-        utm_campaign: body.utm_campaign || null,
+        utm_source: body.utm_source || body.source || null,
+        utm_medium: body.utm_medium || body.medium || null,
+        utm_campaign: body.utm_campaign || body.campaign || null,
+        utm_content: body.utm_content || null,
+        utm_term: body.utm_term || null,
         url_origin: body.url_origen || body.url_origin || null,
+        referrer: body.referrer || null,
       })
       .select().single()
 
