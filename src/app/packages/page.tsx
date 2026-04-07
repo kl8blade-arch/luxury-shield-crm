@@ -133,7 +133,8 @@ function PackagesPage() {
     }
     setCheckoutLoading(true)
     const aiSurcharge = useOwnKeys ? 0 : 50
-    const price = annual ? Math.round(plan.price * 10) : plan.price + aiSurcharge
+    const basePrice = typeof plan.price === 'number' ? plan.price : 0
+    const price = Math.max(0, annual ? Math.round(basePrice * 10) : basePrice + aiSurcharge)
     try {
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
@@ -206,8 +207,9 @@ function PackagesPage() {
             const isCurrent = currentPlan === plan.key
             const isHighlighted = plan.highlighted
             const aiSurcharge = useOwnKeys || plan.isEnterprise ? 0 : 50
-            const displayPrice = annual ? Math.round(plan.price * 10 / 12) : plan.price
-            const totalMonthly = plan.isEnterprise ? 0 : displayPrice + (annual ? 0 : aiSurcharge)
+            const basePrice = typeof plan.price === 'number' ? plan.price : 0
+            const displayPrice = annual ? Math.round(Math.max(0, basePrice * 10 / 12)) : basePrice
+            const totalMonthly = plan.isEnterprise ? 0 : Math.max(0, displayPrice + (annual ? 0 : aiSurcharge))
 
             return (
               <div key={plan.key} style={{
@@ -250,10 +252,10 @@ function PackagesPage() {
 
                   {/* Price breakdown */}
                   {!plan.isEnterprise && aiSurcharge > 0 && !annual && (
-                    <p style={{ fontSize: '10px', color: 'rgba(240,236,227,0.25)', margin: '0 0 4px' }}>${plan.price} plan + ${aiSurcharge} IA</p>
+                    <p style={{ fontSize: '10px', color: 'rgba(240,236,227,0.25)', margin: '0 0 4px' }}>${basePrice} plan + ${aiSurcharge} IA</p>
                   )}
                   {!plan.isEnterprise && annual && (
-                    <p style={{ fontSize: '10px', color: '#34d399', margin: '0 0 4px' }}>Ahorra ${Math.round(plan.price * 2)}/ano vs mensual</p>
+                    <p style={{ fontSize: '10px', color: '#34d399', margin: '0 0 4px' }}>Ahorra ${Math.round(Math.max(0, basePrice * 2))}/ano vs mensual</p>
                   )}
                   {!plan.isEnterprise && useOwnKeys && (
                     <p style={{ fontSize: '10px', color: '#34d399', margin: '0 0 4px' }}>$0 cargo IA (tus keys)</p>
@@ -380,31 +382,40 @@ function PackagesPage() {
 
               <h3 style={{ fontFamily: '"Cormorant Garamond",serif', fontSize: '26px', fontWeight: 400, color: '#F0ECE3', margin: '0 0 8px' }}>Plan {selectedPlan.name}</h3>
 
-              <div style={{ padding: '18px', borderRadius: '14px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', marginBottom: '24px', textAlign: 'left' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)' }}>Plan {selectedPlan.name}</span>
-                  <span style={{ fontSize: '13px', color: '#F0ECE3', fontWeight: 600 }}>${annual ? Math.round(selectedPlan.price * 10 / 12) : selectedPlan.price}/mes</span>
-                </div>
-                {!useOwnKeys && !annual && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)' }}>Creditos IA</span>
-                    <span style={{ fontSize: '13px', color: '#a78bfa', fontWeight: 600 }}>+$50/mes</span>
+              {(() => {
+                const planPrice = typeof selectedPlan.price === 'number' ? selectedPlan.price : 0
+                const monthlyPrice = annual ? Math.round(Math.max(0, planPrice * 10 / 12)) : planPrice
+                const annualPrice = Math.round(Math.max(0, planPrice * 10))
+                const totalPrice = annual ? annualPrice : planPrice + (useOwnKeys ? 0 : 50)
+
+                return (
+                  <div style={{ padding: '18px', borderRadius: '14px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', marginBottom: '24px', textAlign: 'left' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)' }}>Plan {selectedPlan.name}</span>
+                      <span style={{ fontSize: '13px', color: '#F0ECE3', fontWeight: 600 }}>${monthlyPrice}/mes</span>
+                    </div>
+                    {!useOwnKeys && !annual && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)' }}>Creditos IA</span>
+                        <span style={{ fontSize: '13px', color: '#a78bfa', fontWeight: 600 }}>+$50/mes</span>
+                      </div>
+                    )}
+                    {annual && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)' }}>Facturacion anual (2 meses gratis)</span>
+                        <span style={{ fontSize: '13px', color: '#34d399', fontWeight: 600 }}>${annualPrice}/ano</span>
+                      </div>
+                    )}
+                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '15px', fontWeight: 700, color: '#F0ECE3' }}>Total</span>
+                      <span style={{ fontFamily: '"Cormorant Garamond",serif', fontSize: '28px', fontWeight: 700, color: '#C9A84C' }}>
+                        ${totalPrice}
+                        <span style={{ fontSize: '13px', color: 'rgba(240,236,227,0.3)', fontFamily: '"Outfit",sans-serif', fontWeight: 400 }}>{annual ? '/ano' : '/mes'}</span>
+                      </span>
+                    </div>
                   </div>
-                )}
-                {annual && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)' }}>Facturacion anual (2 meses gratis)</span>
-                    <span style={{ fontSize: '13px', color: '#34d399', fontWeight: 600 }}>${Math.round(selectedPlan.price * 10)}/ano</span>
-                  </div>
-                )}
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: '15px', fontWeight: 700, color: '#F0ECE3' }}>Total</span>
-                  <span style={{ fontFamily: '"Cormorant Garamond",serif', fontSize: '28px', fontWeight: 700, color: '#C9A84C' }}>
-                    ${annual ? Math.round(selectedPlan.price * 10) : selectedPlan.price + (useOwnKeys ? 0 : 50)}
-                    <span style={{ fontSize: '13px', color: 'rgba(240,236,227,0.3)', fontFamily: '"Outfit",sans-serif', fontWeight: 400 }}>{annual ? '/ano' : '/mes'}</span>
-                  </span>
-                </div>
-              </div>
+                )
+              })()}
 
               <button onClick={() => handleCheckout(selectedPlan)} disabled={checkoutLoading} style={{
                 width: '100%', padding: '16px', borderRadius: '14px', fontSize: '15px', fontWeight: 700,

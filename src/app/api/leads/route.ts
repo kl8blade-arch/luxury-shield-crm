@@ -79,12 +79,19 @@ export async function GET(req: NextRequest) {
     const accountId = req.nextUrl.searchParams.get('account_id')
     const role = req.nextUrl.searchParams.get('role')
     const format = req.nextUrl.searchParams.get('format') || 'json'
+    const page = parseInt(req.nextUrl.searchParams.get('page') || '1')
+    const limit = Math.min(parseInt(req.nextUrl.searchParams.get('limit') || '100'), 500) // Max 500 per page
 
     if (!agentId) {
       return NextResponse.json({ error: 'agent_id requerido' }, { status: 400 })
     }
 
-    let query = supabase.from('leads').select('name, phone, email, state, city, zip_code, country, age, gender, marital_status, children, occupation, income_range, industry, insurance_type, stage, score, source, notes, contact_attempts, last_contact, ready_to_buy, purchased_products, sold_product, sale_date, pain_points, fears, goals, objections, interests, referral_source, preferred_language, preferred_contact, budget_range, decision_timeline, created_at, updated_at').order('created_at', { ascending: false })
+    const offset = (page - 1) * limit
+
+    let query = supabase.from('leads')
+      .select('name, phone, email, state, city, zip_code, country, age, gender, marital_status, children, occupation, income_range, industry, insurance_type, stage, score, source, notes, contact_attempts, last_contact, ready_to_buy, purchased_products, sold_product, sale_date, pain_points, fears, goals, objections, interests, referral_source, preferred_language, preferred_contact, budget_range, decision_timeline, created_at, updated_at', { count: 'exact' })
+      .order('updated_at', { ascending: false })
+      .range(offset, offset + limit - 1)
 
     // Scope by account
     if (role === 'admin' && accountId) {
@@ -93,7 +100,7 @@ export async function GET(req: NextRequest) {
       query = query.eq('agent_id', agentId)
     }
 
-    const { data, error } = await query
+    const { data, error, count } = await query
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
@@ -163,7 +170,15 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    return NextResponse.json({ leads: data || [] })
+    return NextResponse.json({
+      leads: data || [],
+      pagination: {
+        page,
+        limit,
+        total: count || 0,
+        pages: Math.ceil((count || 0) / limit)
+      }
+    })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
