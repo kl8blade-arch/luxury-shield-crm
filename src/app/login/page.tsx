@@ -11,6 +11,7 @@ const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ''
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [step, setStep] = useState<'login' | '2fa'>('login')
@@ -206,9 +207,33 @@ export default function LoginPage() {
 
                   <div style={{ marginBottom: '24px' }}>
                     <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(240,236,227,0.35)', marginBottom: '8px' }}>Contrasena</label>
-                    <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                      placeholder="••••••••" required autoComplete="current-password"
-                      style={inputStyle} onFocus={handleFocus} onBlur={handleBlur} />
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                      <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
+                        placeholder="••••••••" required autoComplete="current-password"
+                        style={{ ...inputStyle, paddingRight: '48px' }} onFocus={handleFocus} onBlur={handleBlur} />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        style={{
+                          position: 'absolute',
+                          right: '14px',
+                          background: 'none',
+                          border: 'none',
+                          color: 'rgba(240,236,227,0.5)',
+                          cursor: 'pointer',
+                          fontSize: '20px',
+                          padding: '8px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'color 0.2s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.color = 'rgba(201,168,76,0.8)' }}
+                        onMouseLeave={e => { e.currentTarget.style.color = 'rgba(240,236,227,0.5)' }}
+                      >
+                        {showPassword ? '👁️' : '👁️‍🗨️'}
+                      </button>
+                    </div>
                   </div>
 
                   {error && (
