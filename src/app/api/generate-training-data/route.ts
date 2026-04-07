@@ -18,8 +18,14 @@ const PROFILES = [
 
 export async function POST(req: NextRequest) {
   try {
+    // Solo ejecutar si se llama con ?manual=true
+    const manual = req.nextUrl.searchParams.get('manual')
+    if (manual !== 'true') {
+      return NextResponse.json({ error: 'Solo ejecución manual permitida. Usa ?manual=true' }, { status: 403 })
+    }
+
     const { count = 10 } = await req.json()
-    const total = Math.min(count, 50)
+    const total = Math.min(count, 10) // Límite máximo de 10 por ejecución
     const generated: any[] = []
 
     for (let i = 0; i < total; i++) {

@@ -63,7 +63,6 @@ function RegisterInner() {
           leadCount: plan?.subs || 1,
           packageId: selectedPlan,
           agentId,
-          trialDays: 7,
         }),
       })
       const stripeData = await stripeRes.json()
@@ -123,7 +122,7 @@ function RegisterInner() {
                 <h1 style={{ fontFamily: '"Cormorant Garamond",serif', fontSize: isMobile ? '32px' : '48px', fontWeight: 300, color: '#F0ECE3', margin: '0 0 14px', lineHeight: 1.15 }}>
                   La IA que vende<br /><span style={{ color: '#C9A84C' }}>mientras tu duermes.</span>
                 </h1>
-                <p style={{ fontSize: '15px', color: 'rgba(240,236,227,0.4)', maxWidth: '460px', margin: '0 auto' }}>7 dias gratis. Cancela cuando quieras.</p>
+                <p style={{ fontSize: '15px', color: 'rgba(240,236,227,0.4)', maxWidth: '460px', margin: '0 auto' }}>Pago inmediato. 7 días para devolución de dinero.</p>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '20px', marginBottom: '28px' }}>
@@ -157,8 +156,8 @@ function RegisterInner() {
 
               <div style={{ maxWidth: '480px', margin: '0 auto' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 18px', borderRadius: '12px', background: 'rgba(52,211,153,0.04)', border: '1px solid rgba(52,211,153,0.12)', marginBottom: '18px' }}>
-                  <span style={{ fontSize: '18px' }}>&#127873;</span>
-                  <div><p style={{ fontSize: '13px', color: '#34d399', fontWeight: 600, margin: 0 }}>7 dias GRATIS</p><p style={{ fontSize: '11px', color: 'rgba(240,236,227,0.3)', margin: 0 }}>Se cobra al terminar la promocion.</p></div>
+                  <span style={{ fontSize: '18px' }}>🛡️</span>
+                  <div><p style={{ fontSize: '13px', color: '#34d399', fontWeight: 600, margin: 0 }}>GARANTIA DE REEMBOLSO</p><p style={{ fontSize: '11px', color: 'rgba(240,236,227,0.3)', margin: 0 }}>7 días para devolver tu dinero si no estás satisfecho.</p></div>
                 </div>
                 <button onClick={() => { if (!selectedPlan) { setError('Selecciona un plan'); return }; setError(''); setStep('form') }} style={{
                   width: '100%', padding: '16px', borderRadius: '14px', fontSize: '15px', fontWeight: 700, fontFamily: 'inherit',
@@ -175,7 +174,7 @@ function RegisterInner() {
           {step === 'form' && (
             <div style={{ maxWidth: '440px', margin: '0 auto', paddingTop: '20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderRadius: '14px', background: `${plan?.color || '#C9A84C'}08`, border: `1px solid ${plan?.color || '#C9A84C'}20`, marginBottom: '24px' }}>
-                <div><p style={{ fontSize: '14px', fontWeight: 700, color: plan?.color || '#C9A84C', margin: 0 }}>Plan {plan?.name}</p><p style={{ fontSize: '11px', color: 'rgba(240,236,227,0.35)', margin: '2px 0 0' }}>${plan?.price}/mes — 7 dias gratis</p></div>
+                <div><p style={{ fontSize: '14px', fontWeight: 700, color: plan?.color || '#C9A84C', margin: 0 }}>Plan {plan?.name}</p><p style={{ fontSize: '11px', color: 'rgba(240,236,227,0.35)', margin: '2px 0 0' }}>${plan?.price}/mes — Garantía de reembolso 7 días</p></div>
                 <button onClick={() => setStep('plan')} style={{ fontSize: '12px', color: 'rgba(240,236,227,0.4)', background: 'none', border: '1px solid rgba(255,255,255,0.08)', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontFamily: 'inherit' }}>Cambiar</button>
               </div>
 
@@ -216,7 +215,7 @@ function RegisterInner() {
                   </button>
 
                   <p style={{ fontSize: '10px', color: 'rgba(240,236,227,0.2)', textAlign: 'center', marginTop: '12px' }}>
-                    Se cobrara ${plan?.price}/mes al finalizar los 7 dias gratis.
+                    Se cobrará ${plan?.price}/mes ahora. Tienes 7 días para solicitar reembolso.
                   </p>
                 </div>
               </form>

@@ -68,22 +68,39 @@ export async function POST(req: NextRequest) {
         const tokenLimits: Record<string, number> = { starter: 300, professional: 1000, agency: 3000, enterprise: 10000 }
         const subPlan = planMap[packageId || ''] || 'starter'
 
+        // GAP 2 fix: guardar stripe_customer_id
+        const stripeCustomerId = session?.customer || null
+
         await supabase.from('agents').update({
           credits: (agent?.credits || 0) + parseInt(leadCount || '0'),
           paid: true, status: 'active',
           subscription_plan: subPlan,
           tokens_limit: tokenLimits[subPlan] || 300,
           tokens_used: 0, tokens_reset_at: new Date().toISOString(),
-          trial_ends_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          refund_deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          ...(stripeCustomerId ? { stripe_customer_id: stripeCustomerId } : {}),
         }).eq('id', realAgentId)
 
-        console.log(`[STRIPE] Agent ${realAgentId} activated: plan=${subPlan}`)
+        console.log(`[STRIPE] Agent ${realAgentId} activated: plan=${subPlan}, customer=${stripeCustomerId}`)
 
         // Trigger Sophia onboarding after payment
         try {
           const { startAgentOnboarding } = await import('@/lib/agent-onboarding')
           startAgentOnboarding(realAgentId).catch(() => {})
         } catch {}
+      }
+    }
+  }
+
+  // GAP 1 fix: reactivar cuenta al pagar (ej: usuario con trial_expired que re-paga)
+  if (event.type === 'invoice.payment_succeeded') {
+    const invoice = event.data?.object
+    const customerId = invoice?.customer
+    if (customerId) {
+      const { data: agent } = await supabase.from('agents').select('id, status').eq('stripe_customer_id', customerId).single()
+      if (agent && agent.status === 'trial_expired') {
+        await supabase.from('agents').update({ status: 'active', paid: true }).eq('id', agent.id)
+        console.log(`[STRIPE] Agent ${agent.id} reactivated via invoice.payment_succeeded`)
       }
     }
   }

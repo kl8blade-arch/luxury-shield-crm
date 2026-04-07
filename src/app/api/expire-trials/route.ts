@@ -19,6 +19,13 @@ export async function GET() {
 
   let count = 0
   for (const agent of expired || []) {
+    // GAP 3 fix: verificar que realmente no haya pagado antes de marcar como expired
+    const { data: fresh } = await supabase.from('agents').select('paid').eq('id', agent.id).single()
+    if (fresh?.paid) {
+      console.log(`[EXPIRE] Skipping ${agent.id} — already paid`)
+      continue
+    }
+
     await supabase.from('agents').update({ status: 'trial_expired' }).eq('id', agent.id)
 
     // Notify via WhatsApp

@@ -16,7 +16,30 @@
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f\"\"Created: {d.get\\(''''key'''',''''''''\\)} | ID: {d.get\\(''''id'''',''''error''''\\)}\"\"\\)\")",
       "mcp__claude_ai_Supabase__execute_sql",
       "Bash(node:*)",
-      "Bash(npx:*)"
+      "Bash(npx:*)",
+      "Bash(npm list:*)",
+      "Bash(grep -r \"vercel\\\\|deploy\\\\|production\" /c/Users/silva/luxury-shield-crm/.env*)",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__apply_migration",
+      "Bash(find /c/Users/silva/luxury-shield-crm/supabase -type f -name *.sql)",
+      "WebSearch",
+      "WebFetch(domain:www.insuranceandestates.com)",
+      "WebFetch(domain:redbirdagents.com)",
+      "WebFetch(domain:agedleadstore.com)",
+      "Bash(taskkill //F //FI \"WINDOWTITLE eq generate-iul*\")",
+      "Bash(pkill -f \"generate-iul\")",
+      "Bash(source .env.local)",
+      "Bash(start https://luxury-shield-crm.vercel.app/register)",
+      "Bash(node -e \"console.log\\(require\\(''crypto''\\).randomBytes\\(32\\).toString\\(''hex''\\)\\)\")",
+      "Bash(mkdir -p \"C:/Users/silva/Documents/luxury-shield-crm-backup\")",
+      "Bash(cp -r C:/Users/silva/luxury-shield-crm/src C:/Users/silva/luxury-shield-crm/public C:/Users/silva/luxury-shield-crm/package.json C:/Users/silva/luxury-shield-crm/package-lock.json C:/Users/silva/luxury-shield-crm/tsconfig.json C:/Users/silva/luxury-shield-crm/next.config.ts C:/Users/silva/luxury-shield-crm/vercel.json C:/Users/silva/luxury-shield-crm/.env.local C:/Users/silva/luxury-shield-crm/.gitignore \"C:/Users/silva/Documents/luxury-shield-crm-backup/\")",
+      "Bash(cp -r C:/Users/silva/luxury-shield-crm/.claude \"C:/Users/silva/Documents/luxury-shield-crm-backup/\")",
+      "Bash(cp -r C:/Users/silva/luxury-shield-crm/scripts \"C:/Users/silva/Documents/luxury-shield-crm-backup/\")",
+      "Read(//c/Users/silva/Documents/luxury-shield-crm-backup/**)",
+      "Bash(grep -r \"webhook_subscriptions\\\\|integration_log\" /c/Users/silva/luxury-shield-crm/src --include=*.ts --include=*.tsx)",
+      "Bash(find /c/Users/silva/luxury-shield-crm -type f \\\\\\(-name *.sql -o -name *migration* -o -name *schema* \\\\\\))",
+      "Bash(grep -r \"CREATE TABLE.*webhook\\\\|CREATE TABLE.*integration\" /c/Users/silva/luxury-shield-crm --include=*.sql)",
+      "Bash(grep -r \"facebook\\\\|meta\\\\|google.*ads\\\\|google.*lead\\\\|lead.*api\" /c/Users/silva/luxury-shield-crm/src --include=*.ts --include=*.tsx -i)"
     ]
   }
 }

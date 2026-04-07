@@ -13,14 +13,20 @@
     "@supabase/supabase-js": "^2.99.2",
     "autoprefixer": "^10.4.27",
     "date-fns": "^4.1.0",
+    "docx": "^9.6.1",
+    "dotenv": "^17.3.1",
     "lucide-react": "^0.577.0",
     "next": "16.2.0",
     "openai": "^6.33.0",
+    "otpauth": "^9.5.0",
+    "pdfkit": "^0.18.0",
     "postcss": "^8.5.8",
+    "qrcode": "^1.5.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "recharts": "^3.8.0",
-    "stripe": "^21.0.1"
+    "stripe": "^21.0.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
