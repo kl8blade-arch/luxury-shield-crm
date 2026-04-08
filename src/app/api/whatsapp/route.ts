@@ -244,14 +244,21 @@ async function getAIResponse(lead: any, conversationHistory: any[], incomingMess
   let agencyName = 'Luxury Shield'
   try {
     if (lead?.agent_id) {
-      const [{ data: config }, { data: agent }] = await Promise.all([
-        supabase.from('agent_configs').select('sophia_tone, welcome_message, sophia_language, insurance_types').eq('agent_id', lead.agent_id).single(),
-        supabase.from('agents').select('company_name').eq('id', lead.agent_id).single(),
+      console.log(`[Sophia] Loading config for agent ${lead.agent_id}`)
+      const [{ data: config, error: configErr }, { data: agent, error: agentErr }] = await Promise.all([
+        supabase.from('agent_configs').select('sophia_tone, welcome_message, sophia_language, insurance_types').eq('agent_id', lead.agent_id).maybeSingle(),
+        supabase.from('agents').select('company_name').eq('id', lead.agent_id).maybeSingle(),
       ])
-      if (config) agentConfig = config
-      if (agent?.company_name) agencyName = agent.company_name
+      if (configErr) console.error('[Sophia] Config query error:', configErr)
+      if (agentErr) console.error('[Sophia] Agent query error:', agentErr)
+      if (config) { agentConfig = config; console.log('[Sophia] Agent config loaded:', agentConfig) }
+      if (agent?.company_name) { agencyName = agent.company_name; console.log('[Sophia] Company name set to:', agencyName) }
+    } else {
+      console.log('[Sophia] No agent_id on lead, using defaults')
     }
-  } catch {}
+  } catch (e: any) {
+    console.error('[Sophia] Error loading agent config:', e.message)
+  }
 
   // Module: Stage context
   let stageContext = ''
@@ -1021,6 +1028,20 @@ Escribe el comando o dime que necesitas 👇`
     // Create lead ONLY if none found
     if (!lead) {
       console.log(`[Sophia] Creating new lead for ${from}`)
+
+      // Get Silva's agent_id to assign new leads from WhatsApp
+      let silvaAgentId: string | null = null
+      try {
+        const { data: silvaAgent } = await supabase
+          .from('agents')
+          .select('id')
+          .eq('email', 'silva@luxury-shield.com')
+          .maybeSingle()
+        silvaAgentId = silvaAgent?.id || null
+      } catch (e: any) {
+        console.error('[Sophia] Could not find Silva agent:', e.message)
+      }
+
       const { data: newLead, error: insertErr } = await supabase
         .from('leads')
         .insert({
@@ -1031,6 +1052,7 @@ Escribe el comando o dime que necesitas 👇`
           score: 40,
           ia_active: true,
           conversation_mode: 'sophia',
+          agent_id: silvaAgentId, // Assign to Silva if found
         })
         .select()
         .single()
@@ -1045,6 +1067,7 @@ Escribe el comando o dime que necesitas 👇`
             source: 'whatsapp_inbound',
             score: 40,
             conversation_mode: 'sophia',
+            agent_id: silvaAgentId,
           })
           .select()
           .single()
@@ -1130,31 +1153,38 @@ Escribe el comando o dime que necesitas 👇`
           .eq('id', lead.agent_id)
           .maybeSingle()
 
-        if (agent && !ALLOWED_AGENTS.includes(agent.email.toLowerCase())) {
-          console.log(`[SOPHIA BLOCKED] Agent ${agent.email} not in allowed list`)
+        if (agent) {
+          const agentEmail = agent.email.toLowerCase()
+          if (!ALLOWED_AGENTS.includes(agentEmail)) {
+            console.log(`[SOPHIA BLOCKED] Agent ${agentEmail} not in allowed list for Sophia`, { allowedAgents: ALLOWED_AGENTS })
 
-          // Log the blocked attempt
-          await supabase.from('conversations').insert({
-            lead_id: lead.id, lead_name: lead.name, lead_phone: from,
-            channel: 'whatsapp', direction: 'inbound', message: body,
-            created_at: new Date().toISOString(),
-          })
+            // Log the blocked attempt
+            await supabase.from('conversations').insert({
+              lead_id: lead.id, lead_name: lead.name, lead_phone: from,
+              channel: 'whatsapp', direction: 'inbound', message: body,
+              created_at: new Date().toISOString(),
+            })
 
-          await supabase.from('leads').update({
-            last_contact: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            last_message_at: new Date().toISOString(),
-          }).eq('id', lead.id)
+            await supabase.from('leads').update({
+              last_contact: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              last_message_at: new Date().toISOString(),
+            }).eq('id', lead.id)
 
-          return new NextResponse(
-            `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
-            { status: 200, headers: { 'Content-Type': 'text/xml' } }
-          )
+            return new NextResponse(
+              `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
+              { status: 200, headers: { 'Content-Type': 'text/xml' } }
+            )
+          } else {
+            console.log(`[SOPHIA ALLOWED] Agent ${agentEmail} is in allowed list`)
+          }
         }
       } catch (e: any) {
         console.error('[SOPHIA] Exclusivity check error:', e.message)
         // Continue normally on error — don't break the flow
       }
+    } else {
+      console.log(`[SOPHIA] No agent_id on lead, continuing (assuming Silva)`)
     }
 
     console.log(`[SOPHIA ACTIVE] Processing response for ${lead.name}`)
@@ -1287,7 +1317,9 @@ Escribe el comando o dime que necesitas 👇`
       }
     } catch (e: any) { console.error('[TOKENS]', e.message) }
 
+    console.log(`[SOPHIA] Calling getAIResponse for lead: ${lead.id} - ${lead.name}`)
     let aiResponse = await getAIResponse(lead, history || [], body, alreadyIntroduced)
+    console.log(`[SOPHIA] AI Response received: ${aiResponse ? aiResponse.substring(0, 100) : 'EMPTY'} (${aiResponse?.length || 0} chars)`)
 
     // ══════════════════════════════════════════════
     // BUG FIX 2: Force closing signal detection
