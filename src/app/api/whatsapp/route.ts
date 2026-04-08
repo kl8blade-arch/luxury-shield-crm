@@ -1123,32 +1123,37 @@ Escribe el comando o dime que necesitas 👇`
     const ALLOWED_AGENTS = ['silva@luxury-shield.com', 'planmedicoflorida@gmail.com']
 
     if (lead.agent_id) {
-      const { data: agent } = await supabase
-        .from('agents')
-        .select('email')
-        .eq('id', lead.agent_id)
-        .single()
+      try {
+        const { data: agent, error: agentErr } = await supabase
+          .from('agents')
+          .select('email')
+          .eq('id', lead.agent_id)
+          .maybeSingle()
 
-      if (agent && !ALLOWED_AGENTS.includes(agent.email.toLowerCase())) {
-        console.log(`[SOPHIA BLOCKED] Agent ${agent.email} not in allowed list`)
+        if (agent && !ALLOWED_AGENTS.includes(agent.email.toLowerCase())) {
+          console.log(`[SOPHIA BLOCKED] Agent ${agent.email} not in allowed list`)
 
-        // Log the blocked attempt
-        await supabase.from('conversations').insert({
-          lead_id: lead.id, lead_name: lead.name, lead_phone: from,
-          channel: 'whatsapp', direction: 'inbound', message: body,
-          created_at: new Date().toISOString(),
-        })
+          // Log the blocked attempt
+          await supabase.from('conversations').insert({
+            lead_id: lead.id, lead_name: lead.name, lead_phone: from,
+            channel: 'whatsapp', direction: 'inbound', message: body,
+            created_at: new Date().toISOString(),
+          })
 
-        await supabase.from('leads').update({
-          last_contact: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          last_message_at: new Date().toISOString(),
-        }).eq('id', lead.id)
+          await supabase.from('leads').update({
+            last_contact: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            last_message_at: new Date().toISOString(),
+          }).eq('id', lead.id)
 
-        return new NextResponse(
-          `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
-          { status: 200, headers: { 'Content-Type': 'text/xml' } }
-        )
+          return new NextResponse(
+            `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
+            { status: 200, headers: { 'Content-Type': 'text/xml' } }
+          )
+        }
+      } catch (e: any) {
+        console.error('[SOPHIA] Exclusivity check error:', e.message)
+        // Continue normally on error — don't break the flow
       }
     }
 
