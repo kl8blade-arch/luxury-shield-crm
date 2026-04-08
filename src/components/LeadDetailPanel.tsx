@@ -178,16 +178,35 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
   }
 
   async function sendAgentMessage() {
-    if (!msgInput.trim() || sending) return
+    console.log('[LeadDetailPanel] sendAgentMessage called - msgInput:', msgInput.trim(), 'sending:', sending, 'lead.id:', lead.id)
+
+    if (!msgInput.trim()) {
+      console.log('[LeadDetailPanel] Input is empty, returning')
+      return
+    }
+
+    if (sending) {
+      console.log('[LeadDetailPanel] Already sending, returning')
+      return
+    }
+
     setSending(true)
     setWhatsappError('')
+
     try {
+      const payload = { lead_id: lead.id, message: msgInput.trim(), agent_id: user?.id || lead.agent_id }
+      console.log('[LeadDetailPanel] Sending payload:', payload)
+
       const res = await fetch('/api/agent-send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lead_id: lead.id, message: msgInput.trim(), agent_id: user?.id || lead.agent_id })
+        body: JSON.stringify(payload)
       })
+
+      console.log('[LeadDetailPanel] Response status:', res.status)
       const data = await res.json()
+      console.log('[LeadDetailPanel] Response data:', data)
+
       if (!res.ok) {
         const errorMsg = data.error || data.message || 'Error al enviar mensaje'
         console.error('[LeadDetailPanel] Send error:', errorMsg)
@@ -195,13 +214,17 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
         setSending(false)
         return
       }
+
       console.log('[LeadDetailPanel] Message sent successfully')
       setMsgInput('')
       setSending(false)
-      setTimeout(loadMessages, 300)
+      setTimeout(() => {
+        console.log('[LeadDetailPanel] Calling loadMessages')
+        loadMessages()
+      }, 300)
     } catch (err: any) {
       const errorMsg = err.message || 'Error de conexion'
-      console.error('[LeadDetailPanel] Exception:', errorMsg)
+      console.error('[LeadDetailPanel] Exception:', errorMsg, err)
       setWhatsappError(errorMsg)
       setSending(false)
     }
@@ -407,9 +430,33 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: '6px' }}>
-                  <input id="agent-msg-input" value={msgInput} onChange={e => setMsgInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendAgentMessage()}
-                    placeholder="Escribe un mensaje..." style={{ flex: 1, padding: '8px 11px', borderRadius: '8px', fontSize: '12px', background: C.surface2, border: `1px solid ${C.border}`, color: C.text, outline: 'none', fontFamily: C.font }} />
-                  <button onClick={sendAgentMessage} disabled={sending} style={{ padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, fontFamily: C.font, cursor: 'pointer', background: '#60a5fa', color: '#07080A', border: 'none', opacity: sending ? 0.5 : 1 }}>{sending ? '...' : '→'}</button>
+                  <input
+                    id="agent-msg-input"
+                    value={msgInput}
+                    onChange={e => {
+                      console.log('[Input] Changed to:', e.target.value)
+                      setMsgInput(e.target.value)
+                    }}
+                    onKeyDown={e => {
+                      console.log('[Input] KeyDown:', e.key)
+                      if (e.key === 'Enter') {
+                        console.log('[Input] Enter pressed, calling sendAgentMessage')
+                        sendAgentMessage()
+                      }
+                    }}
+                    placeholder="Escribe un mensaje..."
+                    style={{ flex: 1, padding: '8px 11px', borderRadius: '8px', fontSize: '12px', background: C.surface2, border: `1px solid ${C.border}`, color: C.text, outline: 'none', fontFamily: C.font }}
+                  />
+                  <button
+                    onClick={() => {
+                      console.log('[Button] Clicked, calling sendAgentMessage')
+                      sendAgentMessage()
+                    }}
+                    disabled={sending}
+                    style={{ padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, fontFamily: C.font, cursor: sending ? 'not-allowed' : 'pointer', background: '#60a5fa', color: '#07080A', border: 'none', opacity: sending ? 0.5 : 1 }}
+                  >
+                    {sending ? '...' : '→'}
+                  </button>
                 </div>
               </div>
             )}
