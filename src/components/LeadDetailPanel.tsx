@@ -182,23 +182,29 @@ export default function LeadDetailPanel({ lead, onClose, onStageUpdate }: Props)
     setSending(true)
     setWhatsappError('')
     try {
-      const res = await fetch('/api/agent-send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lead_id: lead.id, message: msgInput.trim(), agent_id: user?.id || lead.agent_id }) })
+      const res = await fetch('/api/agent-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_id: lead.id, message: msgInput.trim(), agent_id: user?.id || lead.agent_id })
+      })
       const data = await res.json()
       if (!res.ok) {
-        if (data.error === 'whatsapp_not_configured') {
-          setWhatsappError(data.message)
-        } else {
-          setWhatsappError(data.error || 'Error al enviar mensaje')
-        }
+        const errorMsg = data.error || data.message || 'Error al enviar mensaje'
+        console.error('[LeadDetailPanel] Send error:', errorMsg)
+        setWhatsappError(errorMsg)
         setSending(false)
         return
       }
+      console.log('[LeadDetailPanel] Message sent successfully')
       setMsgInput('')
-      setTimeout(loadMessages, 500)
+      setSending(false)
+      setTimeout(loadMessages, 300)
     } catch (err: any) {
-      setWhatsappError(err.message || 'Error de conexion')
+      const errorMsg = err.message || 'Error de conexion'
+      console.error('[LeadDetailPanel] Exception:', errorMsg)
+      setWhatsappError(errorMsg)
+      setSending(false)
     }
-    setSending(false)
   }
 
   function parseCoachResponse(content: string): { analysis: string; suggestions: { label: string; message: string }[]; tip: string } {

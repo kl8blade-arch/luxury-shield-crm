@@ -41,7 +41,8 @@
       "Bash(grep -r \"CREATE TABLE.*webhook\\\\|CREATE TABLE.*integration\" /c/Users/silva/luxury-shield-crm --include=*.sql)",
       "Bash(grep -r \"facebook\\\\|meta\\\\|google.*ads\\\\|google.*lead\\\\|lead.*api\" /c/Users/silva/luxury-shield-crm/src --include=*.ts --include=*.tsx -i)",
       "Bash(npm run:*)",
-      "Bash(NEXT_SKIP_ENV_VALIDATION=1 npx next build)"
+      "Bash(NEXT_SKIP_ENV_VALIDATION=1 npx next build)",
+      "Bash(vercel logs:*)"
     ]
   }
 }

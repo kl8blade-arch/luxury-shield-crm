@@ -43,13 +43,23 @@ export async function POST(req: NextRequest) {
       .from('leads')
       .select('id, phone, name, agent_id, conversation_mode')
       .eq('id', lead_id)
-      .single()
+      .maybeSingle()
 
-    if (leadErr || !lead) {
+    if (leadErr) {
+      console.error('[Agent Send] Lead query error:', leadErr)
+      return NextResponse.json({ error: 'Error consultando lead' }, { status: 500 })
+    }
+
+    if (!lead) {
       return NextResponse.json({ error: 'Lead no encontrado' }, { status: 404 })
     }
 
+    if (!lead.phone || !lead.phone.trim()) {
+      return NextResponse.json({ error: 'El lead no tiene teléfono configurado' }, { status: 400 })
+    }
+
     if (!TWILIO_SID || !TWILIO_TOKEN || !TWILIO_FROM) {
+      console.error('[Agent Send] Twilio not configured:', { TWILIO_SID: !!TWILIO_SID, TWILIO_TOKEN: !!TWILIO_TOKEN, TWILIO_FROM: !!TWILIO_FROM })
       return NextResponse.json(
         {
           error: 'whatsapp_not_configured',
@@ -81,15 +91,18 @@ export async function POST(req: NextRequest) {
     try {
       const result = await sendWhatsApp(lead.phone, message.trim())
       if (!result.sid) {
+        const errorMsg = result.error_message || result.message || 'Error desconocido en Twilio'
+        console.error('[Agent Send] Twilio error:', errorMsg, 'Full response:', result)
         return NextResponse.json(
-          { error: result.error_message || 'Error al enviar mensaje' },
+          { error: `WhatsApp: ${errorMsg}` },
           { status: 500 }
         )
       }
+      console.log('[Agent Send] Message sent successfully:', result.sid)
     } catch (e: any) {
-      console.error('[Agent Send] WhatsApp error:', e)
+      console.error('[Agent Send] WhatsApp error:', e.message || e)
       return NextResponse.json(
-        { error: 'Error enviando mensaje por WhatsApp' },
+        { error: `Error enviando: ${e.message || 'Error desconocido'}` },
         { status: 500 }
       )
     }
