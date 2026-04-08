@@ -92,11 +92,11 @@ export async function checkRateLimit(agentId: string, estimatedTokens: number = 
   }
 
   // All good — increment message counter (non-blocking, fire and forget)
-  supabase.rpc('increment_rate_counter', {
+  void supabase.rpc('increment_rate_counter', {
     p_agent_id: agentId,
     p_window_type: 'minute',
     p_window_start: minuteWindow.toISOString()
-  }).catch(() => { }) // Ignore errors, don't block response
+  })
 
   return { allowed: true }
 }

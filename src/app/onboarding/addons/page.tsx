@@ -50,7 +50,7 @@ function AddonsInner() {
         if (userData.valid && userData.user) {
           localStorage.setItem('ls_auth', JSON.stringify(userData.user))
         }
-        window.location.href = `/setup`
+        window.location.href = `/onboarding`
       } else {
         setError(data.error || 'Error al configurar')
         setStep('ai')

@@ -43,14 +43,15 @@ export async function POST(req: NextRequest) {
     })
 
     if (error) {
+      console.error('RPC register_agent error:', error)
       if (error.message.includes('already registered')) return NextResponse.json({ error: 'Email ya registrado' }, { status: 409 })
-      return NextResponse.json({ error: 'Error al crear cuenta' }, { status: 500 })
+      return NextResponse.json({ error: `Error al crear cuenta: ${error.message}` }, { status: 500 })
     }
 
     const agentId = data
 
-    // Mark as pending payment (NOT active, NOT accessible)
-    await supabase.from('agents').update({ status: 'pending_payment', trial_ends_at: null }).eq('id', agentId)
+    // Mark as pending (NOT active, NOT accessible — awaiting Stripe payment)
+    await supabase.from('agents').update({ status: 'pending', trial_ends_at: null }).eq('id', agentId)
 
     // Record for trial abuse prevention
     try {
@@ -62,6 +63,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ agentId })
   } catch (err: any) {
     console.error('Register error:', err)
-    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 })
+    return NextResponse.json({ error: `Error del servidor: ${err.message}` }, { status: 500 })
   }
 }

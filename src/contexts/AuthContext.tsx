@@ -14,6 +14,8 @@ interface User {
   onboarding_complete?: boolean
   trial_ends_at?: string | null
   profile_photo?: string | null
+  phone?: string
+  company_name?: string
 }
 
 interface ActiveAccount {
@@ -60,7 +62,7 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext)
 
-const PUBLIC_ROUTES = ['/login', '/register', '/l']
+const PUBLIC_ROUTES = ['/login', '/register', '/l', '/onboarding']
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -134,9 +136,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user && !isPublic) {
       router.push('/login')
     }
-    // Redirect to setup if onboarding not complete (except admin)
-    if (user && !user.onboarding_complete && user.role !== 'admin' && pathname !== '/setup' && !isPublic) {
-      router.push('/setup')
+    // Redirect to onboarding if onboarding not complete (except admin)
+    if (user && !user.onboarding_complete && user.role !== 'admin' && pathname !== '/onboarding' && !isPublic) {
+      router.push('/onboarding')
     }
     // Block access if trial expired and not paid (except admin and packages page)
     if (user && user.role !== 'admin' && !user.paid && user.trial_ends_at) {
@@ -173,7 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('ls_auth', JSON.stringify(data.user))
 
       if (!data.user.onboarding_complete && data.user.role !== 'admin') {
-        router.push('/setup')
+        router.push('/onboarding')
       } else {
         router.push('/dashboard')
       }
@@ -194,7 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!res.ok) return data.error || 'Error al crear cuenta'
       setUser(data.user)
       localStorage.setItem('ls_auth', JSON.stringify(data.user))
-      router.push('/setup')
+      router.push('/onboarding')
       return null
     } catch {
       return 'Error de conexion'

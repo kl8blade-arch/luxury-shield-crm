@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { C, scoreColor, fmtDate } from '@/lib/design'
 import { useAuth } from '@/contexts/AuthContext'
@@ -18,6 +19,7 @@ const CARDS = [
 ]
 
 export default function DashboardPage() {
+  const router = useRouter()
   const [stats, setStats] = useState<Record<string, number>>({})
   const [leads, setLeads] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -60,6 +62,51 @@ export default function DashboardPage() {
   return (
     <>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@300;400;500;600;700;800&display=swap');`}</style>
+
+      {/* Onboarding blocker modal */}
+      {user && !user.onboarding_complete && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9999,
+          background: 'rgba(5,5,7,0.98)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backdropFilter: 'blur(4px)',
+        }}>
+          <div style={{
+            textAlign: 'center',
+            maxWidth: 480,
+            padding: 40,
+          }}>
+            <h2 style={{ fontSize: 28, fontWeight: 700, color: '#F0ECE3', margin: '0 0 12px' }}>
+              ¡Casi listo!
+            </h2>
+            <p style={{ fontSize: 14, color: 'rgba(240,236,227,0.6)', margin: '0 0 28px', lineHeight: 1.6 }}>
+              Necesitamos algunos datos para activar a Sophia en tu negocio
+            </p>
+            <button
+              onClick={() => router.push('/onboarding')}
+              style={{
+                width: '100%',
+                padding: 14,
+                borderRadius: 12,
+                background: 'linear-gradient(135deg, #C9A84C, #8B6E2E)',
+                color: '#050507',
+                border: 'none',
+                fontSize: 15,
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              Configurar ahora
+            </button>
+          </div>
+        </div>
+      )}
+
       <div style={{ padding: isMobile ? '24px 16px' : '40px 36px', background: '#06070B', minHeight: '100vh', fontFamily: '"Outfit","Inter",sans-serif', position: 'relative' }}>
 
         <div style={{ position: 'absolute', top: '-15%', right: '-5%', width: '500px', height: '500px', background: 'radial-gradient(circle, rgba(201,168,76,0.04) 0%, transparent 70%)', pointerEvents: 'none' }} />

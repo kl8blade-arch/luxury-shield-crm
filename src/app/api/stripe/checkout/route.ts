@@ -11,26 +11,19 @@ export async function POST(req: NextRequest) {
     const origin = req.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'https://luxury-shield-crm.vercel.app'
     const auth = `Basic ${Buffer.from(`${stripeKey}:`).toString('base64')}`
 
-    // Build checkout session params
+    // Build checkout session params — ALWAYS subscription (monthly recurring)
     const params = new URLSearchParams()
-    params.append('mode', trialDays ? 'subscription' : 'payment')
+    params.append('mode', 'subscription')
     params.append('payment_method_types[]', 'card')
     params.append('line_items[0][price_data][currency]', 'usd')
     params.append('line_items[0][price_data][product_data][name]', `Luxury Shield CRM — ${packageName}`)
     params.append('line_items[0][price_data][unit_amount]', String(Math.round((price || 0) * 100)))
+    params.append('line_items[0][price_data][recurring][interval]', 'month')
     params.append('line_items[0][quantity]', '1')
-
-    if (trialDays) {
-      params.append('line_items[0][price_data][recurring][interval]', 'month')
-      params.append('subscription_data[trial_period_days]', String(trialDays))
-      params.append('subscription_data[metadata][packageId]', packageId || '')
-      params.append('subscription_data[metadata][agentId]', agentId || '')
-      params.append('success_url', `${origin}/onboarding/addons?agent_id=${agentId}&plan=${packageId}&payment=success`)
-      params.append('cancel_url', `${origin}/register?payment=cancelled`)
-    } else {
-      params.append('success_url', `${origin}/packages?success=true`)
-      params.append('cancel_url', `${origin}/packages?cancelled=true`)
-    }
+    params.append('subscription_data[metadata][packageId]', packageId || '')
+    params.append('subscription_data[metadata][agentId]', agentId || '')
+    params.append('success_url', `${origin}/onboarding/addons?agent_id=${agentId}&plan=${packageId}&payment=success`)
+    params.append('cancel_url', `${origin}/register?payment=cancelled`)
 
     params.append('metadata[packageId]', packageId || '')
     params.append('metadata[packageName]', packageName)

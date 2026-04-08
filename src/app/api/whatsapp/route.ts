@@ -239,6 +239,20 @@ async function getAIResponse(lead: any, conversationHistory: any[], incomingMess
   const hasColor = !!color
   const messageNumber = conversationHistory.length + 1
 
+  // Load agent personalization (company name, tone, welcome message)
+  let agentConfig: any = {}
+  let agencyName = 'Luxury Shield'
+  try {
+    if (lead?.agent_id) {
+      const [{ data: config }, { data: agent }] = await Promise.all([
+        supabase.from('agent_configs').select('sophia_tone, welcome_message, sophia_language, insurance_types').eq('agent_id', lead.agent_id).single(),
+        supabase.from('agents').select('company_name').eq('id', lead.agent_id).single(),
+      ])
+      if (config) agentConfig = config
+      if (agent?.company_name) agencyName = agent.company_name
+    }
+  } catch {}
+
   // Module: Stage context
   let stageContext = ''
   try {
@@ -274,6 +288,14 @@ async function getAIResponse(lead: any, conversationHistory: any[], incomingMess
   }
   const langNote = langNotes[lang] || ''
 
+  // Tone mapping
+  const toneMapping: Record<string, string> = {
+    profesional: 'Mantén un tono profesional, formal, informativo y directo. Usa datos y estudios. Evita emojis excesivos. Sé experto, no amigo.',
+    amigable: 'Eres como un amigo cercano. Cálido, empático, conversacional. Usa emojis con moderación (1-2). Haz que el lead se sienta escuchado y cuidado.',
+    energico: 'Entusiasta, motivador, energético. Celebra las decisiones del lead. Usa emojis. Haz que la conversación sea positiva y movida. Nunca pesimista.',
+  }
+  const toneNote = agentConfig.sophia_tone ? `\n╚ TONO ASIGNADO: ${toneMapping[agentConfig.sophia_tone] || toneMapping.amigable}` : ''
+
   const systemPrompt = `══ REGLA #0 — DETECCIÓN DE CIERRE — MÁXIMA PRIORIDAD ══
 Si el lead dice "ya mismo", "ahora mismo", "quiero que me llamen", "consígueme el plan", "quiero empezar", "dónde firmo", "cómo activo", "ok me interesa", "sí quiero", confirma un número de teléfono, o CUALQUIER frase que indique que quiere proceder:
 → INCLUIR [LISTO_PARA_COMPRAR] en tu respuesta
@@ -286,9 +308,9 @@ Lee TODO el historial. Extrae lo que el lead YA dijo:
 Si alguno ya está → NUNCA volver a preguntarlo.
 Si el lead dice "ya te dije" → pedir disculpas UNA vez y avanzar.
 
-Eres Sophia, parte del equipo de asesores de Luxury Shield Insurance. Eres cálida, inteligente, empática y persuasiva — como una amiga cercana que trabaja en salud y quiere que su gente esté protegida. No eres una vendedora. Eres alguien que genuinamente se preocupa.
+Eres Sophia, parte del equipo de asesores de ${agencyName}. Eres cálida, inteligente, empática y persuasiva — como una amiga cercana que trabaja en salud y quiere que su gente esté protegida. No eres una vendedora. Eres alguien que genuinamente se preocupa.${toneNote}
 
-IDIOMA: Responde en español. Si el cliente escribe en inglés, responde en inglés.
+IDIOMA: Responde en ${agentConfig.sophia_language === 'en' ? 'inglés' : agentConfig.sophia_language === 'bilingue' ? 'español e inglés según lo que el cliente use' : 'español'}. Si el cliente escribe en otro idioma, responde en ese idioma.
 
 ━━━ REGLAS ABSOLUTAS ━━━
 
@@ -1093,6 +1115,41 @@ Escribe el comando o dime que necesitas 👇`
         `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
         { status: 200, headers: { 'Content-Type': 'text/xml' } }
       )
+    }
+
+    // ══════════════════════════════════════════════
+    // SOPHIA EXCLUSIVITY CHECK — only silva & planmedicoflorida can use Sophia
+    // ══════════════════════════════════════════════
+    const ALLOWED_AGENTS = ['silva@luxury-shield.com', 'planmedicoflorida@gmail.com']
+
+    if (lead.agent_id) {
+      const { data: agent } = await supabase
+        .from('agents')
+        .select('email')
+        .eq('id', lead.agent_id)
+        .single()
+
+      if (agent && !ALLOWED_AGENTS.includes(agent.email.toLowerCase())) {
+        console.log(`[SOPHIA BLOCKED] Agent ${agent.email} not in allowed list`)
+
+        // Log the blocked attempt
+        await supabase.from('conversations').insert({
+          lead_id: lead.id, lead_name: lead.name, lead_phone: from,
+          channel: 'whatsapp', direction: 'inbound', message: body,
+          created_at: new Date().toISOString(),
+        })
+
+        await supabase.from('leads').update({
+          last_contact: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          last_message_at: new Date().toISOString(),
+        }).eq('id', lead.id)
+
+        return new NextResponse(
+          `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
+          { status: 200, headers: { 'Content-Type': 'text/xml' } }
+        )
+      }
     }
 
     console.log(`[SOPHIA ACTIVE] Processing response for ${lead.name}`)
