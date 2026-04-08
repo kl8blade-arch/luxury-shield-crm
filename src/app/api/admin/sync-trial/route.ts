@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import Stripe from 'stripe'
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
+
+// Lazy-load Stripe to avoid build errors
+async function getStripe() {
+  const Stripe = (await import('stripe')).default
+  return new Stripe(process.env.STRIPE_SECRET_KEY!)
+}
 
 export async function POST(req: NextRequest) {
   // Auth check
@@ -49,6 +53,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Find active subscription in Stripe
+  const stripe = await getStripe()
   const subscriptions = await stripe.subscriptions.list({
     customer: agent.stripe_customer_id,
     status: 'trialing',

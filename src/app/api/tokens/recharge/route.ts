@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import Stripe from 'stripe'
 import { TOKEN_PACKAGES } from '@/lib/token-guard'
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+
+// Lazy-load Stripe to avoid build errors
+async function getStripe() {
+  const Stripe = (await import('stripe')).default
+  return new Stripe(process.env.STRIPE_SECRET_KEY!)
+}
 
 /**
  * Auto-recharge tokens for an agent.
@@ -40,10 +45,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Attempt Stripe charge if customer exists
-    const stripeKey = process.env.STRIPE_SECRET_KEY
-    if (stripeKey && agent.stripe_customer_id) {
+    if (agent.stripe_customer_id) {
       try {
-        const stripe = new Stripe(stripeKey)
+        const stripe = await getStripe()
         const paymentIntent = await stripe.paymentIntents.create({
           amount: Math.round(pkg.price * 100),
           currency: 'usd',

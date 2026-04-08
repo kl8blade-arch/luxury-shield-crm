@@ -1,16 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import Stripe from 'stripe'
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
 // Lazy initialize Stripe to avoid build-time errors
-let stripeClient: Stripe | null = null
-function getStripe() {
-  if (!stripeClient && process.env.STRIPE_API_KEY) {
-    stripeClient = new Stripe(process.env.STRIPE_API_KEY, { apiVersion: '2025-01-27' as any })
-  }
-  return stripeClient
+async function getStripe() {
+  const Stripe = (await import('stripe')).default
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2025-01-27' as any })
 }
 
 export async function POST(req: NextRequest) {
@@ -47,7 +43,7 @@ export async function POST(req: NextRequest) {
     // Cancel subscription in Stripe
     if (agent.stripe_customer_id) {
       try {
-        const stripe = getStripe()
+        const stripe = await getStripe()
         if (!stripe) throw new Error('Stripe not initialized')
 
         // Get active subscriptions
