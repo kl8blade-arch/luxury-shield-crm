@@ -714,6 +714,7 @@ Devuelve SOLO JSON: {"accion":"vendido"|"perdido"|"seguimiento"|"no_califica"|"d
 
 // ── POST: Twilio Webhook — incoming WhatsApp messages ──
 export async function POST(req: NextRequest) {
+  console.log(`[WEBHOOK] ⭐ POST /api/whatsapp called - ${new Date().toISOString()}`)
   try {
     const formData = await req.formData()
     const from = (formData.get('From') as string || '').replace('whatsapp:', '')
@@ -722,6 +723,8 @@ export async function POST(req: NextRequest) {
     const mediaUrl = formData.get('MediaUrl0') as string || ''
     const numMedia = parseInt(formData.get('NumMedia') as string || '0')
     const mediaType = formData.get('MediaContentType0') as string || ''
+
+    console.log(`[WEBHOOK] Message from: ${from} | Body: "${body.substring(0, 50)}" | Media: ${numMedia > 0 ? mediaType : 'none'}`)
 
     // ══════════════════════════════════════════════
     // SECURITY: Validate Twilio + deduplicate
@@ -1608,13 +1611,15 @@ ${productOppsText}
 
     // Release processing lock + return
     if (lead?.id) await supabase.from('leads').update({ sophia_processing: false }).eq('id', lead.id)
+    console.log(`[WEBHOOK] ✅ Completed successfully for ${lead?.name || from}`)
     return new NextResponse(
       `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
       { status: 200, headers: { 'Content-Type': 'text/xml' } }
     )
 
   } catch (error: any) {
-    console.error('[Sophia] FATAL webhook error:', error?.message || error, error?.stack)
+    console.error('[WEBHOOK] ❌ FATAL ERROR:', error?.message || error)
+    console.error('[WEBHOOK] Stack:', error?.stack)
     // Always release lock on error
     // Release lock best-effort (from may not be in scope)
     try { await supabase.from('leads').update({ sophia_processing: false }).eq('sophia_processing', true) } catch {}
