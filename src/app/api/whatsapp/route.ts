@@ -14,18 +14,47 @@ const ADMIN_PHONE = process.env.ADMIN_WHATSAPP || '+17869435656'
 
 // ── Send WhatsApp via Twilio (auto-splits messages > 1500 chars) ──
 async function sendWhatsApp(to: string, message: string) {
-  const cleanTo = to.startsWith('+') ? to : `+${to.replace(/\D/g, '')}`
-  const auth = `Basic ${Buffer.from(`${TWILIO_SID}:${TWILIO_TOKEN}`).toString('base64')}`
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`
+  try {
+    console.log(`[sendWhatsApp] Starting — to: ${to}, msg length: ${message.length}`)
 
-  // WhatsApp limit is 1600 chars — split if needed
-  const msg = message.length > 1500 ? message.substring(0, 1497) + '...' : message
+    if (!TWILIO_SID || !TWILIO_TOKEN || !TWILIO_FROM) {
+      console.error('[sendWhatsApp] Twilio not configured:', { TWILIO_SID: !!TWILIO_SID, TWILIO_TOKEN: !!TWILIO_TOKEN, TWILIO_FROM: !!TWILIO_FROM })
+      return { error: 'Twilio not configured' }
+    }
 
-  const body = new URLSearchParams({ From: `whatsapp:${TWILIO_FROM}`, To: `whatsapp:${cleanTo}`, Body: msg })
-  const res = await fetch(url, { method: 'POST', headers: { 'Authorization': auth, 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() })
-  const data = await res.json()
-  console.log('WhatsApp sent:', data.sid, 'to:', cleanTo, data.error_code ? `ERROR: ${data.error_code}` : '')
-  return data
+    const cleanTo = to.startsWith('+') ? to : `+${to.replace(/\D/g, '')}`
+    console.log(`[sendWhatsApp] Clean phone: ${cleanTo}, From: ${TWILIO_FROM}`)
+
+    const auth = `Basic ${Buffer.from(`${TWILIO_SID}:${TWILIO_TOKEN}`).toString('base64')}`
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`
+
+    // WhatsApp limit is 1600 chars — split if needed
+    const msg = message.length > 1500 ? message.substring(0, 1497) + '...' : message
+
+    const body = new URLSearchParams({ From: `whatsapp:${TWILIO_FROM}`, To: `whatsapp:${cleanTo}`, Body: msg })
+    console.log(`[sendWhatsApp] Sending to Twilio API: ${url}`)
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Authorization': auth, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    })
+
+    console.log(`[sendWhatsApp] Twilio response status: ${res.status}`)
+    const data = await res.json()
+    console.log('[sendWhatsApp] Twilio response:', JSON.stringify(data).substring(0, 200))
+
+    if (data.sid) {
+      console.log(`[sendWhatsApp] ✅ Message sent: SID=${data.sid} to=${cleanTo}`)
+    } else {
+      console.error(`[sendWhatsApp] ❌ Failed: ${data.error_message || data.message || JSON.stringify(data)}`)
+    }
+
+    return data
+  } catch (e: any) {
+    console.error('[sendWhatsApp] Exception:', e.message, e.stack)
+    return { error: e.message }
+  }
 }
 
 // ── Transcribe audio via Whisper ──
@@ -1318,8 +1347,17 @@ Escribe el comando o dime que necesitas 👇`
     } catch (e: any) { console.error('[TOKENS]', e.message) }
 
     console.log(`[SOPHIA] Calling getAIResponse for lead: ${lead.id} - ${lead.name}`)
-    let aiResponse = await getAIResponse(lead, history || [], body, alreadyIntroduced)
-    console.log(`[SOPHIA] AI Response received: ${aiResponse ? aiResponse.substring(0, 100) : 'EMPTY'} (${aiResponse?.length || 0} chars)`)
+    let aiResponse = ''
+    try {
+      aiResponse = await getAIResponse(lead, history || [], body, alreadyIntroduced)
+      console.log(`[SOPHIA] AI Response received: ${aiResponse ? aiResponse.substring(0, 100) : 'EMPTY'} (${aiResponse?.length || 0} chars)`)
+    } catch (e: any) {
+      console.error('[SOPHIA] getAIResponse ERROR:', e.message, e.stack)
+      // Send error message
+      await sendWhatsApp(from, `Hubo un error procesando tu mensaje. Intenta de nuevo en unos segundos. Error: ${e.message.substring(0, 50)}`)
+      await supabase.from('leads').update({ sophia_processing: false }).eq('id', lead.id)
+      return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
+    }
 
     // ══════════════════════════════════════════════
     // BUG FIX 2: Force closing signal detection
@@ -1385,7 +1423,13 @@ Escribe el comando o dime que necesitas 👇`
     await new Promise(resolve => setTimeout(resolve, delay * 1000))
 
     // Send response via WhatsApp
-    await sendWhatsApp(from, cleanResponse)
+    console.log(`[Sophia] About to send response to ${from}: "${cleanResponse.substring(0, 50)}..."`)
+    const sendResult = await sendWhatsApp(from, cleanResponse)
+    console.log(`[Sophia] sendWhatsApp result:`, JSON.stringify(sendResult).substring(0, 150))
+
+    if (!sendResult.sid) {
+      console.error(`[Sophia] Failed to send message: ${sendResult.error || sendResult.error_message || 'Unknown error'}`)
+    }
 
     // ── SYSTEM 4: Voice response (non-blocking) ──
     const messageCount = (history || []).length + 1
@@ -1587,10 +1631,37 @@ export async function GET() {
   const hasSupabaseUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL
   const hasSupabaseKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY
   const hasTwilioSid = !!process.env.TWILIO_ACCOUNT_SID
+  const hasTwilioToken = !!process.env.TWILIO_AUTH_TOKEN
+  const hasTwilioFrom = !!process.env.TWILIO_WHATSAPP_FROM
   const hasOpenaiKey = !!process.env.OPENAI_API_KEY
+
+  console.log('[Health Check]', {
+    ANTHROPIC_API_KEY: hasAnthropicKey ? '✅' : '❌',
+    NEXT_PUBLIC_SUPABASE_URL: hasSupabaseUrl ? '✅' : '❌',
+    SUPABASE_SERVICE_ROLE_KEY: hasSupabaseKey ? '✅' : '❌',
+    TWILIO_ACCOUNT_SID: hasTwilioSid ? '✅' : '❌',
+    TWILIO_AUTH_TOKEN: hasTwilioToken ? '✅' : '❌',
+    TWILIO_WHATSAPP_FROM: hasTwilioFrom ? '✅' : '❌',
+    OPENAI_API_KEY: hasOpenaiKey ? '✅' : '❌',
+  })
+
   return NextResponse.json({
-    status: '✅ online',
+    status: hasAnthropicKey && hasSupabaseUrl && hasSupabaseKey && hasTwilioSid && hasTwilioToken && hasTwilioFrom ? '✅ online' : '⚠️ missing config',
     agent: 'Sophia v3',
-    env: { anthropic: hasAnthropicKey, supabase: hasSupabaseUrl && hasSupabaseKey, twilio: hasTwilioSid, whisper: hasOpenaiKey },
+    env: {
+      anthropic: hasAnthropicKey,
+      supabase: hasSupabaseUrl && hasSupabaseKey,
+      twilio: hasTwilioSid && hasTwilioToken && hasTwilioFrom,
+      whisper: hasOpenaiKey,
+    },
+    details: {
+      ANTHROPIC_API_KEY: hasAnthropicKey,
+      NEXT_PUBLIC_SUPABASE_URL: hasSupabaseUrl,
+      SUPABASE_SERVICE_ROLE_KEY: hasSupabaseKey,
+      TWILIO_ACCOUNT_SID: hasTwilioSid,
+      TWILIO_AUTH_TOKEN: hasTwilioToken,
+      TWILIO_WHATSAPP_FROM: hasTwilioFrom,
+      OPENAI_API_KEY: hasOpenaiKey,
+    },
   })
 }
