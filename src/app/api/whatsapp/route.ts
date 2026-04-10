@@ -1063,6 +1063,7 @@ Escribe el comando o dime que necesitas 👇`
 
       // Check campaign trigger FIRST — before assigning default agent
       let newLeadAgentId: string | null = null
+      let newLeadAccountId: string | null = null
       let newLeadCampaignId: string | null = null
       let newLeadUtmCampaign: string | null = null
       let newLeadSource = 'whatsapp_inbound'
@@ -1085,7 +1086,16 @@ Escribe el comando o dime que necesitas 👇`
             newLeadCampaignId = campaignCreate.id
             newLeadUtmCampaign = campaignCreate.utm_campaign || potentialTriggerCreate
             newLeadSource = 'meta_ads_whatsapp'
-            console.log(`[CAMPAIGN] New lead assigned to campaign agent ${newLeadAgentId} via trigger "${potentialTriggerCreate}"`)
+            // FIX: Also fetch account_id so tokens/config use the correct account
+            try {
+              const { data: cAgent } = await supabase
+                .from('agents')
+                .select('account_id')
+                .eq('id', campaignCreate.agent_id)
+                .maybeSingle()
+              newLeadAccountId = cAgent?.account_id || null
+            } catch {}
+            console.log(`[CAMPAIGN] New lead → agent ${newLeadAgentId} / account ${newLeadAccountId} via trigger "${potentialTriggerCreate}"`)
           }
         }
       } catch {}
@@ -1095,10 +1105,11 @@ Escribe el comando o dime que necesitas 👇`
         try {
           const { data: silvaAgent } = await supabase
             .from('agents')
-            .select('id')
+            .select('id, account_id')
             .eq('email', 'silva@luxury-shield.com')
             .maybeSingle()
           newLeadAgentId = silvaAgent?.id || null
+          newLeadAccountId = silvaAgent?.account_id || null
         } catch (e: any) {
           console.error('[Sophia] Could not find Silva agent:', e.message)
         }
@@ -1114,6 +1125,7 @@ Escribe el comando o dime que necesitas 👇`
         conversation_mode: 'sophia',
         agent_id: newLeadAgentId,
       }
+      if (newLeadAccountId) insertPayload.account_id = newLeadAccountId
       if (newLeadCampaignId) insertPayload.campaign_id = newLeadCampaignId
       if (newLeadUtmCampaign) insertPayload.utm_campaign = newLeadUtmCampaign
 
@@ -1178,17 +1190,35 @@ Escribe el comando o dime que necesitas 👇`
           console.log(`[CAMPAIGN] ✅ Trigger "${potentialTrigger}" matched campaign "${campaign.name}" → agent ${campaign.agent_id}`)
           // Assign lead to campaign owner if not already assigned
           if (lead.agent_id !== campaign.agent_id) {
-            await supabase.from('leads').update({
+            // FIX: Also fetch the agent's account_id so tokens/config use the right account
+            let campaignAccountId: string | null = null
+            try {
+              const { data: campaignAgent } = await supabase
+                .from('agents')
+                .select('account_id')
+                .eq('id', campaign.agent_id)
+                .maybeSingle()
+              campaignAccountId = campaignAgent?.account_id || null
+              console.log(`[CAMPAIGN] Agent account_id resolved: ${campaignAccountId}`)
+            } catch (e: any) {
+              console.error('[CAMPAIGN] Could not fetch agent account_id:', e.message)
+            }
+
+            const leadUpdates: Record<string, any> = {
               agent_id: campaign.agent_id,
               campaign_id: campaign.id,
               utm_campaign: campaign.utm_campaign || potentialTrigger,
               source: 'meta_ads_whatsapp',
               updated_at: new Date().toISOString(),
-            }).eq('id', lead.id)
+            }
+            if (campaignAccountId) leadUpdates.account_id = campaignAccountId
+
+            await supabase.from('leads').update(leadUpdates).eq('id', lead.id)
             lead.agent_id = campaign.agent_id
             lead.campaign_id = campaign.id
             lead.utm_campaign = campaign.utm_campaign || potentialTrigger
-            console.log(`[CAMPAIGN] Lead ${lead.id} reassigned to agent ${campaign.agent_id} via trigger "${potentialTrigger}"`)
+            if (campaignAccountId) lead.account_id = campaignAccountId
+            console.log(`[CAMPAIGN] Lead ${lead.id} reassigned → agent ${campaign.agent_id} / account ${campaignAccountId} via trigger "${potentialTrigger}"`)
           } else {
             console.log(`[CAMPAIGN] Lead already assigned to correct agent ${lead.agent_id}`)
           }
