@@ -352,7 +352,7 @@ IDIOMA: Responde en ${agentConfig.sophia_language === 'en' ? 'inglés' : agentCo
 
 1. MEMORIA: Lee TODO el historial antes de responder. Nunca pidas información que el lead ya dio. ${alreadyIntroduced ? 'YA TE PRESENTASTE — NUNCA te presentes de nuevo.' : 'Este es el primer contacto, preséntate brevemente UNA vez.'}
 
-2. IDENTIDAD: Eres parte del equipo de Luxury Shield. Si preguntan si eres IA → "Soy parte del equipo de asesores de Luxury Shield 😊 ¿Seguimos?"
+2. IDENTIDAD: Eres parte del equipo de ${agencyName}. Si preguntan si eres IA → "Soy parte del equipo de asesores de ${agencyName} 😊 ¿Seguimos?"
 NUNCA menciones "agente humano" ni "inteligencia artificial".
 
 3. VOCABULARIO: ❌ "seguro" → ✅ "plan de protección", "cobertura", "plan DVH". ❌ "vender/comprar" → ✅ "activar", "iniciar tu cobertura". ❌ "agente humano te contactará".
@@ -525,10 +525,10 @@ Si algún dato dice 'desconocido', puedes preguntarlo. Si ya está, NUNCA volver
     if (!text) {
       console.error('Claude API returned empty content')
     }
-    return text || 'Hola, soy Sophia de Luxury Shield 😊 ¿En qué puedo ayudarte hoy?'
+    return text || `Hola, soy Sophia de ${agencyName} 😊 ¿En qué puedo ayudarte hoy?`
   } catch (err) {
     console.error('Claude API fetch error:', err)
-    return 'Hola, soy Sophia de Luxury Shield 😊 ¿En qué puedo ayudarte hoy?'
+    return `Hola, soy Sophia de ${agencyName} 😊 ¿En qué puedo ayudarte hoy?`
   }
 }
 
@@ -661,7 +661,13 @@ Devuelve SOLO JSON: {"accion":"vendido"|"perdido"|"seguimiento"|"no_califica"|"d
 
     // If sold — welcome message + schedule referral followup (48h)
     if (parsed.accion === 'vendido' && lead.phone) {
-      await sendWhatsApp(lead.phone, `¡${firstName}! 🎉 Tu plan de protección familiar ya está en proceso. Recibirás los detalles completos muy pronto.\n\n¡Bienvenido/a a la familia Luxury Shield! 💙`)
+      // Get agent company name for personalized messages
+      let agentCompanyName = 'Luxury Shield'
+      try {
+        const { data: agentData } = await supabase.from('agents').select('company_name').eq('id', lead.agent_id).maybeSingle()
+        if (agentData?.company_name) agentCompanyName = agentData.company_name.trim()
+      } catch {}
+      await sendWhatsApp(lead.phone, `¡${firstName}! 🎉 Tu plan de protección familiar ya está en proceso. Recibirás los detalles completos muy pronto.\n\n¡Bienvenido/a a la familia ${agentCompanyName}! 💙`)
 
       // Schedule referral followup for 48h later (System 3)
       const in48h = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
@@ -669,7 +675,7 @@ Devuelve SOLO JSON: {"accion":"vendido"|"perdido"|"seguimiento"|"no_califica"|"d
         const { callAI: callAIRef } = await import('@/lib/token-tracker')
         const refResult = await callAIRef({
           feature: 'other', model: 'claude-haiku-4-5-20251001', maxTokens: 150,
-          messages: [{ role: 'user', content: `Eres Sophia de Luxury Shield. ${firstName} activo su plan DVH hace 2 dias. Escribe seguimiento de max 4 lineas: pregunta como se siente, menciona "si conoces a alguien que lo necesite...". Suena como amiga. SOLO el mensaje.` }],
+          messages: [{ role: 'user', content: `Eres Sophia de ${agentCompanyName}. ${firstName} activo su plan DVH hace 2 dias. Escribe seguimiento de max 4 lineas: pregunta como se siente, menciona "si conoces a alguien que lo necesite...". Suena como amiga. SOLO el mensaje.` }],
         })
         const refMsg = refResult.text || ''
         await supabase.from('reminders').insert({
