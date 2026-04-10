@@ -1466,10 +1466,17 @@ Escribe el comando o dime que necesitas 👇`
       }
     } catch (e: any) { console.error('[TOKENS]', e.message) }
 
+    // ── SEGURIDAD: sanitizar mensaje del lead antes de pasarlo a Claude ──
+    const { sanitizeLeadMessage } = await import('@/lib/sophia-orchestrator')
+    const sanitizedBody = sanitizeLeadMessage(body)
+    if (sanitizedBody !== body) {
+      console.warn(`[SECURITY] Message sanitized for lead ${lead.id} — removed ${body.length - sanitizedBody.length} chars`)
+    }
+
     console.log(`[SOPHIA] Calling getAIResponse for lead: ${lead.id} - ${lead.name}`)
     let aiResponse = ''
     try {
-      aiResponse = await getAIResponse(lead, history || [], body, alreadyIntroduced)
+      aiResponse = await getAIResponse(lead, history || [], sanitizedBody, alreadyIntroduced)
       console.log(`[SOPHIA] AI Response received: ${aiResponse ? aiResponse.substring(0, 100) : 'EMPTY'} (${aiResponse?.length || 0} chars)`)
     } catch (e: any) {
       console.error('[SOPHIA] getAIResponse ERROR:', e.message, e.stack)
@@ -1487,6 +1494,21 @@ Escribe el comando o dime que necesitas 👇`
     const isClosingSignal = CLOSING_SIGNALS.some(s => msgLC.includes(s))
 
     let isReadyToBuy = aiResponse.includes('[LISTO_PARA_COMPRAR]')
+
+    // Audit log — registrar detección de cierre
+    if (isReadyToBuy) {
+      try {
+        await supabase.from('sophia_action_log').insert({
+          account_id: lead.account_id || null,
+          agent_id: lead.agent_id || null,
+          lead_id: lead.id,
+          lead_phone: from,
+          action_type: 'listo_para_comprar_detected',
+          trigger_text: body.slice(0, 200),
+          blocked: false,
+        })
+      } catch {}
+    }
 
     // Force closing if lead gave explicit signal but Sophia missed it
     if (isClosingSignal && !isReadyToBuy) {
