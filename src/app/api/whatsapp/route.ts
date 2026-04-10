@@ -1061,31 +1061,65 @@ Escribe el comando o dime que necesitas 👇`
     if (!lead) {
       console.log(`[Sophia] Creating new lead for ${from}`)
 
-      // Get Silva's agent_id to assign new leads from WhatsApp
-      let silvaAgentId: string | null = null
+      // Check campaign trigger FIRST — before assigning default agent
+      let newLeadAgentId: string | null = null
+      let newLeadCampaignId: string | null = null
+      let newLeadUtmCampaign: string | null = null
+      let newLeadSource = 'whatsapp_inbound'
+
       try {
-        const { data: silvaAgent } = await supabase
-          .from('agents')
-          .select('id')
-          .eq('email', 'silva@luxury-shield.com')
-          .maybeSingle()
-        silvaAgentId = silvaAgent?.id || null
-      } catch (e: any) {
-        console.error('[Sophia] Could not find Silva agent:', e.message)
+        const bodyUpperCreate = body.toUpperCase().trim()
+        const triggerMatchCreate = bodyUpperCreate.match(/^([A-Z0-9\-]+)/)
+        const potentialTriggerCreate = triggerMatchCreate?.[1] || null
+
+        if (potentialTriggerCreate) {
+          const { data: campaignCreate } = await supabase
+            .from('meta_campaigns')
+            .select('id, agent_id, utm_campaign')
+            .ilike('trigger_message', `${potentialTriggerCreate}%`)
+            .eq('status', 'active')
+            .maybeSingle()
+
+          if (campaignCreate?.agent_id) {
+            newLeadAgentId = campaignCreate.agent_id
+            newLeadCampaignId = campaignCreate.id
+            newLeadUtmCampaign = campaignCreate.utm_campaign || potentialTriggerCreate
+            newLeadSource = 'meta_ads_whatsapp'
+            console.log(`[CAMPAIGN] New lead assigned to campaign agent ${newLeadAgentId} via trigger "${potentialTriggerCreate}"`)
+          }
+        }
+      } catch {}
+
+      // Fallback to Silva only if no campaign agent found
+      if (!newLeadAgentId) {
+        try {
+          const { data: silvaAgent } = await supabase
+            .from('agents')
+            .select('id')
+            .eq('email', 'silva@luxury-shield.com')
+            .maybeSingle()
+          newLeadAgentId = silvaAgent?.id || null
+        } catch (e: any) {
+          console.error('[Sophia] Could not find Silva agent:', e.message)
+        }
       }
+
+      const insertPayload: Record<string, any> = {
+        name: profileName || from,
+        phone: from,
+        stage: 'new',
+        source: newLeadSource,
+        score: 40,
+        ia_active: true,
+        conversation_mode: 'sophia',
+        agent_id: newLeadAgentId,
+      }
+      if (newLeadCampaignId) insertPayload.campaign_id = newLeadCampaignId
+      if (newLeadUtmCampaign) insertPayload.utm_campaign = newLeadUtmCampaign
 
       const { data: newLead, error: insertErr } = await supabase
         .from('leads')
-        .insert({
-          name: profileName || from,
-          phone: from,
-          stage: 'new',
-          source: 'whatsapp_inbound',
-          score: 40,
-          ia_active: true,
-          conversation_mode: 'sophia',
-          agent_id: silvaAgentId, // Assign to Silva if found
-        })
+        .insert(insertPayload)
         .select()
         .single()
 
@@ -1096,10 +1130,10 @@ Escribe el comando o dime que necesitas 👇`
           .insert({
             name: profileName || from,
             phone: from,
-            source: 'whatsapp_inbound',
+            source: newLeadSource,
             score: 40,
             conversation_mode: 'sophia',
-            agent_id: silvaAgentId,
+            agent_id: newLeadAgentId,
           })
           .select()
           .single()
@@ -1119,6 +1153,53 @@ Escribe el comando o dime que necesitas 👇`
     }
 
     console.log(`[Sophia] Lead found: ${lead.id} — ${lead.name} — stage: ${lead.stage} — mode: ${lead.conversation_mode || 'sophia'}`)
+
+    // ══════════════════════════════════════════════
+    // CAMPAIGN TRIGGER DETECTION — must run BEFORE agent/mode checks
+    // Detects trigger codes (e.g. DENTAL-PMF) in the incoming message
+    // and assigns the lead to the agent who owns that campaign
+    // ══════════════════════════════════════════════
+    try {
+      const bodyUpper = body.toUpperCase().trim()
+      // Extract potential trigger: first word-group before a space (e.g. "DENTAL-PMF Hola..." → "DENTAL-PMF")
+      const triggerMatch = bodyUpper.match(/^([A-Z0-9\-]+)/)
+      const potentialTrigger = triggerMatch?.[1] || null
+
+      if (potentialTrigger) {
+        console.log(`[CAMPAIGN] Checking trigger: "${potentialTrigger}"`)
+        const { data: campaign } = await supabase
+          .from('meta_campaigns')
+          .select('id, name, agent_id, trigger_message, utm_campaign')
+          .ilike('trigger_message', `${potentialTrigger}%`)
+          .eq('status', 'active')
+          .maybeSingle()
+
+        if (campaign?.agent_id) {
+          console.log(`[CAMPAIGN] ✅ Trigger "${potentialTrigger}" matched campaign "${campaign.name}" → agent ${campaign.agent_id}`)
+          // Assign lead to campaign owner if not already assigned
+          if (lead.agent_id !== campaign.agent_id) {
+            await supabase.from('leads').update({
+              agent_id: campaign.agent_id,
+              campaign_id: campaign.id,
+              utm_campaign: campaign.utm_campaign || potentialTrigger,
+              source: 'meta_ads_whatsapp',
+              updated_at: new Date().toISOString(),
+            }).eq('id', lead.id)
+            lead.agent_id = campaign.agent_id
+            lead.campaign_id = campaign.id
+            lead.utm_campaign = campaign.utm_campaign || potentialTrigger
+            console.log(`[CAMPAIGN] Lead ${lead.id} reassigned to agent ${campaign.agent_id} via trigger "${potentialTrigger}"`)
+          } else {
+            console.log(`[CAMPAIGN] Lead already assigned to correct agent ${lead.agent_id}`)
+          }
+        } else {
+          console.log(`[CAMPAIGN] No active campaign found for trigger "${potentialTrigger}"`)
+        }
+      }
+    } catch (campaignErr: any) {
+      console.error('[CAMPAIGN] Trigger detection error (non-blocking):', campaignErr.message)
+      // Non-blocking — continue normally even if campaign lookup fails
+    }
 
     // ══════════════════════════════════════════════
     // FRESH MODE CHECK — check ALL leads with this phone for manual mode
