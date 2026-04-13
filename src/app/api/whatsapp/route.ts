@@ -1596,105 +1596,133 @@ Escribe el comando o dime que necesitas 👇`
       }
     }
 
-    // If ready to buy — generate structured summary and notify ASSIGNED AGENT ONLY
+    // ══════════════════════════════════════════════
+    // LEAD CALIENTE — notificación GARANTIZADA al agente
+    // Notificación básica va PRIMERO (sin depender de Claude)
+    // Battle card con IA va después (no-bloqueante)
+    // ══════════════════════════════════════════════
     if (isReadyToBuy) {
-      const color = lead.favorite_color || lead.color_favorito || '—'
-
-      // Generate structured analysis with Claude
-      const allMessages = [...(history || []), { direction: 'inbound', message: body }, { direction: 'outbound', message: cleanResponse }]
-      const convoText = allMessages.slice(-12).map((c: any) =>
-        `${c.direction === 'inbound' ? 'Lead' : 'Sophia'}: ${c.message}`
-      ).join('\n')
-
-      // Module 4: Product radar
-      let productOppsText = ''
       try {
-        const { detectProductOpportunities, formatOpportunitiesForAgent } = await import('@/lib/product-radar')
-        const opps = detectProductOpportunities(lead, convoText)
-        productOppsText = formatOpportunitiesForAgent(opps)
-        await supabase.from('leads').update({ product_opportunities: opps }).eq('id', lead.id)
-      } catch {}
+        const color = lead.favorite_color || lead.color_favorito || '—'
 
-      // Module 1: Trigger learning + training data extraction
-      try {
-        const { learnFromClosedDeal } = await import('@/lib/sophia-learning')
-        learnFromClosedDeal(supabase, lead.id, process.env.ANTHROPIC_API_KEY!).catch(() => {})
-        const { extractTrainingData } = await import('@/lib/training-pipeline')
-        extractTrainingData(supabase, lead.id).catch(() => {})
-      } catch {}
+        // Actualizar lead en BD inmediatamente
+        await supabase.from('leads').update({
+          ready_to_buy: true,
+          stage: 'interested',
+          score: 95,
+          score_recommendation: '🔥 Lead calificado por Sophia IA — listo para cerrar',
+          ia_active: false,
+        }).eq('id', lead.id)
 
-      // Generate battle card with Claude
-      let bc: any = { nombre: lead.name, estado: lead.state, familia: '', telefono: from, color, nivel_interes: 8, argumento_ganador: 'Cobertura dental', objecion_probable: 'Ninguna', contraargumento: '', dias_considerando: 1, como_abrir: `Hola, soy de Luxury Shield. Tu color es ${color}.`, estado_emocional: 'curioso', resumen: 'Lead interesado en plan dental' }
+        // Resolver teléfono del agente — re-fetch fresco de BD, nunca confiar en el objeto en memoria
+        let notifPhone: string | null = null
+        let notifAgentName: string | null = null
 
-      try {
-        const { callAI: callAIBC } = await import('@/lib/token-tracker')
-        const bcResult = await callAIBC({
-          agentId: lead?.agent_id, accountId: lead?.account_id,
-          feature: 'sophia_whatsapp', model: 'claude-haiku-4-5-20251001', maxTokens: 400,
-          system: `Analiza esta conversacion. Devuelve SOLO JSON: {"nombre":"","estado":"","familia":"","nivel_interes":0,"argumento_ganador":"","objecion_probable":"","contraargumento":"","como_abrir":"","estado_emocional":"","resumen":""}`,
-          messages: [{ role: 'user', content: convoText }],
-          leadId: lead?.id,
-        })
-        if (bcResult.text) {
-          try { bc = { ...bc, ...JSON.parse(bcResult.text.replace(/```json?\n?|\n?```/g, '').trim()) } } catch {}
+        if (lead.agent_id) {
+          const { data: freshAgent } = await supabase
+            .from('agents')
+            .select('phone, name')
+            .eq('id', lead.agent_id)
+            .single()
+          notifPhone = freshAgent?.phone || null
+          notifAgentName = freshAgent?.name || null
+          console.log(`[NOTIFY] Agent resolved: ${notifAgentName} → ${notifPhone}`)
         }
-      } catch {}
 
-      // Save to lead
-      await supabase.from('leads').update({
-        ready_to_buy: true,
-        stage: 'interested',
-        score: 95,
-        score_recommendation: '🔥 Lead calificado por Sophia IA — listo para cerrar',
-        ia_active: false,
-        resumen_sophia: bc.resumen,
-        nivel_interes: bc.nivel_interes,
-      }).eq('id', lead.id)
+        const targetPhone = notifPhone || ADMIN_PHONE
+        console.log(`[NOTIFY] Target phone: ${targetPhone} (agent_id: ${lead.agent_id || 'none'})`)
 
-      const agentMsg = `🔥 *LEAD CALIENTE* — ${bc.nombre || lead.name || from}
-━━━━━━━━━━━━━━━━━━━
-📱 Llamar a: ${from}
-📍 ${bc.estado || lead.state || '—'} • ${bc.familia || (lead.dependents ? lead.dependents + ' personas' : '—')}
-🎨 Color: *${color}* ← mencionar al inicio
-⭐ Interés: ${bc.nivel_interes}/10 • ${bc.estado_emocional}
-━━━━━━━━━━━━━━━━━━━
-🎯 *CÓMO ABRIR LA LLAMADA:*
+        // Notificación básica INMEDIATA — no depende de Claude, siempre llega
+        const quickMsg = `🔥 *LEAD CALIENTE* — ${lead.name || from}
+━━━━━━━━━━━━━━━━━
+📱 Llamar a: *${from}*
+📍 Estado: ${lead.state || '—'}
+🎨 Color: *${color}*
+⭐ Score: 95/100
+━━━━━━━━━━━━━━━━━
+✅ Confirmó que quiere activar el plan
+⏰ Llamar en los próximos 20 min`
+
+        await sendWhatsApp(targetPhone, quickMsg)
+        console.log(`[NOTIFY] ✅ Notificación básica enviada a ${targetPhone} — lead ${lead.name}`)
+
+        // Battle card con Claude — no-bloqueante (fire and forget)
+        const allMessages = [...(history || []), { direction: 'inbound', message: body }, { direction: 'outbound', message: cleanResponse }]
+        const convoText = allMessages.slice(-12).map((c: any) =>
+          `${c.direction === 'inbound' ? 'Lead' : 'Sophia'}: ${c.message}`
+        ).join('\n')
+
+        ;(async () => {
+          try {
+            let productOppsText = ''
+            try {
+              const { detectProductOpportunities, formatOpportunitiesForAgent } = await import('@/lib/product-radar')
+              const opps = detectProductOpportunities(lead, convoText)
+              productOppsText = formatOpportunitiesForAgent(opps)
+              await supabase.from('leads').update({ product_opportunities: opps }).eq('id', lead.id)
+            } catch {}
+
+            try {
+              const { learnFromClosedDeal } = await import('@/lib/sophia-learning')
+              learnFromClosedDeal(supabase, lead.id, process.env.ANTHROPIC_API_KEY!).catch(() => {})
+              const { extractTrainingData } = await import('@/lib/training-pipeline')
+              extractTrainingData(supabase, lead.id).catch(() => {})
+            } catch {}
+
+            let bc: any = {
+              nombre: lead.name, estado: lead.state, familia: '',
+              nivel_interes: 8, argumento_ganador: 'Cobertura dental',
+              objecion_probable: 'Ninguna', contraargumento: '',
+              como_abrir: `Hola ${lead.name?.split(' ')[0] || ''}, te contacto de SeguriSSimo. Tu color es ${color}.`,
+              estado_emocional: 'interesado', resumen: 'Lead listo para activar plan',
+            }
+
+            try {
+              const { callAI: callAIBC } = await import('@/lib/token-tracker')
+              const bcResult = await callAIBC({
+                agentId: lead?.agent_id, accountId: lead?.account_id,
+                feature: 'sophia_whatsapp', model: 'claude-haiku-4-5-20251001', maxTokens: 400,
+                system: 'Analiza esta conversacion. Devuelve SOLO JSON: {"nombre":"","estado":"","familia":"","nivel_interes":0,"argumento_ganador":"","objecion_probable":"","contraargumento":"","como_abrir":"","estado_emocional":"","resumen":""}',
+                messages: [{ role: 'user', content: convoText }],
+                leadId: lead?.id,
+              })
+              if (bcResult.text) {
+                try { bc = { ...bc, ...JSON.parse(bcResult.text.replace(/```json?\n?|\n?```/g, '').trim()) } } catch {}
+              }
+            } catch {}
+
+            await supabase.from('leads').update({
+              resumen_sophia: bc.resumen,
+              nivel_interes: bc.nivel_interes,
+            }).eq('id', lead.id)
+
+            const battleCard = `🧠 *ANÁLISIS SOPHIA*
+━━━━━━━━━━━━━━━━━
+🎯 *CÓMO ABRIR:*
 _"${bc.como_abrir}"_
-━━━━━━━━━━━━━━━━━━━
-💡 *LO QUE MÁS LE RESONÓ:*
+━━━━━━━━━━━━━━━━━
+💡 *LO QUE LE RESONÓ:*
 ${bc.argumento_ganador}
-━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━
 ⚠️ *OBJECIÓN PROBABLE:*
 ${bc.objecion_probable}
-💬 *RESPÓNDELE:*
+💬 *RESPUESTA:*
 ${bc.contraargumento}
-━━━━━━━━━━━━━━━━━━━
-📝 ${bc.resumen}
-${productOppsText}
-━━━━━━━━━━━━━━━━━━━
-⏰ Lead caliente — llamar en los próximos 20 min`
+━━━━━━━━━━━━━━━━━
+📝 ${bc.resumen}${productOppsText ? '\n' + productOppsText : ''}`
 
-      // Send ONLY to assigned agent (not to admin separately)
-      if (lead.agent_id) {
-        const { data: assignedAgent } = await supabase
-          .from('agents')
-          .select('phone, name, whatsapp_number')
-          .eq('id', lead.agent_id)
-          .single()
+            await sendWhatsApp(targetPhone, battleCard)
+            console.log(`[NOTIFY] ✅ Battle card enviada a ${targetPhone}`)
+          } catch (bcErr: any) {
+            console.error('[NOTIFY] Battle card falló (no-bloqueante):', bcErr.message)
+          }
+        })()
 
-        const agentPhone = assignedAgent?.whatsapp_number || assignedAgent?.phone
-        if (agentPhone) {
-          await sendWhatsApp(agentPhone, agentMsg)
-          console.log(`[Sophia] Lead ${lead.name} READY — notified agent ${assignedAgent?.name}`)
-        } else {
-          // Fallback to admin if no agent phone
-          await sendWhatsApp(ADMIN_PHONE, agentMsg)
-          console.log(`[Sophia] Lead ${lead.name} READY — notified admin (no agent phone)`)
-        }
-      } else {
-        // No agent assigned — notify admin
-        await sendWhatsApp(ADMIN_PHONE, agentMsg)
-        console.log(`[Sophia] Lead ${lead.name} READY — notified admin (no agent assigned)`)
+      } catch (notifyErr: any) {
+        console.error('[NOTIFY] ❌ ERROR CRÍTICO en bloque de notificación:', notifyErr.message)
+        try {
+          await sendWhatsApp(ADMIN_PHONE, `🔥 LEAD CALIENTE — revisar CRM\nTeléfono: ${from}\nLead: ${lead?.name || 'desconocido'}`)
+        } catch {}
       }
     }
 
