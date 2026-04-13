@@ -1021,6 +1021,31 @@ Escribe el comando o dime que necesitas 👇`
 
     if (senderAgent) {
       console.log(`[Agent Parser] Message from agent: ${senderAgent.name} — "${body}"`)
+
+      // ONBOARDING: si el agente no completó el setup, iniciar flujo
+      if (!senderAgent.onboarding_complete) {
+        try {
+          const { handleAgentOnboardingFlow } = await import('@/lib/agent-onboarding-flow')
+          const handled = await handleAgentOnboardingFlow(from, body, senderAgent.id)
+          if (handled) return new NextResponse(
+            `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
+            { status: 200, headers: { 'Content-Type': 'text/xml' } }
+          )
+        } catch (e: any) { console.error('[ONBOARDING FLOW] Error:', e.message) }
+      }
+
+      // ADMIN COMMANDS: MI AGENCIA, MI TONO, MODO, MIS LEADS, etc.
+      try {
+        const { isAdminCommand, handleAgentAdminCommand } = await import('@/lib/agent-admin-commands')
+        if (isAdminCommand(body)) {
+          await handleAgentAdminCommand(senderAgent.id, from, body)
+          return new NextResponse(
+            `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
+            { status: 200, headers: { 'Content-Type': 'text/xml' } }
+          )
+        }
+      } catch (e: any) { console.error('[ADMIN CMD] Error:', e.message) }
+
       const agentResult = await handleAgentMessage(senderAgent, body, from)
       return agentResult
     }
