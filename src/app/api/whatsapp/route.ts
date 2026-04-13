@@ -275,7 +275,7 @@ async function getAIResponse(lead: any, conversationHistory: any[], incomingMess
     if (lead?.agent_id) {
       console.log(`[Sophia] Loading config for agent ${lead.agent_id}`)
       const [{ data: config, error: configErr }, { data: agent, error: agentErr }] = await Promise.all([
-        supabase.from('agent_configs').select('sophia_tone, welcome_message, sophia_language, insurance_types').eq('agent_id', lead.agent_id).maybeSingle(),
+        supabase.from('agent_configs').select('plan, ia_active, ai_agent_name, custom_prompt, main_language, main_industry').eq('agent_id', lead.agent_id).maybeSingle(),
         supabase.from('agents').select('company_name').eq('id', lead.agent_id).maybeSingle(),
       ])
       if (configErr) console.error('[Sophia] Config query error:', configErr)
