@@ -101,7 +101,8 @@ export async function callAI(options: AICallOptions): Promise<AIResponse> {
 
   if (!res.ok) {
     const err = await res.text().catch(() => 'Unknown error')
-    console.error(`[AI] Error ${res.status}:`, err.substring(0, 200))
+    console.error(`[AI] ❌ Claude API Error ${res.status} for agent ${agentId}:`, err.substring(0, 400))
+    console.error(`[AI] Model: ${activeModel} | Messages: ${messages.length} | System length: ${system?.length || 0}`)
     return { text: '', inputTokens: 0, outputTokens: 0, cost: 0 }
   }
 

@@ -478,6 +478,13 @@ Si algún dato dice 'desconocido', puedes preguntarlo. Si ya está, NUNCA volver
 
   const fullSystemPrompt = contextSummary + '\n' + systemPrompt + dynamicLayers + expertLayer + campaignLayer
 
+  // Safety: truncar system prompt si es demasiado largo
+  const MAX_SYSTEM_CHARS = 40000
+  const safeSystemPrompt = fullSystemPrompt.length > MAX_SYSTEM_CHARS
+    ? fullSystemPrompt.substring(0, MAX_SYSTEM_CHARS)
+    : fullSystemPrompt
+  console.log(`[SOPHIA] System prompt: ${fullSystemPrompt.length} chars ${fullSystemPrompt.length > MAX_SYSTEM_CHARS ? '⚠️ TRUNCADO' : '✅'}`)
+
   // Build message history for Claude API
   const rawMessages: { role: 'user' | 'assistant'; content: string }[] = []
 
@@ -516,7 +523,7 @@ Si algún dato dice 'desconocido', puedes preguntarlo. Si ya está, NUNCA volver
       feature: 'sophia_whatsapp',
       model: 'claude-haiku-4-5-20251001',
       messages,
-      system: fullSystemPrompt,
+      system: safeSystemPrompt,
       maxTokens: 400,
       leadId: lead?.id || null,
     })
