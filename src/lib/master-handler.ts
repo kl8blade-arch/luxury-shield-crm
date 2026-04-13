@@ -94,6 +94,54 @@ export async function handleMasterMessage(from: string, body: string, mediaUrl?:
   }
 
   // ══════════════════════════════════════════════
+  // RESET COMMAND — borra lead + webhook log por número
+  // Uso: RESET +17869435656  o  RESET 7869435656
+  // Solo Carlos puede ejecutarlo (ya estamos en master handler)
+  // ══════════════════════════════════════════════
+  const resetMatch = (body || '').match(/^RESET\s+([+\d\s()-]+)/i)
+  if (resetMatch) {
+    const rawPhone = resetMatch[1].trim()
+    const digitsOnly = rawPhone.replace(/\D/g, '')
+    const last10 = digitsOnly.slice(-10)
+    const withPlus = `+${digitsOnly}`
+    const with1 = digitsOnly.startsWith('1') ? digitsOnly : `1${digitsOnly}`
+
+    try {
+      // Buscar leads con cualquier variante del número
+      const { data: leadsToDelete } = await supabase
+        .from('leads')
+        .select('id, name')
+        .or(`phone.eq.${digitsOnly},phone.eq.${last10},phone.eq.${withPlus},phone.eq.+${digitsOnly},phone.eq.${rawPhone},phone.eq.${with1}`)
+
+      let deletedLeads = 0
+      if (leadsToDelete && leadsToDelete.length > 0) {
+        const ids = leadsToDelete.map((l: any) => l.id)
+        await supabase.from('leads').delete().in('id', ids)
+        deletedLeads = ids.length
+      }
+
+      // Borrar webhook_request_log del número
+      await supabase
+        .from('webhook_request_log')
+        .delete()
+        .or(`from_number.eq.${digitsOnly},from_number.eq.${withPlus},from_number.eq.+${digitsOnly},from_number.eq.${rawPhone}`)
+
+      const leadNames = leadsToDelete?.map((l: any) => l.name).join(', ') || 'ninguno'
+      await sendWhatsApp(from,
+        `✅ *RESET completado* para ${withPlus}\n` +
+        `━━━━━━━━━━━━━━━━━\n` +
+        `🗑️ Leads borrados: ${deletedLeads} (${leadNames})\n` +
+        `🗑️ Webhook log: limpio\n` +
+        `━━━━━━━━━━━━━━━━━\n` +
+        `El número puede volver a escribir como nuevo lead 👍`
+      )
+    } catch (err: any) {
+      await sendWhatsApp(from, `❌ Error en RESET: ${err.message}`)
+    }
+    return
+  }
+
+  // ══════════════════════════════════════════════
   // HANDLE URLs
   // ══════════════════════════════════════════════
   const urlMatch = (body || '').match(/https?:\/\/[^\s]+/i)
