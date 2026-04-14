@@ -160,7 +160,37 @@ export async function POST(req: NextRequest) {
             account_id: accountId,
           }).select('id').single()
 
-          if (!error) leadsCreated++
+          if (!error) {
+            leadsCreated++
+
+            // Link lead to campaign automatically
+            if (lead?.id && agentId) {
+              try {
+                const { linkLeadToCampaign, incrementCampaignLeadCount } = await import('@/lib/campaign-tracker')
+
+                // Try to find campaign by trigger message or custom fields
+                const triggerMessage = customFields.product || customFields.interest || customFields.service || ''
+                if (triggerMessage) {
+                  const campaignLink = await linkLeadToCampaign(lead.id, triggerMessage, agentId)
+
+                  if (campaignLink.campaignId) {
+                    // Update lead with campaign info
+                    await supabase.from('leads')
+                      .update({ campaign_id: campaignLink.campaignId, campaign_name: campaignLink.campaignName })
+                      .eq('id', lead.id)
+
+                    // Increment campaign leads count
+                    await incrementCampaignLeadCount(campaignLink.campaignId)
+
+                    console.log(`[META] Lead ${lead.id} linked to campaign: ${campaignLink.campaignName}`)
+                  }
+                }
+              } catch (campaignErr: any) {
+                console.warn('[META] Campaign linking failed:', campaignErr.message)
+                // Continue anyway, lead is still created
+              }
+            }
+          }
 
           // Log
           await supabase.from('integration_log').insert({

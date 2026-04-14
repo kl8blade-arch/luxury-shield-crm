@@ -36,9 +36,10 @@ export async function callAI(options: AICallOptions): Promise<AIResponse> {
 
   // 0. Check if AI is blocked for this agent
   if (!isAdmin && agentId) {
-    const { data: blockCheck } = await supabase.from('agents').select('ai_blocked').eq('id', agentId).single()
+    const { data: blockCheck } = await supabase.from('agents').select('ai_blocked, ai_blocked_reason').eq('id', agentId).single()
+    console.log(`[TOKEN-TRACKER] Agent ${agentId} ai_blocked check:`, { blocked: blockCheck?.ai_blocked, reason: blockCheck?.ai_blocked_reason })
     if (blockCheck?.ai_blocked) {
-      console.log(`[AI] Agent ${agentId} AI is BLOCKED`)
+      console.error(`[TOKEN-TRACKER] ❌ BLOCKING: Agent ${agentId} AI is BLOCKED (reason: ${blockCheck?.ai_blocked_reason}). Returning empty response.`)
       return { text: '', inputTokens: 0, outputTokens: 0, cost: 0 }
     }
   }
@@ -48,10 +49,12 @@ export async function callAI(options: AICallOptions): Promise<AIResponse> {
     try {
       const { checkRateLimit } = await import('@/lib/rate-limiter')
       const rateResult = await checkRateLimit(agentId, 1000)
+      console.log(`[TOKEN-TRACKER] Rate limit check for agent ${agentId}:`, { allowed: rateResult.allowed, reason: rateResult.reason })
       if (!rateResult.allowed) {
-        console.log(`[AI] Rate limited: agent=${agentId} reason=${rateResult.reason}`)
+        console.error(`[TOKEN-TRACKER] ❌ BLOCKING: Rate limited for agent ${agentId}. Reason: ${rateResult.reason}. Returning empty response.`)
         // If no balance, block AI
         if (rateResult.reason === 'no_balance') {
+          console.log(`[TOKEN-TRACKER] Blocking agent AI due to no_balance`)
           blockAgentAI(agentId, 'tokens_depleted').catch(() => {})
         }
         return { text: '', inputTokens: 0, outputTokens: 0, cost: 0 }
@@ -60,25 +63,36 @@ export async function callAI(options: AICallOptions): Promise<AIResponse> {
   }
 
   // 2. Get API key (agent's own encrypted key → decrypt, or platform managed)
-  let apiKey = process.env.ANTHROPIC_API_KEY!
+  const platformKey = process.env.ANTHROPIC_API_KEY
+  console.log(`[TOKEN-TRACKER] Platform ANTHROPIC_API_KEY exists:`, !!platformKey, `(length: ${platformKey?.length || 0})`)
+
+  let apiKey = platformKey || ''
   if (!isAdmin && agentId) {
     const { data: agent } = await supabase.from('agents')
       .select('uses_own_ai_keys, anthropic_api_key, anthropic_key_encrypted, anthropic_key_iv, anthropic_key_tag')
       .eq('id', agentId).single()
+    console.log(`[TOKEN-TRACKER] Agent ${agentId} uses_own_ai_keys:`, agent?.uses_own_ai_keys)
+
     if (agent?.uses_own_ai_keys) {
       // Try encrypted key first
       if (agent.anthropic_key_encrypted && agent.anthropic_key_iv && agent.anthropic_key_tag) {
         try {
           const { decryptApiKey } = await import('@/lib/encryption')
           apiKey = decryptApiKey(agent.anthropic_key_encrypted, agent.anthropic_key_iv, agent.anthropic_key_tag)
-        } catch { /* fallback to plain */ }
+          console.log(`[TOKEN-TRACKER] Using decrypted agent API key (length: ${apiKey.length})`)
+        } catch (e) {
+          console.error(`[TOKEN-TRACKER] Failed to decrypt agent key:`, (e as any).message)
+        }
       }
       // Fallback to plain key
-      if (apiKey === process.env.ANTHROPIC_API_KEY && agent.anthropic_api_key && !agent.anthropic_api_key.includes('•')) {
+      if (apiKey === platformKey && agent.anthropic_api_key && !agent.anthropic_api_key.includes('•')) {
         apiKey = agent.anthropic_api_key
+        console.log(`[TOKEN-TRACKER] Using plain agent API key (length: ${apiKey.length})`)
       }
     }
   }
+
+  console.log(`[TOKEN-TRACKER] Final API key being used (length: ${apiKey.length}), starts with: ${apiKey.substring(0, 10)}...`)
 
   // 2.5. Check for active fine-tuned model (for sophia_whatsapp calls)
   let activeModel = model
@@ -93,6 +107,7 @@ export async function callAI(options: AICallOptions): Promise<AIResponse> {
   const body: any = { model: activeModel, max_tokens: maxTokens, messages }
   if (system) body.system = system
 
+  console.log(`[TOKEN-TRACKER] 📤 Calling Anthropic API (model: ${activeModel}, feature: ${feature})`)
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
@@ -111,6 +126,14 @@ export async function callAI(options: AICallOptions): Promise<AIResponse> {
   const inputTokens = data.usage?.input_tokens || 0
   const outputTokens = data.usage?.output_tokens || 0
   const cost = (inputTokens * 0.0000008) + (outputTokens * 0.000004)
+
+  console.log(`[TOKEN-TRACKER] 📥 Claude Response:`, {
+    hasText: !!text,
+    textLength: text.length,
+    preview: text.substring(0, 80),
+    inputTokens,
+    outputTokens
+  })
 
   // 4. Log usage and increment tokens (non-admin only)
   if (!isAdmin && agentId) {

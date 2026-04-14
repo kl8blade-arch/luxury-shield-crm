@@ -45,7 +45,11 @@
       "Bash(vercel logs:*)",
       "Bash(vercel env:*)",
       "WebFetch(domain:luxury-shield-crm.vercel.app)",
-      "Bash(vercel deployments:*)"
+      "Bash(vercel deployments:*)",
+      "Bash(git rebase:*)",
+      "Bash(git reset:*)",
+      "Bash(git stash:*)",
+      "Bash(vercel:*)"
     ]
   }
 }
