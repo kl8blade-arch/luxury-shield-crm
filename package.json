@@ -24,8 +24,9 @@
     "qrcode": "^1.5.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "recharts": "^3.8.0",
+    "recharts": "^3.8.1",
     "stripe": "^21.0.1",
+    "twilio": "^5.13.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
