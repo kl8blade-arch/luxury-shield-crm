@@ -3,6 +3,7 @@
 // Reemplaza tu dashboard actual. Requiere: npm install recharts
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -130,16 +131,19 @@ function Tip({ active, payload, label, T }: any) {
 // ── Main ───────────────────────────────────────────────────────────────────────
 export default function CommandCenter() {
   const { user } = useAuth()
-  const [dark, setDark]       = useState(true)
+  const router = useRouter()
+  const [dark, setDark]       = useState(() => {
+    if (typeof window === 'undefined') return true
+    const saved = localStorage.getItem('sophiaos-theme')
+    if (saved !== null) return saved === 'dark'
+    return new Date().getHours() < 7 || new Date().getHours() >= 19
+  })
   const [time, setTime]       = useState(new Date())
   const [stats, setStats]     = useState<Stats|null>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab]         = useState<'overview'|'pipeline'|'sophia'|'citas'>('overview')
   const timerRef              = useRef<ReturnType<typeof setInterval>|null>(null)
   const T = dark ? DARK : LIGHT
-
-  // Auto dark/light
-  useEffect(() => { setDark(new Date().getHours() < 7 || new Date().getHours() >= 19) }, [])
 
   // Clock
   useEffect(() => {
@@ -222,7 +226,7 @@ export default function CommandCenter() {
           {/* Nav */}
           <div style={{ display:'flex', gap:2, marginLeft:12, overflowX:'auto' }}>
             {([['overview','📊 Dashboard'],['pipeline','🎯 Pipeline'],['sophia','🤖 Sophia'],['citas','📅 Citas']] as const).map(([id,lbl]) => (
-              <button key={id} onClick={()=>setTab(id)} style={{
+              <button key={id} onClick={()=>id==='pipeline'?router.push('/dashboard/pipeline'):setTab(id)} style={{
                 background: tab===id?`${T.accent}20`:'transparent',
                 border:`1px solid ${tab===id?T.accent:'transparent'}`,
                 borderRadius:8, padding:'5px 12px', cursor:'pointer',
@@ -250,7 +254,11 @@ export default function CommandCenter() {
             </div>
 
             {/* Dark/light toggle */}
-            <button onClick={()=>setDark(!dark)} style={{
+            <button onClick={() => {
+              const newDark = !dark
+              setDark(newDark)
+              localStorage.setItem('sophiaos-theme', newDark ? 'dark' : 'light')
+            }} style={{
               width:52, height:28, borderRadius:14, cursor:'pointer', border:'none',
               background: dark?`linear-gradient(135deg,${T.accent},${T.cyan})`:'linear-gradient(135deg,#fbbf24,#f59e0b)',
               position:'relative', transition:'background 0.3s',
