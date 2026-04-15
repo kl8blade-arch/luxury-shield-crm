@@ -272,6 +272,40 @@ export default function CommandCenter() {
         </div>
       </div>
 
+      {/* ── ONBOARDING BLOCKER ───────────────────────────────────────────── */}
+      {user && !user.onboarding_complete && (
+        <div style={{
+          position:'fixed', inset:0, zIndex:9999,
+          background:'rgba(5,5,7,0.97)',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          backdropFilter:'blur(4px)',
+        }}>
+          <div style={{ textAlign:'center', maxWidth:480, padding:'40px 24px' }}>
+            <div style={{ fontSize:60, marginBottom:20 }}>⚙️</div>
+            <h2 style={{ fontSize:28, fontWeight:800, color:T.text, marginBottom:12, marginTop:0 }}>¡Casi listo!</h2>
+            <p style={{ fontSize:14, color:T.muted, lineHeight:1.6, marginBottom:24 }}>
+              Necesitamos algunos datos para activar a Sophia en tu negocio y empezar a vender.
+            </p>
+            <button
+              onClick={() => router.push('/onboarding')}
+              style={{
+                padding:'12px 28px',
+                fontSize:14,
+                fontWeight:700,
+                borderRadius:10,
+                border:'none',
+                cursor:'pointer',
+                background:`linear-gradient(135deg,${T.accent},${T.cyan})`,
+                color:'#fff',
+                boxShadow:`0 4px 12px ${T.accent}40`,
+              }}
+            >
+              Configurar ahora →
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── BODY ─────────────────────────────────────────────────────────── */}
       <div style={{ position:'relative', zIndex:1, padding:'14px 18px 40px' }}>
 

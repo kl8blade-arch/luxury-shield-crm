@@ -64,7 +64,7 @@ function AddonsInner() {
 
   async function handleSkip() {
     setLoading(true); setStep('processing')
-    // Just activate without addons, save user, go to setup
+    // Just activate without addons, save user, go to onboarding
     try {
       await fetch('/api/onboarding/activate-addons', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -77,7 +77,7 @@ function AddonsInner() {
       const userData = await userRes.json()
       if (userData.valid && userData.user) localStorage.setItem('ls_auth', JSON.stringify(userData.user))
     } catch {}
-    window.location.href = '/setup'
+    window.location.href = '/onboarding'
   }
 
   const inp: React.CSSProperties = { width: '100%', padding: '12px 16px', borderRadius: '10px', fontSize: '13px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: '#F0ECE3', outline: 'none', fontFamily: '"Outfit",sans-serif', boxSizing: 'border-box' }
