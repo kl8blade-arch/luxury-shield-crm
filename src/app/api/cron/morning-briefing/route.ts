@@ -140,7 +140,7 @@ Keep it under 150 words in Spanish. Include:
 End with a motivational phrase. Keep it personal and engaging.`
 
         const message = await anthropic.messages.create({
-          model: 'claude-3-5-haiku-20241022',
+          model: 'claude-haiku-4-5-20251001',
           max_tokens: 200,
           messages: [
             {
