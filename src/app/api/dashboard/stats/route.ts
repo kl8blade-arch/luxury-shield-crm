@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { ApiError, errorHandler } from '@/lib/errors'
+import { validateAgentAuth, authError } from '@/lib/auth-middleware'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -32,9 +33,8 @@ const MONTH_NAMES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct'
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const agentId = searchParams.get('agentId')
-    if (!agentId) throw new ApiError(400, 'Missing agentId')
+    // Validate agent is authorized
+    const agentId = await validateAgentAuth(request)
 
     const now          = new Date()
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
@@ -177,6 +177,12 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
+    // Auth errors
+    if (error instanceof Error) {
+      if (error.message === 'Missing agentId') return authError('Missing agentId', 400)
+      if (error.message === 'Agent not found') return authError('Agent not found', 404)
+      if (error.message === 'Agent not authorized') return authError('Agent not authorized', 403)
+    }
     return errorHandler(error)
   }
 }
