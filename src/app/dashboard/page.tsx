@@ -160,7 +160,7 @@ export default function CommandCenter() {
     } finally {
       setLoading(false)
     }
-  }, [user?.id])
+  }, [user])
 
   useEffect(() => {
     if (!user?.id) return
@@ -180,7 +180,8 @@ export default function CommandCenter() {
     </div>
   )
 
-  const s = stats!
+  if (!stats) return null
+  const s = stats
   const META_GOAL  = 8000
   const mrrPct     = Math.min(Math.round((s.mrrReal / META_GOAL) * 100), 100)
   const bgRing     = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'
