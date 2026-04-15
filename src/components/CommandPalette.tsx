@@ -57,8 +57,8 @@ export function CommandPalette() {
       }
       if (e.key === 'Escape') setOpen(false)
     }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
+    window.addEventListener('keydown', handler, { capture: true })
+    return () => window.removeEventListener('keydown', handler, { capture: true })
   }, [])
 
   // Focus input when opened
