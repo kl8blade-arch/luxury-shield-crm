@@ -27,6 +27,10 @@
     {
       "path": "/api/learning/daily-batch",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/reactivation/process",
+      "schedule": "0 15 * * *"
     }
   ]
 }
