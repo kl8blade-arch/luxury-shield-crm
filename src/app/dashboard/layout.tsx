@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
+import { CommandPalette } from '@/components/CommandPalette'
 
 const NAV_ITEMS = [
   { href: '/dashboard',          icon: '📊', label: 'Dashboard',    exact: true  },
@@ -151,6 +152,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
         {children}
       </div>
+
+      {/* Command Palette */}
+      <CommandPalette />
     </div>
   )
 }
