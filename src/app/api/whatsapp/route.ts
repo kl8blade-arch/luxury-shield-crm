@@ -1450,6 +1450,28 @@ Escribe el comando o dime que necesitas 👇`
       updated_at: new Date().toISOString(),
     }).eq('id', lead.id)
 
+    // TOKEN CHECK — Block auto-response if agent has no tokens
+    try {
+      const { checkTokens } = await import('@/lib/token-guard')
+      const ownerAgentId = lead?.agent_id || null
+      if (ownerAgentId) {
+        const tokenCheck = await checkTokens(ownerAgentId)
+        if (!tokenCheck.allowed) {
+          console.log(`[TOKENS] Exhausted for agent ${ownerAgentId}. Saving message, skipping Sophia.`)
+          await supabase.from('conversations').insert({ lead_id: lead.id, lead_name: lead.name, lead_phone: from, channel: 'whatsapp', direction: 'inbound', message: body })
+          await supabase.from('leads').update({ sophia_processing: false }).eq('id', lead.id)
+          return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
+        }
+      }
+    } catch (e: any) { console.error('[TOKENS]', e.message) }
+
+    // ── SEGURIDAD: sanitizar mensaje del lead antes de pasarlo a Claude ──
+    const { sanitizeLeadMessage } = await import('@/lib/sophia-orchestrator')
+    const sanitizedBody = sanitizeLeadMessage(body)
+    if (sanitizedBody !== body) {
+      console.warn(`[SECURITY] Message sanitized for lead ${lead.id} — removed ${body.length - sanitizedBody.length} chars`)
+    }
+
     // Generate AI response
 
     // ══ POST-CITA RESPONSE HANDLER ══
@@ -1497,28 +1519,6 @@ Escribe el comando o dime que necesitas 👇`
       } catch (citaErr: any) {
         console.error('[SophiaCita] Error:', citaErr.message)
       }
-    }
-
-    // TOKEN CHECK — Block auto-response if agent has no tokens
-    try {
-      const { checkTokens } = await import('@/lib/token-guard')
-      const ownerAgentId = lead?.agent_id || null
-      if (ownerAgentId) {
-        const tokenCheck = await checkTokens(ownerAgentId)
-        if (!tokenCheck.allowed) {
-          console.log(`[TOKENS] Exhausted for agent ${ownerAgentId}. Saving message, skipping Sophia.`)
-          await supabase.from('conversations').insert({ lead_id: lead.id, lead_name: lead.name, lead_phone: from, channel: 'whatsapp', direction: 'inbound', message: body })
-          await supabase.from('leads').update({ sophia_processing: false }).eq('id', lead.id)
-          return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
-        }
-      }
-    } catch (e: any) { console.error('[TOKENS]', e.message) }
-
-    // ── SEGURIDAD: sanitizar mensaje del lead antes de pasarlo a Claude ──
-    const { sanitizeLeadMessage } = await import('@/lib/sophia-orchestrator')
-    const sanitizedBody = sanitizeLeadMessage(body)
-    if (sanitizedBody !== body) {
-      console.warn(`[SECURITY] Message sanitized for lead ${lead.id} — removed ${body.length - sanitizedBody.length} chars`)
     }
 
     console.log(`[SOPHIA] Calling getAIResponse for lead: ${lead.id} - ${lead.name}`)
