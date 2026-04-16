@@ -330,6 +330,11 @@ export default function SegurosPage() {
           </div>
         )}
       </div>
+
+      {/* Link to carriers */}
+      <div style={{ padding: '20px', textAlign: 'center', fontSize: 12, color: T.muted }}>
+        Configura tus carriers activos en → <a href="/dashboard/carriers" style={{ color: T.accent, textDecoration: 'none', fontWeight: 700, cursor: 'pointer' }}>/dashboard/carriers</a>
+      </div>
     </div>
   )
 }
