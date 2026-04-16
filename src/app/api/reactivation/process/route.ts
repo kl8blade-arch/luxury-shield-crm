@@ -4,7 +4,6 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-// ⚠️  Twilio disabled at compile time — requires server-side initialization
 import {
   buildReactivationMessage,
   calcNextSendAt,
@@ -31,8 +30,16 @@ export async function GET(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
-  // ⚠️  Twilio client disabled — needs dynamic initialization at runtime
-  const twilioClient: any = null // twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!)
+
+  // Initialize Twilio at runtime (dynamic import to avoid compile-time resolution)
+  let twilioClient: any = null
+  try {
+    const twilioModule = await import('twilio')
+    const twilio = (twilioModule as any).default || twilioModule
+    twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!)
+  } catch (e) {
+    console.error('[Reactivation] Twilio init error:', e)
+  }
 
   const stats = { processed: 0, sent: 0, skipped: 0, errors: 0, completed: 0 }
 

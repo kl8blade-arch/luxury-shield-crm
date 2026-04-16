@@ -12,9 +12,6 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
-// ⚠️  Twilio disabled at compile time — requires server-side initialization
-const twilioClient: any = null // twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
-
 export async function GET(request: NextRequest) {
   // Verify cron authorization
   const authHeader = request.headers.get('authorization')
@@ -37,6 +34,16 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       )
     }
+  }
+
+  // Initialize Twilio at runtime (dynamic import to avoid compile-time resolution)
+  let twilioClient: any = null
+  try {
+    const twilioModule = await import('twilio')
+    const twilio = (twilioModule as any).default || twilioModule
+    twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!)
+  } catch (e) {
+    console.error('[MorningBriefing] Twilio init error:', e)
   }
 
   try {
