@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { loadSophiaContext, buildClaudeMessages } from '@/lib/sophia-context'
+import { isMedicalAppointmentRequest, handleSophiaCitaIntent } from '@/lib/sophiacita'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -1449,6 +1450,28 @@ Escribe el comando o dime que necesitas 👇`
     }).eq('id', lead.id)
 
     // Generate AI response
+
+    // ══ SOPHIACITA ══
+    if (isMedicalAppointmentRequest(sanitizedBody)) {
+      try {
+        const citaResult = await handleSophiaCitaIntent({
+          message: sanitizedBody, leadName: lead.name, leadPhone: from,
+          insuranceType: lead.insurance_type, city: lead.city,
+          state: lead.state, zipCode: lead.zip_code,
+        })
+        if (citaResult.handled) {
+          await supabase.from('conversations').insert({ lead_id: lead.id, lead_name: lead.name, lead_phone: from, channel: 'whatsapp', direction: 'outbound', message: citaResult.response, ai_summary: `SophiaCita: ${citaResult.specialty ?? 'médico'}` })
+          const delay = Math.floor(Math.random() * 3) + 3
+          await new Promise(r => setTimeout(r, delay * 1000))
+          await sendWhatsApp(from, citaResult.response)
+          await supabase.from('leads').update({ sophia_processing: false }).eq('id', lead.id)
+          return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
+        }
+      } catch (citaErr: any) {
+        console.error('[SophiaCita] Error:', citaErr.message)
+      }
+    }
+
     // TOKEN CHECK — Block auto-response if agent has no tokens
     try {
       const { checkTokens } = await import('@/lib/token-guard')
