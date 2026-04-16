@@ -1299,6 +1299,7 @@ Escribe el comando o dime que necesitas 👇`
 
       await supabase.from('conversations').insert({
         lead_id: lead.id, lead_name: lead.name, lead_phone: from,
+        agent_id: lead.agent_id, account_id: lead.account_id,
         channel: 'whatsapp', direction: 'inbound', message: body,
         created_at: new Date().toISOString(),
       })
@@ -1349,6 +1350,7 @@ Escribe el comando o dime que necesitas 👇`
             // Log the blocked attempt
             await supabase.from('conversations').insert({
               lead_id: lead.id, lead_name: lead.name, lead_phone: from,
+              agent_id: lead.agent_id, account_id: lead.account_id,
               channel: 'whatsapp', direction: 'inbound', message: body,
               created_at: new Date().toISOString(),
             })
@@ -1412,6 +1414,8 @@ Escribe el comando o dime que necesitas 👇`
       lead_id: lead.id,
       lead_name: lead.name,
       lead_phone: from,
+      agent_id: lead.agent_id,
+      account_id: lead.account_id,
       channel: 'whatsapp',
       direction: 'inbound',
       message: body,
@@ -1460,7 +1464,7 @@ Escribe el comando o dime que necesitas 👇`
         const tokenCheck = await checkTokens(ownerAgentId)
         if (!tokenCheck.allowed) {
           console.log(`[TOKENS] Exhausted for agent ${ownerAgentId}. Saving message, skipping Sophia.`)
-          await supabase.from('conversations').insert({ lead_id: lead.id, lead_name: lead.name, lead_phone: from, channel: 'whatsapp', direction: 'inbound', message: body })
+          await supabase.from('conversations').insert({ lead_id: lead.id, lead_name: lead.name, lead_phone: from, agent_id: lead.agent_id, account_id: lead.account_id, channel: 'whatsapp', direction: 'inbound', message: body })
           await supabase.from('leads').update({ sophia_processing: false }).eq('id', lead.id)
           return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
         }
@@ -1487,6 +1491,7 @@ Escribe el comando o dime que necesitas 👇`
         if (postCitaResult.handled && postCitaResult.response) {
           await supabase.from('conversations').insert({
             lead_id: lead.id, lead_name: lead.name, lead_phone: from,
+            agent_id: lead.agent_id, account_id: lead.account_id,
             channel: 'whatsapp', direction: 'outbound',
             message: postCitaResult.response,
             ai_summary: `PostCita sentiment: ${postCitaResult.sentiment}`,
@@ -1537,7 +1542,7 @@ Escribe el comando o dime que necesitas 👇`
             stage:            lead.stage,
           })
 
-          await supabase.from('conversations').insert({ lead_id: lead.id, lead_name: lead.name, lead_phone: from, channel: 'whatsapp', direction: 'outbound', message: responseWithCrossSell, ai_summary: `SophiaCita: ${citaResult.specialty ?? 'médico'}` })
+          await supabase.from('conversations').insert({ lead_id: lead.id, lead_name: lead.name, lead_phone: from, agent_id: lead.agent_id, account_id: lead.account_id, channel: 'whatsapp', direction: 'outbound', message: responseWithCrossSell, ai_summary: `SophiaCita: ${citaResult.specialty ?? 'médico'}` })
           const delay = Math.floor(Math.random() * 3) + 3
           await new Promise(r => setTimeout(r, delay * 1000))
           await sendWhatsApp(from, responseWithCrossSell)
@@ -1625,6 +1630,8 @@ Escribe el comando o dime que necesitas 👇`
       lead_id: lead.id,
       lead_name: lead.name,
       lead_phone: from,
+      agent_id: lead.agent_id,
+      account_id: lead.account_id,
       channel: 'whatsapp',
       direction: 'outbound',
       message: cleanResponse,
