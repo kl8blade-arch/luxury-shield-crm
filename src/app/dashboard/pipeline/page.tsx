@@ -38,7 +38,9 @@ interface Stage { key: string; label: string; color: string; emoji: string }
 interface PipelineData { stages: Stage[]; leads: Record<string, Lead[]>; total: number }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-const scoreColor = (s: number) => s >= 75 ? '#00E5A0' : s >= 50 ? '#FFB930' : '#FF4757'
+const scoreColor  = (s: number) => s >= 75 ? '#00E5A0' : s >= 50 ? '#FFB930' : s >= 25 ? '#E67E22' : '#FF4757'
+const scoreBg     = (s: number) => s >= 75 ? '#00E5A020' : s >= 50 ? '#FFB93020' : s >= 25 ? '#E67E2220' : '#FF475720'
+const scoreLabel  = (s: number) => s >= 75 ? '🔥 Caliente' : s >= 50 ? '⚡ Activo' : s >= 25 ? '🌡️ Tibio' : '❄️ Frío'
 
 function timeAgo(date: string | null) {
   if (!date) return '—'
@@ -397,6 +399,23 @@ export default function PipelinePage() {
           </select>
         </div>
         <button onClick={fetchPipeline} style={{ padding: '7px 14px', background: `${T.accent}20`, border: `1px solid ${T.accent}40`, borderRadius: 8, fontSize: 11, fontWeight: 700, color: T.accent, cursor: 'pointer' }}>↺</button>
+        {data && (
+          <div style={{ display: 'flex', gap: 8, marginLeft: 8 }}>
+            {[
+              { label: '🔥', min: 75, color: '#00E5A0' },
+              { label: '⚡', min: 50, color: '#FFB930' },
+              { label: '🌡️', min: 25, color: '#E67E22' },
+              { label: '❄️', min: 0,  color: '#FF4757' },
+            ].map(tier => {
+              const count = Object.values(data.leads).flat().filter((l: Lead) => l.score >= tier.min && (tier.min === 75 || l.score < tier.min + 25)).length
+              return count > 0 ? (
+                <div key={tier.label} style={{ padding: '3px 8px', background: `${tier.color}15`, border: `1px solid ${tier.color}30`, borderRadius: 10, fontSize: 10, fontWeight: 700, color: tier.color }}>
+                  {tier.label} {count}
+                </div>
+              ) : null
+            })}
+          </div>
+        )}
         {selectedId && <button onClick={() => setSelectedId(null)} style={{ padding: '7px 14px', background: 'rgba(255,255,255,0.06)', border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 11, color: T.muted, cursor: 'pointer' }}>✕ Cerrar panel</button>}
       </div>
 
@@ -437,7 +456,12 @@ export default function PipelinePage() {
                         style={{ background: isSelected ? `${T.accent}18` : isDraggingThis ? 'rgba(155,89,182,0.2)' : 'rgba(255,255,255,0.05)', border: `1px solid ${isSelected ? T.accent : isDraggingThis ? T.accent : T.border}`, borderRadius: 10, padding: '9px 11px', cursor: 'pointer', opacity: isDraggingThis ? 0.5 : isUpdating ? 0.7 : 1, transition: 'all 0.15s', userSelect: 'none', boxShadow: isSelected ? `0 0 12px ${T.accent}30` : 'none' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
                           <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.3, flex: 1, marginRight: 4 }}>{lead.name}</div>
-                          <div style={{ fontSize: 13, fontWeight: 900, color: scoreColor(lead.score), flexShrink: 0 }}>{lead.score}</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0, gap: 2 }}>
+                            <div style={{ fontSize: 15, fontWeight: 900, color: scoreColor(lead.score) }}>{lead.score}</div>
+                            <div style={{ fontSize: 7, padding: '1px 5px', background: scoreBg(lead.score), borderRadius: 6, color: scoreColor(lead.score), fontWeight: 700, whiteSpace: 'nowrap' }}>
+                              {scoreLabel(lead.score)}
+                            </div>
+                          </div>
                         </div>
                         <div style={{ fontSize: 10, color: T.muted, marginBottom: 5 }}>{lead.insurance_type}</div>
                         <div style={{ fontSize: 10, color: T.cyan, marginBottom: 5, fontFamily: 'monospace' }}>{lead.phone}</div>
@@ -445,6 +469,11 @@ export default function PipelinePage() {
                           {lead.ready_to_buy && <span style={{ fontSize: 8, padding: '1px 5px', background: '#00E5A020', borderRadius: 8, color: '#00E5A0', fontWeight: 700 }}>⚡</span>}
                           {lead.ia_active    && <span style={{ fontSize: 8, padding: '1px 5px', background: `${T.accent}20`, borderRadius: 8, color: T.accent, fontWeight: 700 }}>🤖</span>}
                           {lead.source       && <span style={{ fontSize: 8, padding: '1px 5px', background: 'rgba(255,255,255,0.06)', borderRadius: 8, color: T.muted }}>{lead.source}</span>}
+                        </div>
+                        <div style={{ marginTop: 6 }}>
+                          <div style={{ height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${lead.score}%`, background: scoreColor(lead.score), borderRadius: 2, transition: 'width 0.8s ease', boxShadow: `0 0 4px ${scoreColor(lead.score)}80` }}/>
+                          </div>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 7, paddingTop: 5, borderTop: `1px solid ${T.border}` }}>
                           <span style={{ fontSize: 9, color: T.muted }}>{timeAgo(lead.last_contact)}</span>
