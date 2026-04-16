@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { loadSophiaContext, buildClaudeMessages } from '@/lib/sophia-context'
 import { isMedicalAppointmentRequest, handleSophiaCitaIntent } from '@/lib/sophiacita'
+import { handlePostCitaResponse, isPostCitaResponse } from '@/lib/sophia-postcita'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -1450,6 +1451,32 @@ Escribe el comando o dime que necesitas 👇`
     }).eq('id', lead.id)
 
     // Generate AI response
+
+    // ══ POST-CITA RESPONSE HANDLER ══
+    if (isPostCitaResponse(sanitizedBody)) {
+      try {
+        const postCitaResult = await handlePostCitaResponse({
+          leadId:  lead.id,
+          message: sanitizedBody,
+          agentId: lead.agent_id,
+        })
+        if (postCitaResult.handled && postCitaResult.response) {
+          await supabase.from('conversations').insert({
+            lead_id: lead.id, lead_name: lead.name, lead_phone: from,
+            channel: 'whatsapp', direction: 'outbound',
+            message: postCitaResult.response,
+            ai_summary: `PostCita sentiment: ${postCitaResult.sentiment}`,
+          })
+          const delay = Math.floor(Math.random() * 2) + 2
+          await new Promise(r => setTimeout(r, delay * 1000))
+          await sendWhatsApp(from, postCitaResult.response)
+          await supabase.from('leads').update({ sophia_processing: false }).eq('id', lead.id)
+          return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
+        }
+      } catch (e: any) {
+        console.error('[PostCita] Error:', e.message)
+      }
+    }
 
     // ══ SOPHIACITA ══
     if (isMedicalAppointmentRequest(sanitizedBody)) {
