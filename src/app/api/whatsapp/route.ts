@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { loadSophiaContext, buildClaudeMessages } from '@/lib/sophia-context'
+import { getRelevantKnowledge } from '@/lib/sophia-knowledge'
 import { isMedicalAppointmentRequest, handleSophiaCitaIntent } from '@/lib/sophiacita'
 import { handlePostCitaResponse, isPostCitaResponse } from '@/lib/sophia-postcita'
 import { detectsExistingInsurance, detectsCompetitorCarrier } from '@/lib/sophia-winback'
@@ -339,6 +340,12 @@ async function getAIResponse(lead: any, conversationHistory: any[], incomingMess
 
   const clientContext = contextSummary ? `\n══ CONTEXTO DEL CLIENTE ══\n${contextSummary}\n══════════════════════════\n` : ''
 
+  // Load product knowledge (RAG — no prices, only benefits and opportunities)
+  let productKnowledge = ''
+  if (lead.account_id) {
+    productKnowledge = await getRelevantKnowledge(incomingMessage, lead.account_id)
+  }
+
   const systemPrompt = `══ REGLA #0 — DETECCIÓN DE CIERRE — MÁXIMA PRIORIDAD ══
 Si el lead dice "ya mismo", "ahora mismo", "quiero que me llamen", "consígueme el plan", "quiero empezar", "dónde firmo", "cómo activo", "ok me interesa", "sí quiero", confirma un número de teléfono, o CUALQUIER frase que indique que quiere proceder:
 → INCLUIR [LISTO_PARA_COMPRAR] en tu respuesta
@@ -357,6 +364,7 @@ IDIOMA: Responde en ${agentConfig.sophia_language === 'en' ? 'inglés' : agentCo
 
 ━━━ REGLAS ABSOLUTAS ━━━
 ${clientContext}
+${productKnowledge ? `\n══ CONOCIMIENTO DE PRODUCTOS RELEVANTES ══\n${productKnowledge}\n══════════════════════════════════════\n` : ''}
 1. MEMORIA: Lee TODO el historial antes de responder. Nunca pidas información que el lead ya dio. ${alreadyIntroduced ? 'YA TE PRESENTASTE — NUNCA te presentes de nuevo.' : 'Este es el primer contacto, preséntate brevemente UNA vez.'}
 
 2. IDENTIDAD: Eres parte del equipo de ${agencyName}. Si preguntan si eres IA → "Soy parte del equipo de asesores de ${agencyName} 😊 ¿Seguimos?"
