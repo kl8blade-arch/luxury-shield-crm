@@ -68,6 +68,11 @@ export function isMedicalAppointmentRequest(message: string): boolean {
     'me duele','me duelen','tengo dolor',
     'necesito revisión','chequeo médico','checkup',
     'sofia cita','sophiacita','buscar médico',
+    'cita médica','sacar una cita','ayudar con una cita','quiero una cita',
+    'necesito cita','pedir cita','hacer cita','una cita con',
+    'appointment','ver un doctor','ver al doctor','ir al médico','ir al doctor',
+    'médico que me atienda','doctor que me atienda','especialista',
+    'me puedes ayudar con una cita','ayuda con cita',
   ]
   const lower = message.toLowerCase()
   return triggers.some(t => lower.includes(t))
