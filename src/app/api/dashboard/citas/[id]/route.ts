@@ -12,11 +12,12 @@ const VALID_STATUSES = ['requested', 'confirmed', 'reminded', 'completed', 'canc
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const agentId = await validateAgentAuth(request)
     const { status } = await request.json()
+    const { id } = await params
 
     // Validate status
     if (!VALID_STATUSES.includes(status)) {
@@ -27,7 +28,7 @@ export async function PATCH(
     const { data: appointment, error: fetchError } = await supabase
       .from('doctor_appointments')
       .select('id, agent_id')
-      .eq('id', params.id)
+      .eq('id', id)
       .single()
 
     if (fetchError || !appointment) {
@@ -42,13 +43,13 @@ export async function PATCH(
     const { error: updateError } = await supabase
       .from('doctor_appointments')
       .update({ status, updated_at: new Date().toISOString() })
-      .eq('id', params.id)
+      .eq('id', id)
 
     if (updateError) throw updateError
 
     // If status becomes 'confirmed', auto-create followup
     if (status === 'confirmed') {
-      await createFollowupForAppointment(params.id)
+      await createFollowupForAppointment(id)
     }
 
     return NextResponse.json({ success: true })

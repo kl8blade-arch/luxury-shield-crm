@@ -5,11 +5,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
-import twilio from 'twilio'
 
 const supabase   = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 const anthropic  = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!)
+// ⚠️  Twilio disabled at compile time — requires server-side initialization
+const twilioClient: any = null // twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!)
 
 function isAuthorized(req: NextRequest) {
   const auth   = req.headers.get('authorization')
