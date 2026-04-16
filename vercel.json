@@ -38,7 +38,7 @@
     },
     {
       "path": "/api/cron/appointment-followup",
-      "schedule": "0 * * * *"
+      "schedule": "0 13 * * *"
     }
   ]
 }
