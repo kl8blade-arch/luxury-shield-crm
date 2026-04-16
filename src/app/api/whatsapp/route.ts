@@ -1,6 +1,7 @@
 // Sophia v3 — Luxury Shield CRM — Updated 2026-03-27
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { loadSophiaContext, buildClaudeMessages } from '@/lib/sophia-context'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -1391,46 +1392,13 @@ Escribe el comando o dime que necesitas 👇`
     // Set processing lock
     await supabase.from('leads').update({ sophia_processing: true }).eq('id', lead.id)
 
-    // Get conversation history — try lead_id, then phone variants
-    let history: any[] | null = null
-
-    const { data: histById, error: histErr } = await supabase
-      .from('conversations')
-      .select('direction, message, created_at')
-      .eq('lead_id', lead.id)
-      .order('created_at', { ascending: true })
-      .limit(30)
-
-    if (histErr) console.error('[Sophia] History error:', histErr)
-    history = histById
-
-    // Fallback: try by phone (multiple formats)
-    if (!history || history.length === 0) {
-      const { data: histByPhone } = await supabase
-        .from('conversations')
-        .select('direction, message, created_at, lead_id')
-        .or(`lead_phone.eq.${from},lead_phone.eq.${digitsOnly},lead_phone.eq.${last10},lead_phone.eq.${withPlus}`)
-        .order('created_at', { ascending: true })
-        .limit(30)
-
-      if (histByPhone && histByPhone.length > 0) {
-        history = histByPhone
-        console.log(`[Sophia] History found by phone fallback: ${history.length} msgs`)
-        // Fix: update old conversations to use correct lead_id
-        const oldLeadIds = [...new Set(histByPhone.map((m: any) => m.lead_id).filter((id: any) => id && id !== lead.id))]
-        if (oldLeadIds.length > 0) {
-          console.log(`[Sophia] Fixing ${oldLeadIds.length} orphaned lead_ids in conversations`)
-          for (const oldId of oldLeadIds) {
-            await supabase.from('conversations').update({ lead_id: lead.id }).eq('lead_id', oldId)
-          }
-        }
-      }
-    }
-
-    console.log(`[SOPHIA] lead.id: ${lead.id} | lead.name: ${lead.name} | phone: ${from}`)
-    console.log(`[SOPHIA] historial encontrado: ${history?.length ?? 0} mensajes`)
-    if (history && history.length > 0) {
-      console.log(`[SOPHIA] primer msg: ${history[0].direction} — "${history[0].message?.substring(0, 50)}"`)
+    // Load full Sophia context (history + family + insights)
+    const sophiaCtx = await loadSophiaContext(lead.id, lead.agent_id, 20)
+    const history = sophiaCtx?.conversations ?? []
+    const alreadyIntroduced = history.some((m: { direction: string }) => m.direction === 'outbound')
+    console.log(`[SOPHIA] Contexto cargado: ${history.length} msgs | introducida: ${alreadyIntroduced}`)
+    if (sophiaCtx?.contextSummary) {
+      console.log(`[SOPHIA] Context summary cargado para ${lead.name}`)
     }
 
     // Save incoming message
@@ -1479,10 +1447,6 @@ Escribe el comando o dime que necesitas 👇`
     }).eq('id', lead.id)
 
     // Generate AI response
-    // Check if ai-contact already sent a welcome message
-    const priorOutbound = (history || []).filter((m: any) => m.direction === 'outbound')
-    const alreadyIntroduced = priorOutbound.length > 0
-
     // TOKEN CHECK — Block auto-response if agent has no tokens
     try {
       const { checkTokens } = await import('@/lib/token-guard')
@@ -1600,6 +1564,17 @@ Escribe el comando o dime que necesitas 👇`
     console.log(`[Sophia] About to send response to ${from}: "${cleanResponse.substring(0, 50)}..."`)
     const sendResult = await sendWhatsApp(from, cleanResponse)
     console.log(`[Sophia] sendWhatsApp result:`, JSON.stringify(sendResult).substring(0, 150))
+
+    // Extract context from lead message (non-blocking)
+    fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/sophia/extract-context`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        leadId: lead.id,
+        agentId: lead.agent_id,
+        message: sanitizedBody,
+      }),
+    }).catch(() => null)
 
     if (!sendResult.sid) {
       console.error(`[Sophia] Failed to send message: ${sendResult.error || sendResult.error_message || 'Unknown error'}`)
