@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { loadSophiaContext, buildClaudeMessages } from '@/lib/sophia-context'
 import { isMedicalAppointmentRequest, handleSophiaCitaIntent } from '@/lib/sophiacita'
 import { handlePostCitaResponse, isPostCitaResponse } from '@/lib/sophia-postcita'
+import { detectsExistingInsurance, detectsCompetitorCarrier } from '@/lib/sophia-winback'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -1498,6 +1499,23 @@ Escribe el comando o dime que necesitas 👇`
       } catch (e: any) {
         console.error('[PostCita] Error:', e.message)
       }
+    }
+
+    // ══ WINBACK — Detectar seguro existente con otro carrier ══
+    if (detectsExistingInsurance(sanitizedBody)) {
+      const carrier = detectsCompetitorCarrier(sanitizedBody)
+      if (carrier) {
+        // Guardar carrier detectado (non-blocking)
+        supabase.from('leads').update({
+          existing_carrier:     carrier,
+          is_competitor_client: true,
+          winback_stage:        'detected',
+        }).eq('id', lead.id).then(() => null)
+        lead.existing_carrier     = carrier
+        lead.is_competitor_client = true
+        console.log(`[WINBACK] Carrier detectado: ${carrier} para ${lead.name}`)
+      }
+      // Continuar con Sophia normal — ella tiene las instrucciones en sophia_memory
     }
 
     // ══ SOPHIACITA ══
