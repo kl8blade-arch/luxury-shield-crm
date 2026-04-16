@@ -738,6 +738,7 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
     const from = (formData.get('From') as string || '').replace('whatsapp:', '')
+    const to = (formData.get('To') as string || '').replace('whatsapp:', '')
     let body = formData.get('Body') as string || ''
     const profileName = formData.get('ProfileName') as string || ''
     const mediaUrl = formData.get('MediaUrl0') as string || ''
@@ -1145,18 +1146,42 @@ Escribe el comando o dime que necesitas 👇`
         }
       } catch {}
 
-      // Fallback to Silva only if no campaign agent found
+      // Fallback #2: Lookup agent via WhatsApp number config
       if (!newLeadAgentId) {
         try {
           const { data: silvaAgent } = await supabase
+            .from('agent_configs')
+            .select('agent_id, agents!inner(account_id)')
+            .eq('whatsapp_number', to)
+            .maybeSingle()
+          if (silvaAgent) {
+            newLeadAgentId   = silvaAgent.agent_id
+            newLeadAccountId = (silvaAgent as any).agents?.account_id ?? null
+            console.log(`[Sophia] Assigned agent via whatsapp_number config: ${newLeadAgentId}`)
+          }
+        } catch (e: any) {
+          console.error('[Sophia] Could not find agent by WhatsApp number:', e.message)
+        }
+      }
+
+      // Fallback #3: Default agent from SeguriSSimo account
+      if (!newLeadAgentId) {
+        try {
+          const { data: fallbackAgent } = await supabase
             .from('agents')
             .select('id, account_id')
-            .eq('email', 'silva@luxury-shield.com')
+            .eq('status', 'active')
+            .eq('account_id', '5cca06c8-e3eb-4b3a-a874-d012874f67a8')
+            .order('created_at', { ascending: true })
+            .limit(1)
             .maybeSingle()
-          newLeadAgentId = silvaAgent?.id || null
-          newLeadAccountId = silvaAgent?.account_id || null
+          if (fallbackAgent) {
+            newLeadAgentId   = fallbackAgent.id
+            newLeadAccountId = fallbackAgent.account_id
+            console.log(`[Sophia] Assigned default account agent: ${newLeadAgentId}`)
+          }
         } catch (e: any) {
-          console.error('[Sophia] Could not find Silva agent:', e.message)
+          console.error('[Sophia] Could not find default account agent:', e.message)
         }
       }
 
