@@ -264,7 +264,7 @@ function getSpeedContext(history: any[]): string {
   return '\nESTADO: Lead muy frío (>24h). Trátalo casi como nuevo. Saluda cálidamente, menciona que habían hablado antes. No menciones el plan hasta el 2do mensaje.'
 }
 
-async function getAIResponse(lead: any, conversationHistory: any[], incomingMessage: string, alreadyIntroduced: boolean = false): Promise<string> {
+async function getAIResponse(lead: any, conversationHistory: any[], incomingMessage: string, alreadyIntroduced: boolean = false, contextSummary?: string): Promise<string> {
   const color = lead.favorite_color || lead.color_favorito || ''
   const hasColor = !!color
   const messageNumber = conversationHistory.length + 1
@@ -333,6 +333,8 @@ async function getAIResponse(lead: any, conversationHistory: any[], incomingMess
   }
   const toneNote = agentConfig.sophia_tone ? `\n╚ TONO ASIGNADO: ${toneMapping[agentConfig.sophia_tone] || toneMapping.amigable}` : ''
 
+  const clientContext = contextSummary ? `\n══ CONTEXTO DEL CLIENTE ══\n${contextSummary}\n══════════════════════════\n` : ''
+
   const systemPrompt = `══ REGLA #0 — DETECCIÓN DE CIERRE — MÁXIMA PRIORIDAD ══
 Si el lead dice "ya mismo", "ahora mismo", "quiero que me llamen", "consígueme el plan", "quiero empezar", "dónde firmo", "cómo activo", "ok me interesa", "sí quiero", confirma un número de teléfono, o CUALQUIER frase que indique que quiere proceder:
 → INCLUIR [LISTO_PARA_COMPRAR] en tu respuesta
@@ -350,7 +352,7 @@ Eres Sophia, parte del equipo de asesores de ${agencyName}. Eres cálida, inteli
 IDIOMA: Responde en ${agentConfig.sophia_language === 'en' ? 'inglés' : agentConfig.sophia_language === 'bilingue' ? 'español e inglés según lo que el cliente use' : 'español'}. Si el cliente escribe en otro idioma, responde en ese idioma.
 
 ━━━ REGLAS ABSOLUTAS ━━━
-
+${clientContext}
 1. MEMORIA: Lee TODO el historial antes de responder. Nunca pidas información que el lead ya dio. ${alreadyIntroduced ? 'YA TE PRESENTASTE — NUNCA te presentes de nuevo.' : 'Este es el primer contacto, preséntate brevemente UNA vez.'}
 
 2. IDENTIDAD: Eres parte del equipo de ${agencyName}. Si preguntan si eres IA → "Soy parte del equipo de asesores de ${agencyName} 😊 ¿Seguimos?"
@@ -433,7 +435,7 @@ ${lead.quiz_has_insurance ? `- Cobertura actual: ${lead.quiz_has_insurance} (del
 ${langNote}${speedContext}${stageContext}${learningsContext}`
 
   // Inject known context into system prompt so Sophia never re-asks
-  const contextSummary = `
+  const builtContextSummary = `
 CONTEXTO YA RECOPILADO (NO PREGUNTAR DE NUEVO):
 - Nombre: ${lead.name || 'desconocido'}
 - Estado: ${lead.state || 'desconocido'}
@@ -477,7 +479,7 @@ Si algún dato dice 'desconocido', puedes preguntarlo. Si ya está, NUNCA volver
     }
   } catch {}
 
-  const fullSystemPrompt = contextSummary + '\n' + systemPrompt + dynamicLayers + expertLayer + campaignLayer
+  const fullSystemPrompt = builtContextSummary + '\n' + systemPrompt + dynamicLayers + expertLayer + campaignLayer
 
   // Safety: truncar system prompt si es demasiado largo
   const MAX_SYSTEM_CHARS = 40000
@@ -1472,7 +1474,7 @@ Escribe el comando o dime que necesitas 👇`
     console.log(`[SOPHIA] Calling getAIResponse for lead: ${lead.id} - ${lead.name}`)
     let aiResponse = ''
     try {
-      aiResponse = await getAIResponse(lead, history || [], sanitizedBody, alreadyIntroduced)
+      aiResponse = await getAIResponse(lead, history || [], sanitizedBody, alreadyIntroduced, sophiaCtx?.contextSummary)
       console.log(`[SOPHIA] AI Response received: ${aiResponse ? aiResponse.substring(0, 100) : 'EMPTY'} (${aiResponse?.length || 0} chars)`)
     } catch (e: any) {
       console.error('[SOPHIA] getAIResponse ERROR:', e.message, e.stack)
