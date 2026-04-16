@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: '/dashboard',          icon: '📊', label: 'Dashboard',    exact: true  },
   { href: '/dashboard/pipeline', icon: '🎯', label: 'Pipeline',     exact: false },
   { href: '/dashboard/money',    icon: '💰', label: 'Comisiones',   exact: false },
+  { href: '/dashboard/seguros',  icon: '📋', label: 'Seguros',      exact: false },
   { href: '/dashboard/citas',    icon: '📅', label: 'SophiaCita',   exact: false },
   { href: '/leads',              icon: '👥', label: 'Leads',        exact: false },
   { href: '/conversations',      icon: '💬', label: 'Conversaciones',exact: false },
