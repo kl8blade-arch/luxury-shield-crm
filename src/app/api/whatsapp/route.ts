@@ -1628,6 +1628,13 @@ Escribe el comando o dime que necesitas 👇`
       }),
     }).catch(() => null)
 
+    // Sophia Score update (non-blocking)
+    fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/sophia/score`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ leadId: lead.id }),
+    }).catch(() => null)
+
     if (!sendResult.sid) {
       console.error(`[Sophia] Failed to send message: ${sendResult.error || sendResult.error_message || 'Unknown error'}`)
     }
