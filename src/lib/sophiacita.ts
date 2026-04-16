@@ -65,7 +65,6 @@ export function isMedicalAppointmentRequest(message: string): boolean {
     'médico que acepte','doctor que acepte','dentista que acepte',
     'i need a doctor','find a doctor','need a dentist',
     'doctor appointment','medical appointment',
-    'me duele','me duelen','tengo dolor',
     'necesito revisión','chequeo médico','checkup',
     'sofia cita','sophiacita','buscar médico',
     'cita médica','sacar una cita','ayudar con una cita','quiero una cita',
