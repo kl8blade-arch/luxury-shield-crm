@@ -166,6 +166,22 @@ export async function POST(req: NextRequest) {
         }
       })
 
+      // Detectar si mencionó un producto de seguro que ya tiene
+      context.forEach((c: { type: string; key: string; value: string }) => {
+        if (c.type === 'existing_insurance' || c.key === 'carrier_actual') {
+          const value = c.value.toLowerCase()
+          // Detectar ACA/Marketplace
+          if (value.includes('aca') || value.includes('marketplace') || value.includes('obamacare') || value.includes('plan médico') || value.includes('seguro médico')) {
+            if (!updates.purchased_products) updates.purchased_products = ['ACA']
+            updates.existing_carrier = 'Marketplace ACA'
+          }
+          // Detectar dental de otro carrier
+          if (value.includes('dental') && !value.includes('cigna')) {
+            updates.existing_carrier = c.value
+          }
+        }
+      })
+
       // Update insights
       if (insights.length > 0) {
         const existingInsights = (await supabase

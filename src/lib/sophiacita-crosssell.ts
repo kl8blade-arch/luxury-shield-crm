@@ -15,7 +15,9 @@ export function buildCrossellHook(lead: LeadContext): string | null {
 
   const hasACA    = lead.insuranceType?.toLowerCase().includes('aca') ||
                     lead.existingCarrier?.toLowerCase().includes('marketplace') ||
-                    lead.purchasedProducts?.some(p => p.toLowerCase().includes('aca'))
+                    lead.existingCarrier?.toLowerCase().includes('aca') ||
+                    lead.existingCarrier?.toLowerCase().includes('marketplace') ||
+                    lead.purchasedProducts?.some(p => p.toLowerCase() === 'aca')
 
   const hasDental = lead.insuranceType?.toLowerCase().includes('dental') ||
                     lead.purchasedProducts?.some(p => p.toLowerCase().includes('dental'))
