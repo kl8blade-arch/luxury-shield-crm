@@ -5,6 +5,7 @@ import { loadSophiaContext, buildClaudeMessages } from '@/lib/sophia-context'
 import { isMedicalAppointmentRequest, handleSophiaCitaIntent } from '@/lib/sophiacita'
 import { handlePostCitaResponse, isPostCitaResponse } from '@/lib/sophia-postcita'
 import { detectsExistingInsurance, detectsCompetitorCarrier } from '@/lib/sophia-winback'
+import { appendCrossSellToResponse } from '@/lib/sophiacita-crosssell'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -1527,10 +1528,19 @@ Escribe el comando o dime que necesitas 👇`
           state: lead.state, zipCode: lead.zip_code,
         })
         if (citaResult.handled) {
-          await supabase.from('conversations').insert({ lead_id: lead.id, lead_name: lead.name, lead_phone: from, channel: 'whatsapp', direction: 'outbound', message: citaResult.response, ai_summary: `SophiaCita: ${citaResult.specialty ?? 'médico'}` })
+          // Agregar cross-sell hook según el pipeline del lead
+          const responseWithCrossSell = appendCrossSellToResponse(citaResult.response, {
+            name:             lead.name,
+            insuranceType:    lead.insurance_type,
+            existingCarrier:  lead.existing_carrier ?? null,
+            purchasedProducts: lead.purchased_products ?? [],
+            stage:            lead.stage,
+          })
+
+          await supabase.from('conversations').insert({ lead_id: lead.id, lead_name: lead.name, lead_phone: from, channel: 'whatsapp', direction: 'outbound', message: responseWithCrossSell, ai_summary: `SophiaCita: ${citaResult.specialty ?? 'médico'}` })
           const delay = Math.floor(Math.random() * 3) + 3
           await new Promise(r => setTimeout(r, delay * 1000))
-          await sendWhatsApp(from, citaResult.response)
+          await sendWhatsApp(from, responseWithCrossSell)
           await supabase.from('leads').update({ sophia_processing: false }).eq('id', lead.id)
           return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
         }
