@@ -24,6 +24,18 @@ export async function GET(request: NextRequest) {
 
     const accountId = agent?.account_id
 
+    // Incluir cuentas vinculadas (linked_accounts)
+    const { data: linkedAccounts } = await supabase
+      .from('linked_accounts')
+      .select('linked_account_id')
+      .eq('owner_account_id', accountId)
+      .eq('status', 'active')
+
+    const allAccountIds = [
+      accountId,
+      ...(linkedAccounts ?? []).map(la => la.linked_account_id)
+    ]
+
     // Query by account_id (shows all agents in account) OR agent_id as fallback
     let query = supabase
       .from('conversations')
@@ -32,7 +44,7 @@ export async function GET(request: NextRequest) {
       .limit(limit)
 
     if (accountId) {
-      query = query.eq('account_id', accountId)
+      query = query.in('account_id', allAccountIds)
     } else {
       query = query.eq('agent_id', agentId)
     }

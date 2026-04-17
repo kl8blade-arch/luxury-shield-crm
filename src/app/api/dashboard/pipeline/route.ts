@@ -24,10 +24,31 @@ export async function GET(request: NextRequest) {
     const agentId = searchParams.get('agentId')
     if (!agentId) throw new ApiError(400, 'Missing agentId')
 
+    // Get agent's account_id
+    const { data: agent } = await supabase
+      .from('agents')
+      .select('account_id')
+      .eq('id', agentId)
+      .single()
+
+    const accountId = agent?.account_id
+
+    // Incluir cuentas vinculadas (linked_accounts)
+    const { data: linkedAccounts } = await supabase
+      .from('linked_accounts')
+      .select('linked_account_id')
+      .eq('owner_account_id', accountId)
+      .eq('status', 'active')
+
+    const allAccountIds = [
+      accountId,
+      ...(linkedAccounts ?? []).map(la => la.linked_account_id)
+    ]
+
     const { data: leads, error } = await supabase
       .from('leads')
       .select('id, name, phone, stage, score, insurance_type, created_at, last_contact, source, city, state, ready_to_buy, ia_active, notes')
-      .eq('agent_id', agentId)
+      .in('account_id', allAccountIds)
       .not('stage', 'in', '("closed_lost","unqualified","no_califica")')
       .order('score', { ascending: false })
 

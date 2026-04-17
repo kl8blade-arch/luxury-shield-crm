@@ -36,6 +36,27 @@ export async function GET(request: NextRequest) {
     // Validate agent is authorized
     const agentId = await validateAgentAuth(request)
 
+    // Get agent's account_id
+    const { data: agent } = await supabase
+      .from('agents')
+      .select('account_id')
+      .eq('id', agentId)
+      .single()
+
+    const accountId = agent?.account_id
+
+    // Incluir cuentas vinculadas (linked_accounts)
+    const { data: linkedAccounts } = await supabase
+      .from('linked_accounts')
+      .select('linked_account_id')
+      .eq('owner_account_id', accountId)
+      .eq('status', 'active')
+
+    const allAccountIds = [
+      accountId,
+      ...(linkedAccounts ?? []).map(la => la.linked_account_id)
+    ]
+
     const now          = new Date()
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
@@ -49,39 +70,39 @@ export async function GET(request: NextRequest) {
     ] = await Promise.all([
       supabase.from('leads')
         .select('id, stage, created_at, insurance_type, score')
-        .eq('agent_id', agentId),
+        .in('account_id', allAccountIds),
 
       supabase.from('leads')
         .select('id, stage, created_at', { count: 'exact' })
-        .eq('agent_id', agentId)
+        .in('account_id', allAccountIds)
         .gte('created_at', startOfMonth),
 
       supabase.from('leads')
         .select('created_at, stage')
-        .eq('agent_id', agentId)
+        .in('account_id', allAccountIds)
         .gte('created_at', last7Days)
         .order('created_at', { ascending: true }),
 
       supabase.from('conversations')
         .select('id, lead_id, lead_name, lead_phone, created_at, sentiment, message')
-        .eq('agent_id', agentId)
+        .in('account_id', allAccountIds)
         .gte('created_at', startOfToday)
         .order('created_at', { ascending: false })
         .limit(8),
 
       supabase.from('commissions')
         .select('commission_amount, status, carrier, product, created_at')
-        .eq('agent_id', agentId)
+        .in('account_id', allAccountIds)
         .order('created_at', { ascending: false }),
 
       supabase.from('commissions')
         .select('commission_amount, status, carrier, product')
-        .eq('agent_id', agentId)
+        .in('account_id', allAccountIds)
         .gte('created_at', startOfMonth),
 
       supabase.from('calendar_events')
         .select('id, title, start_time, event_type, lead_name, status, location')
-        .eq('agent_id', agentId)
+        .in('account_id', allAccountIds)
         .gte('start_time', startOfToday)
         .lte('start_time', endOfMonth)
         .neq('status', 'cancelled')
@@ -90,7 +111,7 @@ export async function GET(request: NextRequest) {
 
       supabase.from('doctor_appointments')
         .select('id, doctor_name, specialty, scheduled_at, status, lead_name, in_network', { count: 'exact' })
-        .eq('agent_id', agentId)
+        .in('account_id', allAccountIds)
         .gte('scheduled_at', startOfToday)
         .order('scheduled_at', { ascending: true })
         .limit(5),
