@@ -307,7 +307,7 @@ export default function CommandCenter() {
       )}
 
       {/* ── BODY ─────────────────────────────────────────────────────────── */}
-      <div style={{ position:'relative', zIndex:1, padding:'14px 18px 40px' }}>
+      <div style={{ position:'relative', zIndex:1, padding:'14px 18px 40px', overflowX:'hidden' }}>
 
         {/* ── OVERVIEW ──────────────────────────────────────────────────── */}
         {tab==='overview' && <>
@@ -331,8 +331,8 @@ export default function CommandCenter() {
               </div>
             </Card>
 
-            {/* 4 KPI rings */}
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10 }}>
+            {/* 4 KPI rings - responsive grid */}
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))', gap:10, overflowX:'auto' }}>
               {KPIS.map((m,i) => (
                 <Card key={i} T={T} glow={`${m.color}30`} sx={{ display:'flex', alignItems:'center', gap:12 }}>
                   <Ring pct={m.pct} size={72} stroke={7} color={m.color} bg={bgRing} value={m.val}/>

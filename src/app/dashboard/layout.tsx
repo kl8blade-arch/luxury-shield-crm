@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { CommandPalette } from '@/components/CommandPalette'
+import { Menu, X } from 'lucide-react'
 
 const NAV_ITEMS = [
   { href: '/dashboard',           icon: '📊', label: 'Dashboard',      exact: true  },
@@ -25,12 +26,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { user } = useAuth()
 
   const [collapsed, setCollapsed] = useState(false)
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
   const [dark, setDark] = useState(() => {
     if (typeof window === 'undefined') return true
     const saved = localStorage.getItem('sophiaos-theme')
     if (saved !== null) return saved === 'dark'
     return new Date().getHours() < 7 || new Date().getHours() >= 19
   })
+
+  // ESC key handler for mobile menu
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsMobileOpen(false)
+    }
+    if (isMobileOpen) {
+      window.addEventListener('keydown', handleKeyDown)
+      return () => window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isMobileOpen])
 
   // Sync dark mode con el dashboard
   useEffect(() => {
@@ -66,6 +79,47 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: T.bg, fontFamily: "'SF Pro Display',system-ui,sans-serif" }}>
 
+      {/* Mobile hamburger button */}
+      <button
+        onClick={() => setIsMobileOpen(!isMobileOpen)}
+        style={{
+          position: 'fixed',
+          top: '12px',
+          left: '12px',
+          zIndex: 200,
+          display: 'none',
+          background: T.hover,
+          border: `1px solid ${T.border}`,
+          borderRadius: '8px',
+          padding: '8px',
+          cursor: 'pointer',
+          color: T.text,
+          width: '40px',
+          height: '40px',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'all 0.2s',
+        }}
+        className="dashboard-mobile-hamburger"
+      >
+        {isMobileOpen ? <X size={20} /> : <Menu size={20} />}
+      </button>
+
+      {/* Dark overlay for mobile */}
+      {isMobileOpen && (
+        <div
+          onClick={() => setIsMobileOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            zIndex: 49,
+            display: 'none',
+          }}
+          className="dashboard-mobile-overlay"
+        />
+      )}
+
       {/* ── SIDEBAR ─────────────────────────────────────────────────────── */}
       <div style={{
         width: sidebarW, flexShrink: 0,
@@ -75,9 +129,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         WebkitBackdropFilter: 'blur(20px)',
         display: 'flex', flexDirection: 'column',
         position: 'sticky', top: 0, height: '100vh',
-        transition: 'width 0.2s ease',
+        transition: 'width 0.2s ease, transform 0.3s ease',
         overflow: 'hidden', zIndex: 50,
-      }}>
+        transform: `translateX(${isMobileOpen ? '0' : '-100%'})`,
+      }}
+      className="dashboard-sidebar"
+      >
 
         {/* Logo */}
         <div style={{ padding: collapsed ? '14px 12px' : '14px 16px', borderBottom: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', gap: 10, minHeight: 56 }}>
@@ -97,7 +154,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             return (
               <button
                 key={item.href}
-                onClick={() => router.push(item.href)}
+                onClick={() => { router.push(item.href); setIsMobileOpen(false) }}
                 title={collapsed ? item.label : undefined}
                 style={{
                   display: 'flex', alignItems: 'center',
@@ -157,6 +214,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Command Palette */}
       <CommandPalette />
+
+      <style>{`
+        @media (max-width: 768px) {
+          .dashboard-mobile-hamburger { display: flex !important; }
+          .dashboard-mobile-overlay { display: block !important; }
+          .dashboard-sidebar {
+            position: fixed !important;
+            left: 0 !important;
+            height: 100vh !important;
+            width: 200px !important;
+          }
+        }
+      `}</style>
     </div>
   )
 }

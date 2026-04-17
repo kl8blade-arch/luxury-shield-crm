@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, Kanban, Bell, Calendar,
   MessageSquare, Settings, Shield, Building2,
   UserCheck, Package, ChevronRight, BarChart3, Brain, LogOut, Upload,
-  ChevronDown, Plus, Circle, Share2, Archive, Plug,
+  ChevronDown, Plus, Circle, Share2, Archive, Plug, Menu, X,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useEffect, useState } from 'react'
@@ -44,6 +44,18 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
   const [subAccounts, setSubAccounts] = useState<any[]>([])
   const [linkedAccounts, setLinkedAccounts] = useState<any[]>([])
   const [accountsOpen, setAccountsOpen] = useState(false)
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
+
+  // ESC key handler for mobile menu
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsMobileOpen(false)
+    }
+    if (isMobileOpen) {
+      window.addEventListener('keydown', handleKeyDown)
+      return () => window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isMobileOpen])
 
   useEffect(() => {
     if (!user?.account_id) return
@@ -84,12 +96,63 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
     : 'AG'
 
   return (
-    <aside style={{
-      position: 'fixed', left: 0, top: 0, bottom: 0, width: '224px',
-      background: '#08090d', borderRight: '1px solid rgba(255,255,255,0.06)',
-      display: 'flex', flexDirection: 'column',
-      zIndex: 50, fontFamily: '"Inter","Segoe UI",sans-serif',
-    }}>
+    <>
+      {/* Hamburger button for mobile */}
+      <button
+        onClick={() => setIsMobileOpen(!isMobileOpen)}
+        style={{
+          position: 'fixed',
+          top: '12px',
+          left: '12px',
+          zIndex: 200,
+          display: 'none',
+          background: 'rgba(255,255,255,0.08)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: '8px',
+          padding: '8px',
+          cursor: 'pointer',
+          color: '#F0ECE3',
+          width: '40px',
+          height: '40px',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'all 0.2s',
+        }}
+        onMouseEnter={e => {
+          (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.12)'
+          (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.18)'
+        }}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'
+          (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.12)'
+        }}
+        className="mobile-hamburger"
+      >
+        {isMobileOpen ? <X size={20} /> : <Menu size={20} />}
+      </button>
+
+      {/* Dark overlay for mobile */}
+      {isMobileOpen && (
+        <div
+          onClick={() => setIsMobileOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            zIndex: 49,
+            display: 'none',
+          }}
+          className="mobile-overlay"
+        />
+      )}
+
+      {/* Main sidebar */}
+      <aside style={{
+        position: 'fixed', left: 0, top: 0, bottom: 0, width: '224px',
+        background: '#08090d', borderRight: '1px solid rgba(255,255,255,0.06)',
+        display: 'flex', flexDirection: 'column',
+        zIndex: 50, fontFamily: '"Inter","Segoe UI",sans-serif',
+      }}>
 
       {/* ── LOGO ── */}
       <div style={{ padding: '20px 16px 8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
@@ -249,7 +312,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
         {NAV.filter(n => !n.admin || isAdmin).map(({ href, icon: Icon, label, badge }) => {
           const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
           return (
-            <Link key={href} href={href} onClick={onNavigate} style={{ textDecoration: 'none' }}>
+            <Link key={href} href={href} onClick={() => { onNavigate?.(); setIsMobileOpen(false) }} style={{ textDecoration: 'none' }}>
               <div style={{
                 display: 'flex', alignItems: 'center', gap: '10px',
                 padding: '9px 12px', borderRadius: '10px', cursor: 'pointer',
@@ -315,5 +378,17 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
         </div>
       </div>
     </aside>
+
+    <style>{`
+      @media (max-width: 768px) {
+        .mobile-hamburger { display: flex !important; }
+        .mobile-overlay { display: block !important; }
+        aside {
+          transform: translateX(${isMobileOpen ? '0' : '-100%'}) !important;
+          transition: transform 0.3s ease !important;
+        }
+      }
+    `}</style>
+    </>
   )
 }

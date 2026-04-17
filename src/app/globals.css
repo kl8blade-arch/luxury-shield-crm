@@ -18,27 +18,72 @@ input, select, textarea { font-family: inherit; }
 
 /* ── MOBILE RESPONSIVE ── */
 @media (max-width: 768px) {
+  /* Prevent horizontal overflow */
+  body { overflow-x: hidden; }
+  main { overflow-x: hidden; max-width: 100vw; }
+
+  /* Adjust body padding for mobile */
+  body { padding-top: 50px; }
+
   /* Make all tables horizontally scrollable */
   table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
   /* Compact padding on pages */
-  .page-padding { padding: 20px 14px !important; }
+  .page-padding { padding: 14px 12px !important; }
+
+  /* Responsive font sizes */
+  body { font-size: 14px; }
+  h1 { font-size: 22px; }
+  h2 { font-size: 18px; }
+  h3 { font-size: 16px; }
+
+  /* Button min-height for touch targets */
+  button { min-height: 44px; min-width: 44px; }
+
+  /* Touch-friendly padding */
+  button, a, [role="button"] { padding: 10px 12px; }
 
   /* Stack grid columns */
   [style*="gridTemplateColumns: '2fr"] { grid-template-columns: 1fr !important; }
 
-  /* Prevent overflow */
-  body { overflow-x: hidden; }
-  main { overflow-x: hidden; max-width: 100vw; }
-
   /* Fix modals */
   [style*="width: '440px'"], [style*="width: '520px'"], [style*="width: '500px'"] {
-    width: 95vw !important;
-    max-width: 95vw !important;
+    width: 90vw !important;
+    max-width: 90vw !important;
   }
+
+  /* Responsive containers */
+  [style*="display: 'grid'"] { grid-template-columns: 1fr !important; }
+
+  /* Ensure proper spacing for mobile */
+  main { padding: 0; margin: 0; }
+}
+
+/* Extra small screens (max 480px) */
+@media (max-width: 480px) {
+  body { font-size: 13px; padding-top: 56px; }
+  h1 { font-size: 18px; }
+  h2 { font-size: 15px; }
+  h3 { font-size: 14px; }
+
+  /* Stack everything on small phones */
+  [style*="display: 'grid'"] { grid-template-columns: 1fr !important; grid-auto-flow: row; }
+
+  /* Smaller stat numbers on mobile */
+  [style*="fontSize: '20px'"] { font-size: 16px !important; }
+  [style*="fontSize: '32px'"] { font-size: 24px !important; }
+
+  /* Tighter padding */
+  body { padding: 0; }
+  [style*="padding: '14px'"] { padding: 10px !important; }
+  [style*="padding: '20px'"] { padding: 14px !important; }
+
+  /* Hamburger menu spacing */
+  button[class*="hamburger"] { top: 8px; left: 8px; width: 36px; height: 36px; }
 }
 
 /* iOS safe areas */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  body { padding-bottom: env(safe-area-inset-bottom); }
 }
