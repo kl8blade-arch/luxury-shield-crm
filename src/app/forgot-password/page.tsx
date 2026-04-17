@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
+import { ThemeToggle } from '@/components/ui/ThemeToggle'
 
 type Account = { id: string; name: string; email_hint: string; plan: string }
 
@@ -19,12 +20,16 @@ export default function ForgotPasswordPage() {
 
   const inputStyle = {
     width: '100%', padding: '14px 18px', borderRadius: '12px', fontSize: '15px',
-    fontFamily: '"Outfit",sans-serif', background: 'rgba(255,255,255,0.03)',
-    border: '1px solid rgba(255,255,255,0.08)', color: '#F0ECE3', outline: 'none',
-    boxSizing: 'border-box' as const, transition: 'border-color 0.2s',
+    fontFamily: '"Outfit",sans-serif',
+    background: 'var(--glass-bg)',
+    border: '1px solid var(--glass-border)',
+    color: 'var(--text-primary)',
+    outline: 'none',
+    boxSizing: 'border-box' as const,
+    transition: 'border-color 0.2s, background-color 200ms ease, color 200ms ease',
   }
-  function handleFocus(e: React.FocusEvent<HTMLInputElement>) { e.currentTarget.style.borderColor = 'rgba(201,168,76,0.3)' }
-  function handleBlur(e: React.FocusEvent<HTMLInputElement>) { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)' }
+  function handleFocus(e: React.FocusEvent<HTMLInputElement>) { e.currentTarget.style.borderColor = 'rgba(var(--brand-primary-rgb, 201, 168, 76), 0.3)' }
+  function handleBlur(e: React.FocusEvent<HTMLInputElement>) { e.currentTarget.style.borderColor = 'var(--glass-border)' }
 
   async function handleFind(e: React.FormEvent) {
     e.preventDefault()
@@ -89,11 +94,29 @@ export default function ForgotPasswordPage() {
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700&family=Outfit:wght@300;400;500;600;700&display=swap');`}</style>
       <div style={{
         minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: '#050507', position: 'relative', overflow: 'hidden', fontFamily: '"Outfit",sans-serif',
+        background: 'var(--bg-base)', position: 'relative', overflow: 'hidden', fontFamily: '"Outfit",sans-serif',
+        transition: 'background-color 200ms ease',
       }}>
-        <div style={{ position: 'absolute', top: '-30%', left: '-10%', width: '700px', height: '700px', background: 'radial-gradient(circle, rgba(167,139,250,0.05) 0%, transparent 60%)', pointerEvents: 'none' }} />
-        <div style={{ position: 'absolute', bottom: '-25%', right: '-15%', width: '600px', height: '600px', background: 'radial-gradient(circle, rgba(201,168,76,0.04) 0%, transparent 60%)', pointerEvents: 'none' }} />
-        <div style={{ position: 'absolute', inset: 0, opacity: 0.02, backgroundImage: 'linear-gradient(rgba(201,168,76,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(201,168,76,0.3) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
+        {/* Theme Toggle */}
+        <div style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 100 }}>
+          <ThemeToggle variant="icon" />
+        </div>
+
+        <div style={{
+          position: 'absolute', top: '-30%', left: '-10%', width: '700px', height: '700px',
+          background: 'radial-gradient(circle, rgba(var(--info-rgb, 59, 130, 246), 0.05) 0%, transparent 60%)',
+          pointerEvents: 'none',
+        }} />
+        <div style={{
+          position: 'absolute', bottom: '-25%', right: '-15%', width: '600px', height: '600px',
+          background: 'radial-gradient(circle, rgba(var(--brand-primary-rgb, 201, 168, 76), 0.04) 0%, transparent 60%)',
+          pointerEvents: 'none',
+        }} />
+        <div style={{
+          position: 'absolute', inset: 0, opacity: 0.02,
+          backgroundImage: 'linear-gradient(rgba(var(--brand-primary-rgb, 201, 168, 76), 0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--brand-primary-rgb, 201, 168, 76), 0.3) 1px, transparent 1px)',
+          backgroundSize: '60px 60px',
+        }} />
 
         <div style={{ width: '440px', maxWidth: '92vw', position: 'relative', zIndex: 1 }}>
           {/* Logo */}

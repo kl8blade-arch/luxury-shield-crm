@@ -2,6 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+import { ThemeToggle } from '@/components/ui/ThemeToggle'
 
 const PLANS = [
   { key: 'starter', name: 'Starter', price: 47, color: '#60a5fa', subs: 1, tagline: 'Ideal para comenzar', features: ['Sophia IA basica', 'Pipeline + Leads', 'WhatsApp', '100 leads/mes', '1 sub-cuenta'], badge: null },
@@ -81,19 +82,52 @@ function RegisterInner() {
   return (
     <>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700&family=Outfit:wght@300;400;500;600;700;800&display=swap');`}</style>
-      <div style={{ minHeight: '100vh', background: '#050507', fontFamily: '"Outfit",sans-serif', position: 'relative', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', top: '-20%', left: '50%', transform: 'translateX(-50%)', width: '1000px', height: '600px', background: 'radial-gradient(ellipse, rgba(201,168,76,0.07) 0%, transparent 60%)', pointerEvents: 'none' }} />
-        <div style={{ position: 'absolute', inset: 0, opacity: 0.015, backgroundImage: 'linear-gradient(rgba(201,168,76,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(201,168,76,0.4) 1px, transparent 1px)', backgroundSize: '80px 80px', pointerEvents: 'none' }} />
+      <div style={{
+        minHeight: '100vh',
+        background: 'var(--bg-base)',
+        fontFamily: '"Outfit",sans-serif', position: 'relative', overflow: 'hidden',
+        transition: 'background-color 200ms ease',
+      }}>
+        <div style={{
+          position: 'absolute', top: '-20%', left: '50%', transform: 'translateX(-50%)',
+          width: '1000px', height: '600px',
+          background: 'radial-gradient(ellipse, rgba(var(--brand-primary-rgb, 201, 168, 76), 0.07) 0%, transparent 60%)',
+          pointerEvents: 'none',
+        }} />
+        <div style={{
+          position: 'absolute', inset: 0, opacity: 0.015,
+          backgroundImage: 'linear-gradient(rgba(var(--brand-primary-rgb, 201, 168, 76), 0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--brand-primary-rgb, 201, 168, 76), 0.4) 1px, transparent 1px)',
+          backgroundSize: '80px 80px', pointerEvents: 'none',
+        }} />
 
         {/* Nav */}
         <div style={{ padding: '20px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 2 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ width: '32px', height: '32px', borderRadius: '9px', background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" strokeWidth="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <div style={{
+              width: '32px', height: '32px', borderRadius: '9px',
+              background: 'rgba(var(--brand-primary-rgb, 201, 168, 76), 0.1)',
+              border: '1px solid rgba(var(--brand-primary-rgb, 201, 168, 76), 0.25)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'all 200ms ease',
+            }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--brand-primary)" strokeWidth="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             </div>
-            <span style={{ fontSize: '14px', fontWeight: 700, color: '#C9A84C' }}>Luxury Shield</span>
+            <span style={{
+              fontSize: '14px', fontWeight: 700,
+              color: 'var(--brand-primary)',
+              transition: 'color 200ms ease',
+            }}>Luxury Shield</span>
           </div>
-          <Link href="/login" style={{ fontSize: '13px', color: 'rgba(240,236,227,0.5)', textDecoration: 'none', padding: '8px 18px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>Iniciar sesion</Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <Link href="/login" style={{
+              fontSize: '13px',
+              color: 'var(--text-secondary)',
+              textDecoration: 'none', padding: '8px 18px', borderRadius: '8px',
+              border: '1px solid var(--glass-border)',
+              transition: 'all 200ms ease',
+            }}>Iniciar sesion</Link>
+            <ThemeToggle variant="icon" />
+          </div>
         </div>
 
         <div style={{ maxWidth: '1100px', margin: '0 auto', padding: isMobile ? '20px 16px 40px' : '20px 32px 60px', position: 'relative', zIndex: 2 }}>
@@ -232,5 +266,5 @@ function RegisterInner() {
 }
 
 export default function RegisterPage() {
-  return <Suspense fallback={<div style={{ minHeight: '100vh', background: '#050507' }} />}><RegisterInner /></Suspense>
+  return <Suspense fallback={<div style={{ minHeight: '100vh', background: 'var(--bg-base)' }} />}><RegisterInner /></Suspense>
 }
