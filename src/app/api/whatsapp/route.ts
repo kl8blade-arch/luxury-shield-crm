@@ -1731,9 +1731,17 @@ Escribe el comando o dime que necesitas 👇`
     await new Promise(resolve => setTimeout(resolve, delay * 1000))
 
     // Send response via WhatsApp
-    console.log(`[Sophia] About to send response to ${from}: "${cleanResponse.substring(0, 50)}..."`)
-    const sendResult = await sendWhatsApp(from, cleanResponse)
-    console.log(`[Sophia] sendWhatsApp result:`, JSON.stringify(sendResult).substring(0, 150))
+    console.log(`[Sophia] About to send response to ${from}: "${cleanResponse.substring(0, 50)}..." (${cleanResponse.length} chars)`)
+    console.log(`[Sophia] Response text:`, cleanResponse)
+
+    let sendResult: any = { error: 'Not sent yet' }
+    try {
+      sendResult = await sendWhatsApp(from, cleanResponse)
+      console.log(`[Sophia] sendWhatsApp result:`, JSON.stringify(sendResult).substring(0, 200))
+    } catch (sendErr: any) {
+      console.error(`[Sophia] sendWhatsApp exception:`, sendErr.message, sendErr.stack)
+      sendResult = { error: sendErr.message }
+    }
 
     // Extract context from lead message (non-blocking)
     fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/sophia/extract-context`, {
@@ -1754,7 +1762,9 @@ Escribe el comando o dime que necesitas 👇`
     }).catch(() => null)
 
     if (!sendResult.sid) {
-      console.error(`[Sophia] Failed to send message: ${sendResult.error || sendResult.error_message || 'Unknown error'}`)
+      console.error(`[Sophia] ❌ FAILED to send message to ${from}:`, { error: sendResult.error, error_message: sendResult.error_message, full_response: sendResult })
+    } else {
+      console.log(`[Sophia] ✅ Message sent successfully - SID: ${sendResult.sid}`)
     }
 
     // ── SYSTEM 4: Voice response (non-blocking) ──
