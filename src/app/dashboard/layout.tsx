@@ -8,15 +8,15 @@ import { useAuth } from '@/contexts/AuthContext'
 import { CommandPalette } from '@/components/CommandPalette'
 
 const NAV_ITEMS = [
-  { href: '/dashboard',          icon: '📊', label: 'Dashboard',    exact: true  },
-  { href: '/dashboard/pipeline', icon: '🎯', label: 'Pipeline',     exact: false },
-  { href: '/dashboard/money',    icon: '💰', label: 'Comisiones',   exact: false },
-  { href: '/dashboard/seguros',  icon: '📋', label: 'Seguros',      exact: false },
-  { href: '/dashboard/carriers', icon: '🏢', label: 'Carriers',     exact: false },
-  { href: '/dashboard/citas',    icon: '📅', label: 'SophiaCita',   exact: false },
-  { href: '/leads',              icon: '👥', label: 'Leads',        exact: false },
-  { href: '/conversations',      icon: '💬', label: 'Conversaciones',exact: false },
-  { href: '/dashboard/settings', icon: '⚙️', label: 'Configuración',exact: false },
+  { href: '/dashboard',           icon: '📊', label: 'Dashboard',      exact: true  },
+  { href: '/dashboard/carriers',  icon: '🏢', label: 'Carriers',       exact: false },
+  { href: '/dashboard/citas',     icon: '📅', label: 'Citas',          exact: false },
+  { href: '/dashboard/money',     icon: '💰', label: 'Comisiones',     exact: false },
+  { href: '/conversations',       icon: '💬', label: 'Conversaciones', exact: false },
+  { href: '/leads',               icon: '👥', label: 'Leads',          exact: false },
+  { href: '/dashboard/pipeline',  icon: '🎯', label: 'Pipeline',       exact: false },
+  { href: '/dashboard/seguros',   icon: '📋', label: 'Seguros',        exact: false },
+  { href: '/dashboard/settings',  icon: '⚙️', label: 'Configuración',  exact: false },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
