@@ -31,6 +31,9 @@ async function sendWhatsApp(to: string, body: string, fromNumber?: string) {
     const credentials = Buffer.from(`${accountSid}:${authToken}`).toString('base64')
     const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`
 
+    // Truncate to WhatsApp limit (1500 chars)
+    const msgBody = body.length > 1500 ? body.substring(0, 1497) + '...' : body
+
     const res = await fetch(url, {
       method: 'POST',
       headers: {
@@ -40,7 +43,7 @@ async function sendWhatsApp(to: string, body: string, fromNumber?: string) {
       body: new URLSearchParams({
         From: fromFormatted,
         To:   toFormatted,
-        Body: body,
+        Body: msgBody,
       }).toString(),
     })
 
@@ -1486,6 +1489,13 @@ Escribe el comando o dime que necesitas 👇`
         return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
       }
     }
+
+    // Safety: si el lock lleva más de 45 segundos, liberar
+    await supabase.from('leads')
+      .update({ sophia_processing: false })
+      .eq('id', lead.id)
+      .eq('sophia_processing', true)
+      .lt('updated_at', new Date(Date.now() - 45000).toISOString())
 
     // Set processing lock
     await supabase.from('leads').update({ sophia_processing: true }).eq('id', lead.id)
