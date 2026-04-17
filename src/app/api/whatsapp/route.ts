@@ -1763,6 +1763,17 @@ Escribe el comando o dime que necesitas 👇`
             .single()
           notifPhone = freshAgent?.phone || null
           notifAgentName = freshAgent?.name || null
+
+          // Fallback: buscar en agent_configs si el agente no tiene phone directo
+          if (!notifPhone) {
+            const { data: agentCfg } = await supabase
+              .from('agent_configs')
+              .select('whatsapp_number')
+              .eq('agent_id', lead.agent_id)
+              .single()
+            notifPhone = (agentCfg as any)?.whatsapp_number || null
+          }
+
           console.log(`[NOTIFY] Agent resolved: ${notifAgentName} → ${notifPhone}`)
         }
 
