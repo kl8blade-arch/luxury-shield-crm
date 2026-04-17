@@ -56,21 +56,15 @@ export function detectSpecialty(message: string) {
 
 export function isMedicalAppointmentRequest(message: string): boolean {
   const triggers = [
-    'necesito un médico','necesito un doctor','necesito dentista',
-    'busco médico','busco doctor','busco dentista',
-    'quiero ver al médico','quiero ir al médico','quiero un médico',
+    // Explicit appointment request phrases
     'cita médica','cita con el médico','cita con doctor',
-    'agendar cita','hacer una cita','conseguir cita',
-    'doctor cerca','médico cerca','dentista cerca',
-    'médico que acepte','doctor que acepte','dentista que acepte',
-    'i need a doctor','find a doctor','need a dentist',
+    'agendar cita','hacer una cita','conseguir cita','sacar una cita',
+    'quiero una cita','necesito cita','pedir cita',
+    'busco médico','busco doctor',
+    'necesito un médico','necesito un doctor',
     'doctor appointment','medical appointment',
-    'necesito revisión','chequeo médico','checkup',
-    'sofia cita','sophiacita','buscar médico',
-    'cita médica','sacar una cita','ayudar con una cita','quiero una cita',
-    'necesito cita','pedir cita','hacer cita','una cita con',
-    'appointment','ver un doctor','ver al doctor','ir al médico','ir al doctor',
-    'médico que me atienda','doctor que me atienda','especialista',
+    'ver un doctor','ver al doctor','ir al médico','ir al doctor',
+    'sofia cita','sophiacita',
     'me puedes ayudar con una cita','ayuda con cita',
   ]
   const lower = message.toLowerCase()
