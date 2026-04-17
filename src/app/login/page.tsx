@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Script from 'next/script'
 import { useAuth } from '@/contexts/AuthContext'
+import { ThemeToggle } from '@/components/ui/ThemeToggle'
 
 declare global { interface Window { google: any } }
 
@@ -78,19 +79,19 @@ export default function LoginPage() {
   const inputStyle = {
     width: '100%', padding: '14px 18px', borderRadius: '12px',
     fontSize: '15px', fontFamily: '"Outfit",sans-serif',
-    background: 'rgba(255,255,255,0.03)',
-    border: '1px solid rgba(255,255,255,0.08)',
-    color: '#F0ECE3', outline: 'none',
+    background: 'var(--glass-bg)',
+    border: '1px solid var(--glass-border)',
+    color: 'var(--text-primary)', outline: 'none',
     transition: 'border-color 0.2s, box-shadow 0.2s',
     boxSizing: 'border-box' as const,
   }
 
   function handleFocus(e: React.FocusEvent<HTMLInputElement>) {
-    e.currentTarget.style.borderColor = 'rgba(201,168,76,0.3)'
-    e.currentTarget.style.boxShadow = '0 0 20px rgba(201,168,76,0.08)'
+    e.currentTarget.style.borderColor = 'rgba(var(--brand-primary-rgb, 201, 168, 76), 0.3)'
+    e.currentTarget.style.boxShadow = '0 0 20px rgba(var(--brand-primary-rgb, 201, 168, 76), 0.08)'
   }
   function handleBlur(e: React.FocusEvent<HTMLInputElement>) {
-    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
+    e.currentTarget.style.borderColor = 'var(--glass-border)'
     e.currentTarget.style.boxShadow = 'none'
   }
 
@@ -104,48 +105,94 @@ export default function LoginPage() {
       )}
       <div style={{
         minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: '#050507', position: 'relative', overflow: 'hidden',
+        background: 'var(--bg-base)', position: 'relative', overflow: 'hidden',
         fontFamily: '"Outfit",sans-serif',
       }}>
+        {/* Theme Toggle */}
+        <div style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 100 }}>
+          <ThemeToggle variant="icon" />
+        </div>
         {/* Ambient effects */}
-        <div style={{ position: 'absolute', top: '-30%', left: '-10%', width: '700px', height: '700px', background: 'radial-gradient(circle, rgba(201,168,76,0.06) 0%, transparent 60%)', pointerEvents: 'none' }} />
-        <div style={{ position: 'absolute', bottom: '-25%', right: '-15%', width: '600px', height: '600px', background: 'radial-gradient(circle, rgba(201,168,76,0.04) 0%, transparent 60%)', pointerEvents: 'none' }} />
+        <div style={{
+          position: 'absolute', top: '-30%', left: '-10%', width: '700px', height: '700px',
+          background: 'radial-gradient(circle, rgba(var(--brand-primary-rgb, 201, 168, 76), 0.06) 0%, transparent 60%)',
+          pointerEvents: 'none',
+        }} />
+        <div style={{
+          position: 'absolute', bottom: '-25%', right: '-15%', width: '600px', height: '600px',
+          background: 'radial-gradient(circle, rgba(var(--brand-primary-rgb, 201, 168, 76), 0.04) 0%, transparent 60%)',
+          pointerEvents: 'none',
+        }} />
 
-        <div style={{ position: 'absolute', inset: 0, opacity: 0.02, backgroundImage: 'linear-gradient(rgba(201,168,76,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(201,168,76,0.3) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
-        <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '1px', background: 'linear-gradient(90deg, transparent, rgba(201,168,76,0.3), transparent)' }} />
+        <div style={{
+          position: 'absolute', inset: 0, opacity: 0.02,
+          backgroundImage: 'linear-gradient(rgba(var(--brand-primary-rgb, 201, 168, 76), 0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--brand-primary-rgb, 201, 168, 76), 0.3) 1px, transparent 1px)',
+          backgroundSize: '60px 60px',
+        }} />
+        <div style={{
+          position: 'absolute', top: 0, left: '20%', right: '20%', height: '1px',
+          background: 'linear-gradient(90deg, transparent, rgba(var(--brand-primary-rgb, 201, 168, 76), 0.3), transparent)',
+        }} />
 
         <div style={{ width: '420px', maxWidth: '92vw', position: 'relative', zIndex: 1 }}>
           {/* Logo */}
           <div style={{ textAlign: 'center', marginBottom: '40px' }}>
             <div style={{
               width: '64px', height: '64px', margin: '0 auto 20px', borderRadius: '18px',
-              background: 'linear-gradient(135deg, rgba(201,168,76,0.12), rgba(201,168,76,0.04))',
-              border: '1px solid rgba(201,168,76,0.2)',
+              background: 'linear-gradient(135deg, rgba(var(--brand-primary-rgb, 201, 168, 76), 0.12), rgba(var(--brand-primary-rgb, 201, 168, 76), 0.04))',
+              border: '1px solid rgba(var(--brand-primary-rgb, 201, 168, 76), 0.2)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 8px 32px rgba(201,168,76,0.1)',
+              boxShadow: '0 8px 32px rgba(var(--brand-primary-rgb, 201, 168, 76), 0.1)',
+              transition: 'all 200ms ease',
             }}>
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--brand-primary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
               </svg>
             </div>
-            <h1 style={{ fontFamily: '"Cormorant Garamond",serif', fontSize: '36px', fontWeight: 300, color: '#F0ECE3', margin: '0 0 6px', letterSpacing: '0.02em', lineHeight: 1 }}>Luxury Shield</h1>
-            <p style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.25em', textTransform: 'uppercase', color: 'rgba(201,168,76,0.5)' }}>Insurance CRM</p>
+            <h1 style={{
+              fontFamily: '"Cormorant Garamond",serif', fontSize: '36px', fontWeight: 300,
+              color: 'var(--text-primary)', margin: '0 0 6px', letterSpacing: '0.02em', lineHeight: 1,
+              transition: 'color 200ms ease',
+            }}>Luxury Shield</h1>
+            <p style={{
+              fontSize: '11px', fontWeight: 600, letterSpacing: '0.25em', textTransform: 'uppercase',
+              color: 'rgba(var(--brand-primary-rgb, 201, 168, 76), 0.5)',
+              transition: 'color 200ms ease',
+            }}>Insurance CRM</p>
           </div>
 
           {step === '2fa' ? (
             /* ═══ 2FA STEP ═══ */
             <form onSubmit={handleVerify2FA}>
               <div style={{
-                background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.06)',
+                background: 'var(--glass-bg)',
+                border: '1px solid var(--glass-border)',
                 borderRadius: '20px', padding: '36px 32px',
-                backdropFilter: 'blur(20px)', boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
+                backdropFilter: 'blur(20px)',
+                boxShadow: 'var(--glass-shadow)',
+                transition: 'all 200ms ease',
               }}>
                 <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-                  <div style={{ width: '48px', height: '48px', margin: '0 auto 16px', borderRadius: '14px', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="1.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="m7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  <div style={{
+                    width: '48px', height: '48px', margin: '0 auto 16px', borderRadius: '14px',
+                    background: 'rgba(var(--info-rgb, 59, 130, 246), 0.1)',
+                    border: '1px solid rgba(var(--info-rgb, 59, 130, 246), 0.2)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 200ms ease',
+                  }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--info)" strokeWidth="1.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="m7 11V7a5 5 0 0 1 10 0v4"/></svg>
                   </div>
-                  <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#F0ECE3', margin: '0 0 4px' }}>Verificacion de dos factores</h2>
-                  <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.4)' }}>Hola {pendingAgent?.name}. Ingresa el codigo de tu app de autenticacion.</p>
+                  <h2 style={{
+                    fontSize: '18px', fontWeight: 600,
+                    color: 'var(--text-primary)',
+                    margin: '0 0 4px',
+                    transition: 'color 200ms ease',
+                  }}>Verificacion de dos factores</h2>
+                  <p style={{
+                    fontSize: '13px',
+                    color: 'var(--text-secondary)',
+                    transition: 'color 200ms ease',
+                  }}>Hola {pendingAgent?.name}. Ingresa el codigo de tu app de autenticacion.</p>
                 </div>
 
                 <div style={{ marginBottom: '24px' }}>
@@ -158,21 +205,37 @@ export default function LoginPage() {
                 </div>
 
                 {error && (
-                  <div style={{ padding: '10px 14px', borderRadius: '10px', marginBottom: '16px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', fontSize: '13px', color: '#fca5a5', textAlign: 'center' }}>{error}</div>
+                  <div style={{
+                    padding: '10px 14px', borderRadius: '10px', marginBottom: '16px',
+                    background: 'var(--danger-bg)',
+                    border: '1px solid var(--danger)',
+                    fontSize: '13px',
+                    color: 'var(--danger)',
+                    textAlign: 'center',
+                    transition: 'all 200ms ease',
+                  }}>{error}</div>
                 )}
 
                 <button type="submit" disabled={loading || totpCode.length !== 6} style={{
                   width: '100%', padding: '15px', borderRadius: '14px', fontSize: '14px', fontWeight: 700,
                   fontFamily: '"Outfit",sans-serif', letterSpacing: '0.05em',
-                  background: totpCode.length === 6 ? 'linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)' : 'rgba(167,139,250,0.2)',
-                  color: '#050507', border: 'none', cursor: totpCode.length === 6 ? 'pointer' : 'not-allowed',
-                  boxShadow: '0 8px 32px rgba(167,139,250,0.2)', transition: 'all 0.3s',
+                  background: totpCode.length === 6 ? 'linear-gradient(135deg, var(--info) 0%, var(--brand-primary) 100%)' : 'rgba(var(--info-rgb, 59, 130, 246), 0.2)',
+                  color: 'var(--bg-base)',
+                  border: 'none', cursor: totpCode.length === 6 ? 'pointer' : 'not-allowed',
+                  boxShadow: '0 8px 32px rgba(var(--info-rgb, 59, 130, 246), 0.2)',
+                  transition: 'all 0.3s',
                 }}>
                   {loading ? 'Verificando...' : 'Verificar'}
                 </button>
 
                 <button type="button" onClick={() => { setStep('login'); setError(''); setTotpCode('') }}
-                  style={{ width: '100%', padding: '10px', marginTop: '12px', background: 'none', border: 'none', color: 'rgba(240,236,227,0.4)', fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                  style={{
+                    width: '100%', padding: '10px', marginTop: '12px',
+                    background: 'none', border: 'none',
+                    color: 'var(--text-secondary)',
+                    fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit',
+                    transition: 'color 200ms ease',
+                  }}>
                   Volver al login
                 </button>
               </div>
@@ -182,31 +245,51 @@ export default function LoginPage() {
             <>
               <form onSubmit={handleLogin}>
                 <div style={{
-                  background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.06)',
+                  background: 'var(--glass-bg)',
+                  border: '1px solid var(--glass-border)',
                   borderRadius: '20px', padding: '36px 32px',
-                  backdropFilter: 'blur(20px)', boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
+                  backdropFilter: 'blur(20px)',
+                  boxShadow: 'var(--glass-shadow)',
+                  transition: 'all 200ms ease',
                 }}>
                   {/* Google Sign-In */}
                   {GOOGLE_CLIENT_ID && (
                     <>
                       <div id="google-btn" style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }} />
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-                        <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.08)' }} />
-                        <span style={{ fontSize: '11px', color: 'rgba(240,236,227,0.3)', fontWeight: 500 }}>o con email</span>
-                        <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.08)' }} />
+                        <div style={{ flex: 1, height: '1px', background: 'var(--glass-border)' }} />
+                        <span style={{
+                          fontSize: '11px',
+                          color: 'var(--text-secondary)',
+                          fontWeight: 500,
+                          transition: 'color 200ms ease',
+                        }}>o con email</span>
+                        <div style={{ flex: 1, height: '1px', background: 'var(--glass-border)' }} />
                       </div>
                     </>
                   )}
 
                   <div style={{ marginBottom: '20px' }}>
-                    <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(240,236,227,0.35)', marginBottom: '8px' }}>Email</label>
+                    <label style={{
+                      display: 'block', fontSize: '11px', fontWeight: 600, letterSpacing: '0.12em',
+                      textTransform: 'uppercase',
+                      color: 'var(--text-muted)',
+                      marginBottom: '8px',
+                      transition: 'color 200ms ease',
+                    }}>Email</label>
                     <input type="email" value={email} onChange={e => setEmail(e.target.value)}
                       placeholder="tu@email.com" required autoComplete="email"
                       style={inputStyle} onFocus={handleFocus} onBlur={handleBlur} />
                   </div>
 
                   <div style={{ marginBottom: '24px' }}>
-                    <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(240,236,227,0.35)', marginBottom: '8px' }}>Contrasena</label>
+                    <label style={{
+                      display: 'block', fontSize: '11px', fontWeight: 600, letterSpacing: '0.12em',
+                      textTransform: 'uppercase',
+                      color: 'var(--text-muted)',
+                      marginBottom: '8px',
+                      transition: 'color 200ms ease',
+                    }}>Contrasena</label>
                     <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                       <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
                         placeholder="••••••••" required autoComplete="current-password"
@@ -219,7 +302,7 @@ export default function LoginPage() {
                           right: '14px',
                           background: 'none',
                           border: 'none',
-                          color: 'rgba(240,236,227,0.5)',
+                          color: 'var(--text-secondary)',
                           cursor: 'pointer',
                           fontSize: '20px',
                           padding: '8px',
@@ -228,8 +311,8 @@ export default function LoginPage() {
                           justifyContent: 'center',
                           transition: 'color 0.2s',
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.color = 'rgba(201,168,76,0.8)' }}
-                        onMouseLeave={e => { e.currentTarget.style.color = 'rgba(240,236,227,0.5)' }}
+                        onMouseEnter={e => { e.currentTarget.style.color = 'var(--brand-primary)' }}
+                        onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)' }}
                       >
                         {showPassword ? '👁️' : '👁️‍🗨️'}
                       </button>
@@ -237,15 +320,25 @@ export default function LoginPage() {
                   </div>
 
                   {error && (
-                    <div style={{ padding: '10px 14px', borderRadius: '10px', marginBottom: '16px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', fontSize: '13px', color: '#fca5a5', textAlign: 'center' }}>{error}</div>
+                    <div style={{
+                      padding: '10px 14px', borderRadius: '10px', marginBottom: '16px',
+                      background: 'var(--danger-bg)',
+                      border: '1px solid var(--danger)',
+                      fontSize: '13px',
+                      color: 'var(--danger)',
+                      textAlign: 'center',
+                      transition: 'all 200ms ease',
+                    }}>{error}</div>
                   )}
 
                   <button type="submit" disabled={loading} style={{
                     width: '100%', padding: '15px', borderRadius: '14px', fontSize: '14px', fontWeight: 700,
                     fontFamily: '"Outfit",sans-serif', letterSpacing: '0.05em',
-                    background: loading ? 'rgba(201,168,76,0.3)' : 'linear-gradient(135deg, #C9A84C 0%, #A8893A 50%, #C9A84C 100%)',
-                    color: '#050507', border: 'none', cursor: loading ? 'wait' : 'pointer',
-                    boxShadow: '0 8px 32px rgba(201,168,76,0.2)', transition: 'all 0.3s',
+                    background: loading ? 'rgba(var(--brand-primary-rgb, 201, 168, 76), 0.3)' : 'linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-primary-dark) 50%, var(--brand-primary) 100%)',
+                    color: 'var(--bg-base)',
+                    border: 'none', cursor: loading ? 'wait' : 'pointer',
+                    boxShadow: '0 8px 32px rgba(var(--brand-primary-rgb, 201, 168, 76), 0.2)',
+                    transition: 'all 0.3s',
                   }}
                     onMouseEnter={e => { if (!loading) { e.currentTarget.style.transform = 'translateY(-1px)' } }}
                     onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)' }}
@@ -256,14 +349,27 @@ export default function LoginPage() {
               </form>
 
               <div style={{ textAlign: 'center', marginTop: '20px' }}>
-                <Link href="/forgot-password" style={{ fontSize: '13px', color: 'rgba(167,139,250,0.7)', textDecoration: 'none', fontWeight: 500 }}>
+                <Link href="/forgot-password" style={{
+                  fontSize: '13px',
+                  color: 'var(--info)',
+                  textDecoration: 'none', fontWeight: 500,
+                  transition: 'color 200ms ease',
+                }}>
                   Olvide mi contrasena
                 </Link>
               </div>
               <div style={{ textAlign: 'center', marginTop: '12px' }}>
-                <p style={{ fontSize: '13px', color: 'rgba(240,236,227,0.35)' }}>
+                <p style={{
+                  fontSize: '13px',
+                  color: 'var(--text-muted)',
+                  transition: 'color 200ms ease',
+                }}>
                   Eres agente?{' '}
-                  <Link href="/register" style={{ color: '#C9A84C', textDecoration: 'none', fontWeight: 600 }}>Crea tu cuenta gratis</Link>
+                  <Link href="/register" style={{
+                    color: 'var(--brand-primary)',
+                    textDecoration: 'none', fontWeight: 600,
+                    transition: 'color 200ms ease',
+                  }}>Crea tu cuenta gratis</Link>
                 </p>
               </div>
             </>
@@ -271,12 +377,28 @@ export default function LoginPage() {
 
           {/* Footer */}
           <div style={{ textAlign: 'center', marginTop: '24px' }}>
-            <p style={{ fontSize: '11px', color: 'rgba(240,236,227,0.2)' }}>
-              Powered by <span style={{ color: 'rgba(201,168,76,0.4)', fontWeight: 600 }}>SophiaOS</span>
+            <p style={{
+              fontSize: '11px',
+              color: 'var(--text-muted)',
+              transition: 'color 200ms ease',
+            }}>
+              Powered by <span style={{
+                color: 'rgba(var(--brand-primary-rgb, 201, 168, 76), 0.6)',
+                fontWeight: 600,
+                transition: 'color 200ms ease',
+              }}>SophiaOS</span>
             </p>
             <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginTop: '12px' }}>
-              <span style={{ fontSize: '10px', color: 'rgba(240,236,227,0.15)' }}>2026 Luxury Shield Insurance</span>
-              <span style={{ fontSize: '10px', color: 'rgba(240,236,227,0.15)' }}>SeguriSSimo Agency</span>
+              <span style={{
+                fontSize: '10px',
+                color: 'var(--text-muted)',
+                transition: 'color 200ms ease',
+              }}>2026 Luxury Shield Insurance</span>
+              <span style={{
+                fontSize: '10px',
+                color: 'var(--text-muted)',
+                transition: 'color 200ms ease',
+              }}>SeguriSSimo Agency</span>
             </div>
           </div>
         </div>
