@@ -18,48 +18,42 @@ const TWILIO_TOKEN = process.env.TWILIO_AUTH_TOKEN!
 const TWILIO_FROM = process.env.TWILIO_WHATSAPP_FROM!
 const ADMIN_PHONE = process.env.ADMIN_WHATSAPP || '+17869435656'
 
-// ── Send WhatsApp via Twilio (auto-splits messages > 1500 chars) ──
-async function sendWhatsApp(to: string, message: string) {
+// ── Send WhatsApp via Twilio using fetch (no npm module dependency) ──
+async function sendWhatsApp(to: string, body: string, fromNumber?: string) {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID!
+  const authToken  = process.env.TWILIO_AUTH_TOKEN!
+  const from       = fromNumber ?? process.env.TWILIO_WHATSAPP_FROM ?? process.env.TWILIO_PHONE_NUMBER ?? '+17722772510'
+
+  const toFormatted   = `whatsapp:${to.startsWith('+') ? to : '+' + to}`
+  const fromFormatted = `whatsapp:${from.startsWith('+') ? from : '+' + from}`
+
   try {
-    console.log(`[sendWhatsApp] Starting — to: ${to}, msg length: ${message.length}`)
-
-    if (!TWILIO_SID || !TWILIO_TOKEN || !TWILIO_FROM) {
-      console.error('[sendWhatsApp] Twilio not configured:', { TWILIO_SID: !!TWILIO_SID, TWILIO_TOKEN: !!TWILIO_TOKEN, TWILIO_FROM: !!TWILIO_FROM })
-      return { error: 'Twilio not configured' }
-    }
-
-    const cleanTo = to.startsWith('+') ? to : `+${to.replace(/\D/g, '')}`
-    console.log(`[sendWhatsApp] Clean phone: ${cleanTo}, From: ${TWILIO_FROM}`)
-
-    const auth = `Basic ${Buffer.from(`${TWILIO_SID}:${TWILIO_TOKEN}`).toString('base64')}`
-    const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`
-
-    // WhatsApp limit is 1600 chars — split if needed
-    const msg = message.length > 1500 ? message.substring(0, 1497) + '...' : message
-
-    const body = new URLSearchParams({ From: `whatsapp:${TWILIO_FROM}`, To: `whatsapp:${cleanTo}`, Body: msg })
-    console.log(`[sendWhatsApp] Sending to Twilio API: ${url}`)
+    const credentials = Buffer.from(`${accountSid}:${authToken}`).toString('base64')
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`
 
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Authorization': auth, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString()
+      headers: {
+        'Authorization': `Basic ${credentials}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        From: fromFormatted,
+        To:   toFormatted,
+        Body: body,
+      }).toString(),
     })
 
-    console.log(`[sendWhatsApp] Twilio response status: ${res.status}`)
     const data = await res.json()
-    console.log('[sendWhatsApp] Twilio response:', JSON.stringify(data).substring(0, 200))
-
-    if (data.sid) {
-      console.log(`[sendWhatsApp] ✅ Message sent: SID=${data.sid} to=${cleanTo}`)
-    } else {
-      console.error(`[sendWhatsApp] ❌ Failed: ${data.error_message || data.message || JSON.stringify(data)}`)
+    if (!res.ok) {
+      console.error(`[sendWhatsApp] Twilio error ${res.status}:`, data)
+      return { sid: null, error: data.message }
     }
-
-    return data
+    console.log(`[sendWhatsApp] ✅ Sent to ${to} | SID: ${data.sid}`)
+    return { sid: data.sid }
   } catch (e: any) {
-    console.error('[sendWhatsApp] Exception:', e.message, e.stack)
-    return { error: e.message }
+    console.error('[sendWhatsApp] Fatal error:', e.message)
+    return { sid: null, error: e.message }
   }
 }
 

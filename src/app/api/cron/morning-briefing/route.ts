@@ -12,6 +12,45 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
+// ── Send WhatsApp via Twilio using fetch (no npm module dependency) ──
+async function sendWhatsApp(to: string, body: string, fromNumber?: string) {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID!
+  const authToken  = process.env.TWILIO_AUTH_TOKEN!
+  const from       = fromNumber ?? process.env.TWILIO_WHATSAPP_FROM ?? process.env.TWILIO_PHONE_NUMBER ?? '+17722772510'
+
+  const toFormatted   = `whatsapp:${to.startsWith('+') ? to : '+' + to}`
+  const fromFormatted = `whatsapp:${from.startsWith('+') ? from : '+' + from}`
+
+  try {
+    const credentials = Buffer.from(`${accountSid}:${authToken}`).toString('base64')
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${credentials}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        From: fromFormatted,
+        To:   toFormatted,
+        Body: body,
+      }).toString(),
+    })
+
+    const data = await res.json()
+    if (!res.ok) {
+      console.error(`[sendWhatsApp] Twilio error ${res.status}:`, data)
+      return { sid: null, error: data.message }
+    }
+    console.log(`[sendWhatsApp] ✅ Sent to ${to} | SID: ${data.sid}`)
+    return { sid: data.sid }
+  } catch (e: any) {
+    console.error('[sendWhatsApp] Fatal error:', e.message)
+    return { sid: null, error: e.message }
+  }
+}
+
 export async function GET(request: NextRequest) {
   // Verify cron authorization
   const authHeader = request.headers.get('authorization')
@@ -36,15 +75,6 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Initialize Twilio at runtime (dynamic import to avoid compile-time resolution)
-  let twilioClient: any = null
-  try {
-    const twilioModule = await import('twilio')
-    const twilio = (twilioModule as any).default || twilioModule
-    twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!)
-  } catch (e) {
-    console.error('[MorningBriefing] Twilio init error:', e)
-  }
 
   try {
     // Fetch active paid agents
@@ -159,15 +189,11 @@ End with a motivational phrase. Keep it personal and engaging.`
 
         // Send via Twilio WhatsApp
         const phoneNumber = agent.phone.replace(/\D/g, '')
-        const whatsappNumber = phoneNumber.startsWith('+')
-          ? `whatsapp:${phoneNumber}`
-          : `whatsapp:+${phoneNumber}`
+        const result = await sendWhatsApp(phoneNumber, briefing)
 
-        await twilioClient.messages.create({
-          from: `whatsapp:${process.env.TWILIO_WHATSAPP_FROM}`,
-          to: whatsappNumber,
-          body: briefing,
-        })
+        if (!result.sid) {
+          throw new Error(`Failed to send: ${result.error}`)
+        }
 
         results.push({ agentId: agent.id, sent: true })
       } catch (error) {

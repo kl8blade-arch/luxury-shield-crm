@@ -18,20 +18,40 @@ function isAuthorized(req: NextRequest) {
   return false
 }
 
-async function sendWhatsApp(to: string, body: string, fromNumber?: string, twilioClient?: any) {
-  const from = fromNumber ?? process.env.TWILIO_PHONE_NUMBER ?? '+17722772510'
+async function sendWhatsApp(to: string, body: string, fromNumber?: string) {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID!
+  const authToken  = process.env.TWILIO_AUTH_TOKEN!
+  const from       = fromNumber ?? process.env.TWILIO_WHATSAPP_FROM ?? process.env.TWILIO_PHONE_NUMBER ?? '+17722772510'
+
+  const toFormatted   = `whatsapp:${to.startsWith('+') ? to : '+' + to}`
+  const fromFormatted = `whatsapp:${from.startsWith('+') ? from : '+' + from}`
+
   try {
-    if (!twilioClient) {
-      console.error('[Followup] sendWhatsApp: twilioClient not provided')
+    const credentials = Buffer.from(`${accountSid}:${authToken}`).toString('base64')
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${credentials}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        From: fromFormatted,
+        To:   toFormatted,
+        Body: body,
+      }).toString(),
+    })
+
+    const data = await res.json()
+    if (!res.ok) {
+      console.error(`[sendWhatsApp] Twilio error ${res.status}:`, data)
       return null
     }
-    return await twilioClient.messages.create({
-      from: `whatsapp:${from}`,
-      to:   `whatsapp:${to.startsWith('+') ? to : '+' + to}`,
-      body,
-    })
-  } catch (e) {
-    console.error('[Followup] sendWhatsApp error:', e)
+    console.log(`[sendWhatsApp] ✅ Sent to ${to} | SID: ${data.sid}`)
+    return { sid: data.sid }
+  } catch (e: any) {
+    console.error('[sendWhatsApp] Fatal error:', e.message)
     return null
   }
 }
@@ -148,16 +168,6 @@ REGLAS:
 export async function GET(request: NextRequest) {
   if (!isAuthorized(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Initialize Twilio at runtime (dynamic import to avoid compile-time resolution)
-  let twilioClient: any = null
-  try {
-    const twilioModule = await import('twilio')
-    const twilio = (twilioModule as any).default || twilioModule
-    twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!)
-  } catch (e) {
-    console.error('[Appointmentfollowup] Twilio init error:', e)
-  }
-
   const now       = new Date()
   const processed: { lead: string; touchpoint: string; status: string }[] = []
 
@@ -236,12 +246,12 @@ export async function GET(request: NextRequest) {
       if (!f.reminder_24h_at && hoursToAppt >= 20 && hoursToAppt <= 26) {
         const msg = await generateMessage({ touchpoint: 'reminder_24h', ...msgParams })
         if (msg) {
-          await sendWhatsApp(leadPhone, msg, from, twilioClient)
+          await sendWhatsApp(leadPhone, msg, from)
           await supabase.from('appointment_followups')
             .update({ reminder_24h_at: now.toISOString() }).eq('id', f.id)
           // También notificar al agente
           const agentMsg = `📅 Recordatorio enviado a ${leadName}\nCita mañana con ${appt.doctor_name}\n📞 ${leadPhone}`
-          await sendWhatsApp(lead.phone ?? leadPhone, agentMsg, from, twilioClient).catch(() => null)
+          await sendWhatsApp(lead.phone ?? leadPhone, agentMsg, from).catch(() => null)
           processed.push({ lead: leadName, touchpoint: 'reminder_24h', status: 'sent' })
         }
       }
@@ -252,7 +262,7 @@ export async function GET(request: NextRequest) {
         if (msg) {
           // Enviar mensaje + link de Maps explícito si no está en el mensaje
           const fullMsg = msg.includes('maps.google') ? msg : `${msg}\n\n📍 Dirección: ${mapsLink}`
-          await sendWhatsApp(leadPhone, fullMsg, from, twilioClient)
+          await sendWhatsApp(leadPhone, fullMsg, from)
           await supabase.from('appointment_followups')
             .update({ reminder_2h_at: now.toISOString() }).eq('id', f.id)
           processed.push({ lead: leadName, touchpoint: 'reminder_2h', status: 'sent' })
@@ -263,7 +273,7 @@ export async function GET(request: NextRequest) {
       else if (!f.checkin_at && hoursSince >= 3.5 && hoursSince <= 6) {
         const msg = await generateMessage({ touchpoint: 'checkin', ...msgParams })
         if (msg) {
-          await sendWhatsApp(leadPhone, msg, from, twilioClient)
+          await sendWhatsApp(leadPhone, msg, from)
           await supabase.from('appointment_followups')
             .update({ checkin_at: now.toISOString() }).eq('id', f.id)
           processed.push({ lead: leadName, touchpoint: 'checkin', status: 'sent' })
@@ -278,7 +288,7 @@ export async function GET(request: NextRequest) {
         if (!f.checkin_responded || sentiment === 'positive' || sentiment === 'neutral' || !sentiment) {
           const msg = await generateMessage({ touchpoint: 'referral', ...msgParams, checkInSentiment: sentiment ?? undefined })
           if (msg) {
-            await sendWhatsApp(leadPhone, msg, from, twilioClient)
+            await sendWhatsApp(leadPhone, msg, from)
             await supabase.from('appointment_followups')
               .update({ referral_at: now.toISOString() }).eq('id', f.id)
             processed.push({ lead: leadName, touchpoint: 'referral', status: 'sent' })
@@ -295,7 +305,7 @@ export async function GET(request: NextRequest) {
       else if (!f.thankyou_at && hoursSince >= 167 && hoursSince <= 171) {
         const msg = await generateMessage({ touchpoint: 'thankyou', ...msgParams })
         if (msg) {
-          await sendWhatsApp(leadPhone, msg, from, twilioClient)
+          await sendWhatsApp(leadPhone, msg, from)
           await supabase.from('appointment_followups')
             .update({ thankyou_at: now.toISOString(), status: 'completed' }).eq('id', f.id)
           processed.push({ lead: leadName, touchpoint: 'thankyou', status: 'sent' })
