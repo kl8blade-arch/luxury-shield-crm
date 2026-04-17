@@ -10,6 +10,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { ThemeToggle } from './ui/ThemeToggle'
 
 const NAV = [
   { href: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard',     badge: null, admin: false },
@@ -106,12 +107,12 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
           left: '12px',
           zIndex: 200,
           display: 'none',
-          background: 'rgba(255,255,255,0.08)',
-          border: '1px solid rgba(255,255,255,0.12)',
+          background: 'var(--glass-bg)',
+          border: '1px solid var(--glass-border)',
           borderRadius: '8px',
           padding: '8px',
           cursor: 'pointer',
-          color: '#F0ECE3',
+          color: 'var(--text-primary)',
           width: '40px',
           height: '40px',
           alignItems: 'center',
@@ -120,13 +121,13 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
         }}
         onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
           const el = e.currentTarget as HTMLElement
-          el.style.background = 'rgba(255,255,255,0.12)'
-          el.style.borderColor = 'rgba(255,255,255,0.18)'
+          el.style.background = 'var(--glass-bg-hover)'
+          el.style.borderColor = 'var(--glass-border-hover)'
         }}
         onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
           const el = e.currentTarget as HTMLElement
-          el.style.background = 'rgba(255,255,255,0.08)'
-          el.style.borderColor = 'rgba(255,255,255,0.12)'
+          el.style.background = 'var(--glass-bg)'
+          el.style.borderColor = 'var(--glass-border)'
         }}
         className="mobile-hamburger"
       >
@@ -140,7 +141,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.5)',
+            background: 'var(--bg-overlay)',
             zIndex: 49,
             display: 'none',
           }}
@@ -151,32 +152,57 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
       {/* Main sidebar */}
       <aside style={{
         position: 'fixed', left: 0, top: 0, bottom: 0, width: '224px',
-        background: '#08090d', borderRight: '1px solid rgba(255,255,255,0.06)',
+        background: 'var(--glass-bg)',
+        borderRight: '1px solid var(--glass-border)',
+        backdropFilter: 'blur(10px)',
         display: 'flex', flexDirection: 'column',
         zIndex: 50, fontFamily: '"Inter","Segoe UI",sans-serif',
+        transition: 'background-color 200ms ease, border-color 200ms ease',
       }}>
 
       {/* ── LOGO ── */}
-      <div style={{ padding: '20px 16px 8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-          <div style={{
-            width: '34px', height: '34px', borderRadius: '10px', flexShrink: 0,
-            background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.3)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-          }}>
-            {accountLogo ? (
-              <img src={accountLogo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            ) : (
-              <Shield style={{ width: '15px', height: '15px', color: '#C9A84C' }} />
-            )}
+      <div style={{
+        padding: '20px 16px 8px',
+        borderBottom: '1px solid var(--glass-border)',
+        transition: 'border-color 200ms ease',
+      }}>
+        {/* Header with logo and theme toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+            <div style={{
+              width: '34px', height: '34px', borderRadius: '10px', flexShrink: 0,
+              background: 'rgba(var(--brand-primary-rgb, 201, 168, 76), 0.1)',
+              border: '1px solid rgba(var(--brand-primary-rgb, 201, 168, 76), 0.3)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+              transition: 'all 200ms ease',
+            }}>
+              {accountLogo ? (
+                <img src={accountLogo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <Shield style={{ width: '15px', height: '15px', color: 'var(--brand-primary)' }} />
+              )}
+            </div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <p style={{
+                fontSize: '12px', fontWeight: 700,
+                color: isViewingSubAccount ? '#34d399' : 'var(--brand-primary-hover)',
+                letterSpacing: '0.02em', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                transition: 'color 200ms ease',
+              }}>
+                {isViewingSubAccount ? activeAccount?.name : (accountName || 'Luxury Shield')}
+              </p>
+              <p style={{
+                fontSize: '9px',
+                color: 'var(--text-secondary)',
+                letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '1px',
+                transition: 'color 200ms ease',
+              }}>
+                {isViewingSubAccount ? `Sub-cuenta · ${activeAccount?.industry || 'CRM'}` : `CRM ${isAdmin ? '· Admin' : ''}`}
+              </p>
+            </div>
           </div>
-          <div style={{ minWidth: 0 }}>
-            <p style={{ fontSize: '12px', fontWeight: 700, color: isViewingSubAccount ? '#34d399' : '#E2C060', letterSpacing: '0.02em', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {isViewingSubAccount ? activeAccount?.name : (accountName || 'Luxury Shield')}
-            </p>
-            <p style={{ fontSize: '9px', color: 'rgba(240,236,227,0.3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '1px' }}>
-              {isViewingSubAccount ? `Sub-cuenta · ${activeAccount?.industry || 'CRM'}` : `CRM ${isAdmin ? '· Admin' : ''}`}
-            </p>
+          <div style={{ flexShrink: 0 }}>
+            <ThemeToggle variant="icon" />
           </div>
         </div>
 
@@ -187,19 +213,25 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
             <div onClick={() => setAccountsOpen(!accountsOpen)} style={{
               display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 8px',
               borderRadius: '8px', cursor: 'pointer', transition: 'all 0.15s',
-              background: accountsOpen ? 'rgba(201,168,76,0.06)' : 'transparent',
+              background: accountsOpen ? 'rgba(var(--brand-primary-rgb, 201, 168, 76), 0.06)' : 'transparent',
             }}
-              onMouseEnter={e => { if (!accountsOpen) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)' }}
+              onMouseEnter={e => { if (!accountsOpen) (e.currentTarget as HTMLDivElement).style.background = 'var(--glass-bg-hover)' }}
               onMouseLeave={e => { if (!accountsOpen) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
             >
-              <Building2 style={{ width: '12px', height: '12px', color: '#C9A84C', flexShrink: 0 }} />
-              <span style={{ flex: 1, fontSize: '11px', fontWeight: 600, color: 'rgba(240,236,227,0.5)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <Building2 style={{ width: '12px', height: '12px', color: 'var(--brand-primary)', flexShrink: 0 }} />
+              <span style={{
+                flex: 1, fontSize: '11px', fontWeight: 600,
+                color: 'var(--text-secondary)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                transition: 'color 200ms ease',
+              }}>
                 {parentAccount?.name || 'Luxury Shield'}
               </span>
               <ChevronDown style={{
-                width: '12px', height: '12px', color: 'rgba(240,236,227,0.3)',
+                width: '12px', height: '12px',
+                color: 'var(--text-muted)',
                 transform: accountsOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: 'transform 0.2s',
+                transition: 'transform 0.2s, color 200ms ease',
               }} />
             </div>
 
@@ -211,10 +243,12 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
                   <div onClick={() => { switchAccount(null); onNavigate?.() }} style={{
                     display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 8px 6px 16px',
                     borderRadius: '6px', cursor: 'pointer', marginBottom: '4px',
-                    background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)',
+                    background: 'rgba(var(--brand-primary-rgb, 201, 168, 76), 0.06)',
+                    border: '1px solid rgba(var(--brand-primary-rgb, 201, 168, 76), 0.15)',
+                    transition: 'all 200ms ease',
                   }}>
-                    <span style={{ fontSize: '10px', color: '#C9A84C' }}>&larr;</span>
-                    <span style={{ fontSize: '10px', color: '#C9A84C', fontWeight: 600 }}>Volver a cuenta principal</span>
+                    <span style={{ fontSize: '10px', color: 'var(--brand-primary)' }}>&larr;</span>
+                    <span style={{ fontSize: '10px', color: 'var(--brand-primary)', fontWeight: 600 }}>Volver a cuenta principal</span>
                   </div>
                 )}
 
@@ -224,21 +258,37 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
                     <div key={sub.id} onClick={() => { switchAccount({ id: sub.id, name: sub.name, slug: sub.slug, industry: sub.industry || 'seguros', logo_url: sub.logo_url }); onNavigate?.() }} style={{
                       display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px 6px 20px',
                       borderRadius: '6px', cursor: 'pointer', transition: 'all 0.12s',
-                      background: isActive ? 'rgba(52,211,153,0.06)' : 'transparent',
-                      border: isActive ? '1px solid rgba(52,211,153,0.15)' : '1px solid transparent',
+                      background: isActive ? 'rgba(var(--success-rgb, 16, 185, 129), 0.06)' : 'transparent',
+                      border: isActive ? '1px solid rgba(var(--success-rgb, 16, 185, 129), 0.15)' : '1px solid transparent',
                     }}
-                      onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)' }}
+                      onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = 'var(--glass-bg-hover)' }}
                       onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
                     >
                       {sub.logo_url ? (
                         <img src={sub.logo_url} alt="" style={{ width: '14px', height: '14px', borderRadius: '4px', objectFit: 'cover' }} />
                       ) : (
-                        <Circle style={{ width: '8px', height: '8px', color: isActive ? '#34d399' : 'rgba(240,236,227,0.2)', fill: isActive ? '#34d399' : 'rgba(240,236,227,0.2)' }} />
+                        <Circle style={{
+                          width: '8px', height: '8px',
+                          color: isActive ? 'var(--success)' : 'var(--text-muted)',
+                          fill: isActive ? 'var(--success)' : 'var(--text-muted)',
+                          transition: 'color 200ms ease, fill 200ms ease',
+                        }} />
                       )}
-                      <span style={{ fontSize: '11px', color: isActive ? '#34d399' : 'rgba(240,236,227,0.4)', fontWeight: isActive ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{
+                        fontSize: '11px',
+                        color: isActive ? 'var(--success)' : 'var(--text-secondary)',
+                        fontWeight: isActive ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        transition: 'color 200ms ease',
+                      }}>
                         {sub.name}
                       </span>
-                      <span style={{ fontSize: '8px', padding: '1px 5px', borderRadius: '100px', background: isActive ? 'rgba(52,211,153,0.1)' : 'rgba(255,255,255,0.04)', color: isActive ? '#34d399' : 'rgba(240,236,227,0.25)', marginLeft: 'auto', flexShrink: 0, textTransform: 'capitalize' }}>
+                      <span style={{
+                        fontSize: '8px', padding: '1px 5px', borderRadius: '100px',
+                        background: isActive ? 'rgba(var(--success-rgb, 16, 185, 129), 0.1)' : 'var(--glass-bg)',
+                        color: isActive ? 'var(--success)' : 'var(--text-muted)',
+                        marginLeft: 'auto', flexShrink: 0, textTransform: 'capitalize',
+                        transition: 'all 200ms ease',
+                      }}>
                         {sub.plan}
                       </span>
                     </div>
@@ -250,12 +300,22 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 8px 6px 18px',
                     borderRadius: '6px', cursor: 'pointer', marginTop: '2px',
+                    transition: 'all 200ms ease',
                   }}
-                    onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = 'rgba(201,168,76,0.04)'}
+                    onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = 'rgba(var(--brand-primary-rgb, 201, 168, 76), 0.04)'}
                     onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}
                   >
-                    <Plus style={{ width: '10px', height: '10px', color: 'rgba(201,168,76,0.5)' }} />
-                    <span style={{ fontSize: '10px', color: 'rgba(201,168,76,0.5)', fontWeight: 500 }}>Nueva sub-cuenta</span>
+                    <Plus style={{
+                      width: '10px', height: '10px',
+                      color: 'rgba(var(--brand-primary-rgb, 201, 168, 76), 0.5)',
+                      transition: 'color 200ms ease',
+                    }} />
+                    <span style={{
+                      fontSize: '10px',
+                      color: 'rgba(var(--brand-primary-rgb, 201, 168, 76), 0.5)',
+                      fontWeight: 500,
+                      transition: 'color 200ms ease',
+                    }}>Nueva sub-cuenta</span>
                   </div>
                 </Link>
               </div>
@@ -266,8 +326,17 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
 
       {/* ── LINKED ACCOUNTS ── */}
       {linkedAccounts.length > 0 && (
-        <div style={{ padding: '6px 16px 8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-          <p style={{ fontSize: '8px', fontWeight: 700, letterSpacing: '0.15em', color: 'rgba(240,236,227,0.18)', marginBottom: '6px' }}>CUENTAS VINCULADAS</p>
+        <div style={{
+          padding: '6px 16px 8px',
+          borderBottom: '1px solid var(--glass-border)',
+          transition: 'border-color 200ms ease',
+        }}>
+          <p style={{
+            fontSize: '8px', fontWeight: 700, letterSpacing: '0.15em',
+            color: 'var(--text-muted)',
+            marginBottom: '6px',
+            transition: 'color 200ms ease',
+          }}>CUENTAS VINCULADAS</p>
           {linkedAccounts.map((la: any) => {
             const acc = la.owner
             const isActive = activeAccount?.id === acc?.id && activeAccount?.isLinked
@@ -275,16 +344,21 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
               <div key={la.id} style={{
                 display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 8px', borderRadius: '6px',
                 marginBottom: '2px', transition: 'all 0.12s',
-                background: isActive ? 'rgba(251,191,36,0.06)' : 'transparent',
-                border: isActive ? '1px solid rgba(251,191,36,0.15)' : '1px solid transparent',
+                background: isActive ? 'rgba(var(--warning-rgb, 245, 158, 11), 0.06)' : 'transparent',
+                border: isActive ? '1px solid rgba(var(--warning-rgb, 245, 158, 11), 0.15)' : '1px solid transparent',
               }}>
                 <div onClick={() => { switchAccount({ id: acc.id, name: acc.name, slug: acc.slug, industry: acc.industry || '', logo_url: acc.logo_url, isLinked: true, permissions: la.permissions }); onNavigate?.() }}
                   style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, cursor: 'pointer', overflow: 'hidden' }}
-                  onMouseEnter={e => { if (!isActive) (e.currentTarget.parentElement as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)' }}
+                  onMouseEnter={e => { if (!isActive) (e.currentTarget.parentElement as HTMLDivElement).style.background = 'var(--glass-bg-hover)' }}
                   onMouseLeave={e => { if (!isActive) (e.currentTarget.parentElement as HTMLDivElement).style.background = 'transparent' }}
                 >
                   <span style={{ fontSize: '10px' }}>🔗</span>
-                  <span style={{ fontSize: '11px', color: isActive ? '#fbbf24' : 'rgba(240,236,227,0.4)', fontWeight: isActive ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acc.name}</span>
+                  <span style={{
+                    fontSize: '11px',
+                    color: isActive ? 'var(--warning)' : 'var(--text-secondary)',
+                    fontWeight: isActive ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    transition: 'color 200ms ease',
+                  }}>{acc.name}</span>
                 </div>
                 <span onClick={async (e) => {
                   e.stopPropagation()
@@ -292,9 +366,14 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
                   await fetch('/api/linked-accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'revoke', accountId: user?.account_id, linkId: la.id }) })
                   if (isActive) switchAccount(null)
                   setLinkedAccounts((prev: any[]) => prev.filter((l: any) => l.id !== la.id))
-                }} title="Desvincular" style={{ cursor: 'pointer', fontSize: '10px', color: 'rgba(240,236,227,0.2)', padding: '2px 4px', borderRadius: '4px', flexShrink: 0 }}
-                  onMouseEnter={e => (e.currentTarget.style.color = '#f87171')}
-                  onMouseLeave={e => (e.currentTarget.style.color = 'rgba(240,236,227,0.2)')}
+                }} title="Desvincular" style={{
+                  cursor: 'pointer', fontSize: '10px',
+                  color: 'var(--text-muted)',
+                  padding: '2px 4px', borderRadius: '4px', flexShrink: 0,
+                  transition: 'color 200ms ease',
+                }}
+                  onMouseEnter={e => (e.currentTarget.style.color = 'var(--danger)')}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
                 >✕</span>
               </div>
             ) : null
@@ -304,7 +383,11 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
 
       {/* ── NAV LABEL ── */}
       <div style={{ padding: '14px 20px 6px' }}>
-        <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(240,236,227,0.22)' }}>
+        <p style={{
+          fontSize: '9px', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase',
+          color: 'var(--text-muted)',
+          transition: 'color 200ms ease',
+        }}>
           Navegacion
         </p>
       </div>
@@ -318,24 +401,44 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
               <div style={{
                 display: 'flex', alignItems: 'center', gap: '10px',
                 padding: '9px 12px', borderRadius: '10px', cursor: 'pointer',
-                background: active ? 'rgba(201,168,76,0.1)' : 'transparent',
-                border: active ? '1px solid rgba(201,168,76,0.22)' : '1px solid transparent',
-                color: active ? '#E2C060' : 'rgba(240,236,227,0.45)',
+                background: active ? 'rgba(var(--brand-primary-rgb, 201, 168, 76), 0.1)' : 'transparent',
+                border: active ? '1px solid rgba(var(--brand-primary-rgb, 201, 168, 76), 0.22)' : '1px solid transparent',
+                color: active ? 'var(--brand-primary-hover)' : 'var(--text-secondary)',
                 fontSize: '13px', fontWeight: active ? 600 : 400,
                 transition: 'all 0.15s', position: 'relative',
               }}
                 onMouseEnter={e => {
-                  if (!active) { const el = e.currentTarget as HTMLDivElement; el.style.background = 'rgba(255,255,255,0.04)'; el.style.color = 'rgba(240,236,227,0.82)'; el.style.border = '1px solid rgba(255,255,255,0.07)' }
+                  if (!active) {
+                    const el = e.currentTarget as HTMLDivElement
+                    el.style.background = 'var(--glass-bg-hover)'
+                    el.style.color = 'var(--text-primary)'
+                    el.style.border = '1px solid var(--glass-border-hover)'
+                  }
                 }}
                 onMouseLeave={e => {
-                  if (!active) { const el = e.currentTarget as HTMLDivElement; el.style.background = 'transparent'; el.style.color = 'rgba(240,236,227,0.45)'; el.style.border = '1px solid transparent' }
+                  if (!active) {
+                    const el = e.currentTarget as HTMLDivElement
+                    el.style.background = 'transparent'
+                    el.style.color = 'var(--text-secondary)'
+                    el.style.border = '1px solid transparent'
+                  }
                 }}
               >
-                {active && <div style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: '3px', height: '18px', background: '#C9A84C', borderRadius: '0 3px 3px 0', marginLeft: '-12px' }} />}
+                {active && <div style={{
+                  position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
+                  width: '3px', height: '18px',
+                  background: 'var(--brand-primary)',
+                  borderRadius: '0 3px 3px 0', marginLeft: '-12px',
+                }} />}
                 <Icon style={{ width: '16px', height: '16px', flexShrink: 0, opacity: active ? 1 : 0.7 }} />
                 <span style={{ flex: 1, letterSpacing: '0.01em' }}>{label}</span>
                 {active && <ChevronRight style={{ width: '12px', height: '12px', opacity: 0.5 }} />}
-                {badge && <span style={{ background: '#f97316', color: 'white', fontSize: '10px', fontWeight: 700, borderRadius: '100px', padding: '1px 6px', minWidth: '18px', textAlign: 'center' }}>{badge}</span>}
+                {badge && <span style={{
+                  background: 'var(--danger)',
+                  color: 'white', fontSize: '10px', fontWeight: 700, borderRadius: '100px',
+                  padding: '1px 6px', minWidth: '18px', textAlign: 'center',
+                  transition: 'all 200ms ease',
+                }}>{badge}</span>}
               </div>
             </Link>
           )
@@ -343,37 +446,61 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
       </nav>
 
       {/* ── DIVIDER ── */}
-      <div style={{ margin: '0 20px', borderTop: '1px solid rgba(255,255,255,0.05)' }} />
+      <div style={{
+        margin: '0 20px',
+        borderTop: '1px solid var(--glass-border)',
+        transition: 'border-color 200ms ease',
+      }} />
 
       {/* ── AGENT CARD ── */}
       <div style={{ padding: '12px 16px 16px' }}>
         <div style={{
-          background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)',
+          background: 'rgba(var(--brand-primary-rgb, 201, 168, 76), 0.06)',
+          border: '1px solid rgba(var(--brand-primary-rgb, 201, 168, 76), 0.15)',
           borderRadius: '12px', padding: '10px 12px',
           display: 'flex', alignItems: 'center', gap: '10px',
+          transition: 'all 200ms ease',
         }}>
           <div style={{
             width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
-            background: 'linear-gradient(135deg, #C9A84C, #8B6E2E)',
+            background: 'var(--brand-gradient)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '11px', fontWeight: 800, color: '#07080A',
-            boxShadow: '0 2px 8px rgba(201,168,76,0.3)',
+            fontSize: '11px', fontWeight: 800,
+            color: 'var(--bg-base)',
+            boxShadow: 'var(--brand-primary-glow)',
+            transition: 'all 200ms ease',
           }}>{initials}</div>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <p style={{ fontSize: '12px', fontWeight: 600, color: '#F0ECE3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <p style={{
+              fontSize: '12px', fontWeight: 600,
+              color: 'var(--text-primary)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              transition: 'color 200ms ease',
+            }}>
               {user?.name || 'Agent'}
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
-              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#34d399', display: 'inline-block' }} />
-              <p style={{ fontSize: '9px', color: '#C9A84C', fontWeight: 600, textTransform: 'capitalize' }}>{user?.role} · {user?.plan}</p>
+              <span style={{
+                width: '5px', height: '5px', borderRadius: '50%',
+                background: 'var(--success)',
+                display: 'inline-block',
+                transition: 'background-color 200ms ease',
+              }} />
+              <p style={{
+                fontSize: '9px',
+                color: 'var(--brand-primary)',
+                fontWeight: 600, textTransform: 'capitalize',
+                transition: 'color 200ms ease',
+              }}>{user?.role} · {user?.plan}</p>
             </div>
           </div>
           <button onClick={logout} title="Cerrar sesion" style={{
             background: 'none', border: 'none', cursor: 'pointer', padding: '5px',
-            color: 'rgba(240,236,227,0.3)', transition: 'color 0.2s', flexShrink: 0,
+            color: 'var(--text-muted)',
+            transition: 'color 200ms ease', flexShrink: 0,
           }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#f87171')}
-            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(240,236,227,0.3)')}
+            onMouseEnter={e => (e.currentTarget.style.color = 'var(--danger)')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
           >
             <LogOut style={{ width: '13px', height: '13px' }} />
           </button>
