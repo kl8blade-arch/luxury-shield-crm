@@ -346,6 +346,9 @@ async function getAIResponse(lead: any, conversationHistory: any[], incomingMess
     productKnowledge = await getRelevantKnowledge(incomingMessage, lead.account_id)
   }
 
+  // Coverage assumption guard: never assume a lead has active coverage unless explicitly confirmed
+  const coverageStatus = `NUNCA asumas que el lead tiene una póliza activa a menos que lead.sold_product o lead.purchased_products lo confirme explícitamente. Si el historial muestra que se coordinó una llamada con especialista, eso NO significa que compró — está en proceso. Estado actual: lead.sold_product = ${lead.sold_product ?? 'null'} | lead.purchased_products = ${JSON.stringify(lead.purchased_products ?? [])}. Si sold_product es null, el lead AÚN NO ha comprado nada con nosotros. NUNCA le digas que tiene cobertura activa.`
+
   const systemPrompt = `══ REGLA #0 — DETECCIÓN DE CIERRE — MÁXIMA PRIORIDAD ══
 Si el lead dice "ya mismo", "ahora mismo", "quiero que me llamen", "consígueme el plan", "quiero empezar", "dónde firmo", "cómo activo", "ok me interesa", "sí quiero", confirma un número de teléfono, o CUALQUIER frase que indique que quiere proceder:
 → INCLUIR [LISTO_PARA_COMPRAR] en tu respuesta
