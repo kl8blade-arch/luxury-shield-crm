@@ -118,13 +118,15 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
           justifyContent: 'center',
           transition: 'all 0.2s',
         }}
-        onMouseEnter={e => {
-          (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.12)'
-          (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.18)'
+        onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
+          const el = e.currentTarget as HTMLElement
+          el.style.background = 'rgba(255,255,255,0.12)'
+          el.style.borderColor = 'rgba(255,255,255,0.18)'
         }}
-        onMouseLeave={e => {
-          (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'
-          (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.12)'
+        onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
+          const el = e.currentTarget as HTMLElement
+          el.style.background = 'rgba(255,255,255,0.08)'
+          el.style.borderColor = 'rgba(255,255,255,0.12)'
         }}
         className="mobile-hamburger"
       >
