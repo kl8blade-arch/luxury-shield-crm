@@ -19,5 +19,5 @@ Si aún tienes interés en el IUL, con gusto te explico cómo funciona — espec
 💰 El retiro es 100% libre de impuestos
 
 ¿Me das la oportunidad de explicarte bien esta vez?`
-}).then((msg) => console.log('✅ Enviado:', msg.sid))
+}).then((msg: any) => console.log('✅ Enviado:', msg.sid))
   .catch(console.error)
