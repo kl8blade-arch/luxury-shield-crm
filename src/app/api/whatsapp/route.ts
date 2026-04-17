@@ -1393,7 +1393,7 @@ Escribe el comando o dime que necesitas 👇`
         const isAdmin = agent.role === 'admin'
 
         // GATE 2: Plan-based access for agents
-        const VALID_PLANS = ['starter', 'pro', 'agency']
+        const VALID_PLANS = ['starter', 'professional', 'agency']
         const hasActivePlan =
           agent.status === 'active' &&
           agent.plan_status === 'active' &&
