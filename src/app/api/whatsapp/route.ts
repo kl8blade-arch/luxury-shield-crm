@@ -770,6 +770,20 @@ export async function POST(req: NextRequest) {
     console.log(`[TWILIO RAW] From: ${from} | Body: "${body}" | MediaUrl: ${mediaUrl ? 'yes' : 'no'} | NumMedia: ${numMedia} | Type: ${mediaType}`)
 
     // ══════════════════════════════════════════════
+    // SAFETY: Clean up stale sophia_processing locks (>30 seconds)
+    // ══════════════════════════════════════════════
+    try {
+      const lockTimeout = new Date(Date.now() - 30000).toISOString()
+      await supabase.from('leads')
+        .update({ sophia_processing: false })
+        .eq('sophia_processing', true)
+        .lt('updated_at', lockTimeout)
+      console.log('[LOCK-CLEANUP] Stale locks cleaned')
+    } catch (err: any) {
+      console.log('[LOCK-CLEANUP] Cleanup attempt:', err?.message || 'ok')
+    }
+
+    // ══════════════════════════════════════════════
     // SLASH COMMANDS — "/" triggers command menu
     // ══════════════════════════════════════════════
     const trimmed = body.trim()
@@ -1376,7 +1390,6 @@ Escribe el comando o dime que necesitas 👇`
             agent_id: lead.agent_id, account_id: lead.account_id,
             channel: 'whatsapp', direction: 'inbound', message: body,
           })
-          await supabase.from('leads').update({ sophia_processing: false }).eq('id', lead.id)
           return new NextResponse(
             `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
             { status: 200, headers: { 'Content-Type': 'text/xml' } }
@@ -1477,6 +1490,7 @@ Escribe el comando o dime que necesitas 👇`
     // Set processing lock
     await supabase.from('leads').update({ sophia_processing: true }).eq('id', lead.id)
 
+    try {
     // Load full Sophia context (history + family + insights)
     const sophiaCtx = await loadSophiaContext(lead.id, lead.agent_id, 20)
     const history = sophiaCtx?.conversations ?? []
@@ -1542,7 +1556,6 @@ Escribe el comando o dime que necesitas 👇`
         if (!tokenCheck.allowed) {
           console.log(`[TOKENS] Exhausted for agent ${ownerAgentId}. Saving message, skipping Sophia.`)
           await supabase.from('conversations').insert({ lead_id: lead.id, lead_name: lead.name, lead_phone: from, agent_id: lead.agent_id, account_id: lead.account_id, channel: 'whatsapp', direction: 'inbound', message: body })
-          await supabase.from('leads').update({ sophia_processing: false }).eq('id', lead.id)
           return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
         }
       }
@@ -1576,7 +1589,6 @@ Escribe el comando o dime que necesitas 👇`
           const delay = Math.floor(Math.random() * 2) + 2
           await new Promise(r => setTimeout(r, delay * 1000))
           await sendWhatsApp(from, postCitaResult.response)
-          await supabase.from('leads').update({ sophia_processing: false }).eq('id', lead.id)
           return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
         }
       } catch (e: any) {
@@ -1623,7 +1635,6 @@ Escribe el comando o dime que necesitas 👇`
           const delay = Math.floor(Math.random() * 3) + 3
           await new Promise(r => setTimeout(r, delay * 1000))
           await sendWhatsApp(from, responseWithCrossSell)
-          await supabase.from('leads').update({ sophia_processing: false }).eq('id', lead.id)
           return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
         }
       } catch (citaErr: any) {
@@ -1640,7 +1651,6 @@ Escribe el comando o dime que necesitas 👇`
       console.error('[SOPHIA] getAIResponse ERROR:', e.message, e.stack)
       // Send error message
       await sendWhatsApp(from, `Hubo un error procesando tu mensaje. Intenta de nuevo en unos segundos. Error: ${e.message.substring(0, 50)}`)
-      await supabase.from('leads').update({ sophia_processing: false }).eq('id', lead.id)
       return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
     }
 
@@ -1975,8 +1985,18 @@ ${bc.contraargumento}
       console.error('[META] Non-blocking metadata extraction error:', metaErr)
     }
 
-    // Release processing lock + return
-    if (lead?.id) await supabase.from('leads').update({ sophia_processing: false }).eq('id', lead.id)
+    } finally {
+      // ALWAYS release processing lock, even if errors occurred
+      if (lead?.id) {
+        try {
+          await supabase.from('leads').update({ sophia_processing: false }).eq('id', lead.id)
+          console.log(`[LOCK] Released for ${lead.id}`)
+        } catch (lockErr: any) {
+          console.error(`[LOCK] Failed to release for ${lead.id}:`, lockErr.message)
+        }
+      }
+    }
+
     console.log(`[WEBHOOK] ✅ Completed successfully for ${lead?.name || from}`)
     return new NextResponse(
       `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
