@@ -16,7 +16,7 @@ const NAV_ITEMS = [
   { href: '/dashboard/citas',    icon: '📅', label: 'SophiaCita',   exact: false },
   { href: '/leads',              icon: '👥', label: 'Leads',        exact: false },
   { href: '/conversations',      icon: '💬', label: 'Conversaciones',exact: false },
-  { href: '/settings',           icon: '⚙️', label: 'Configuración',exact: false },
+  { href: '/dashboard/settings', icon: '⚙️', label: 'Configuración',exact: false },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
