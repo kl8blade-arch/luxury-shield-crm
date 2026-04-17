@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
+import { ThemeToggle } from '@/components/ui/ThemeToggle'
 
 const US_STATES = [
   'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware',
@@ -126,18 +127,21 @@ export default function OnboardingPage() {
 
   const containerStyle: React.CSSProperties = {
     minHeight: '100vh',
-    background: '#050507',
+    background: 'var(--bg-base)',
     padding: '40px 20px',
     fontFamily: '"Outfit", sans-serif',
+    position: 'relative',
+    transition: 'background-color 200ms ease',
   }
 
   const cardStyle: React.CSSProperties = {
     maxWidth: 600,
     margin: '0 auto',
-    background: 'rgba(255,255,255,0.015)',
-    border: '1px solid rgba(255,255,255,0.06)',
+    background: 'var(--glass-bg)',
+    border: '1px solid var(--glass-border)',
     borderRadius: 20,
     padding: 40,
+    transition: 'all 200ms ease',
   }
 
   const progressStyle: React.CSSProperties = {
@@ -185,6 +189,11 @@ export default function OnboardingPage() {
 
   return (
     <div style={containerStyle}>
+      {/* Theme Toggle */}
+      <div style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 100 }}>
+        <ThemeToggle variant="icon" />
+      </div>
+
       <div style={cardStyle}>
         {/* Progress bar */}
         <div style={progressStyle}>
@@ -193,13 +202,21 @@ export default function OnboardingPage() {
           ))}
         </div>
 
-        <h1 style={{ color: '#F0ECE3', fontSize: 24, fontWeight: 700, margin: '0 0 8px' }}>
+        <h1 style={{
+          color: 'var(--text-primary)',
+          fontSize: 24, fontWeight: 700, margin: '0 0 8px',
+          transition: 'color 200ms ease',
+        }}>
           {step === 1 && 'Tu Negocio'}
           {step === 2 && 'Tus Servicios'}
           {step === 3 && 'Configura a Sophia'}
           {step === 4 && 'Tu WhatsApp'}
         </h1>
-        <p style={{ color: 'rgba(240,236,227,0.4)', fontSize: 13, margin: '0 0 28px' }}>
+        <p style={{
+          color: 'var(--text-secondary)',
+          fontSize: 13, margin: '0 0 28px',
+          transition: 'color 200ms ease',
+        }}>
           Paso {step} de 4
         </p>
 
