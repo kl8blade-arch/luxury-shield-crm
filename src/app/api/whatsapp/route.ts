@@ -732,26 +732,88 @@ Devuelve SOLO JSON: {"accion":"vendido"|"perdido"|"seguimiento"|"no_califica"|"d
 }
 
 // ── POST: Twilio Webhook — incoming WhatsApp messages ──
+// PATTERN: Respond fast, process async — Twilio times out after 15s
 export async function POST(req: NextRequest) {
   const webhookStartTime = Date.now()
   console.log(`[WEBHOOK] ⭐ POST /api/whatsapp called - ${new Date().toISOString()}`)
+
   try {
+    // Parse request immediately
     const formData = await req.formData()
     const from = (formData.get('From') as string || '').replace('whatsapp:', '')
     const to = (formData.get('To') as string || '').replace('whatsapp:', '')
-    let body = formData.get('Body') as string || ''
+    const body = formData.get('Body') as string || ''
     const profileName = formData.get('ProfileName') as string || ''
     const mediaUrl = formData.get('MediaUrl0') as string || ''
     const numMedia = parseInt(formData.get('NumMedia') as string || '0')
     const mediaType = formData.get('MediaContentType0') as string || ''
+    const accountSid = formData.get('AccountSid') as string || ''
 
     console.log(`[WEBHOOK] 📱 FROM: ${from} | TO: ${to} | BodyLen: ${body.length} | Media: ${numMedia > 0 ? mediaType : 'none'}`)
-    console.log(`[WEBHOOK] Message from: ${from} | Body: "${body.substring(0, 50)}" | Media: ${numMedia > 0 ? mediaType : 'none'}`)
+
+    // ✅ RESPOND TO TWILIO IMMEDIATELY (before 15s timeout)
+    const xmlResponse = new NextResponse(
+      `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
+      { status: 200, headers: { 'Content-Type': 'text/xml' } }
+    )
+
+    // Process in background (non-blocking) using waitUntil if available
+    const processingPromise = processIncomingMessage({
+      req,
+      webhookStartTime,
+      from,
+      to,
+      body,
+      profileName,
+      mediaUrl,
+      numMedia,
+      mediaType,
+      accountSid,
+    })
+
+    // If running on Vercel, use waitUntil to ensure background work completes
+    if ((globalThis as any).waitUntil) {
+      (globalThis as any).waitUntil(processingPromise)
+    } else {
+      // Fallback: just let it run in background without waiting
+      processingPromise.catch(err => console.error('[WEBHOOK] Background error:', err))
+    }
+
+    return xmlResponse
+
+  } catch (err: any) {
+    console.error('[WEBHOOK] Fatal error in parsing:', err?.message || err)
+    return new NextResponse(
+      `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
+      { status: 200, headers: { 'Content-Type': 'text/xml' } }
+    )
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PROCESS INCOMING MESSAGE — All heavy lifting happens here (async)
+// ══════════════════════════════════════════════════════════════════
+async function processIncomingMessage(params: {
+  req: NextRequest
+  webhookStartTime: number
+  from: string
+  to: string
+  body: string
+  profileName: string
+  mediaUrl: string
+  numMedia: number
+  mediaType: string
+  accountSid: string
+}) {
+  const { req, webhookStartTime, from: fromParam, to, body: bodyParam, profileName, mediaUrl, numMedia, mediaType, accountSid } = params
+  let body = bodyParam
+  const from = fromParam
+
+  try {
 
     // ══════════════════════════════════════════════
     // SECURITY: Validate Twilio + deduplicate
     // ══════════════════════════════════════════════
-    const accountSid = formData.get('AccountSid') as string || ''
     if (accountSid && accountSid !== TWILIO_SID) {
       console.error(`[SECURITY] Invalid AccountSid: ${accountSid}`)
       // Log security event
@@ -761,7 +823,8 @@ export async function POST(req: NextRequest) {
         })
         await supabase.from('webhook_request_log').insert({ from_number: from, signature_valid: false, rejected_reason: 'invalid_account_sid' })
       } catch {}
-      return new NextResponse('Forbidden', { status: 403 })
+      // Note: Can't return early from background function — just log and continue
+      return
     }
 
     // Deduplication: prevent processing same message twice (Twilio retries)
@@ -771,7 +834,7 @@ export async function POST(req: NextRequest) {
       const { data: existing } = await supabase.from('webhook_request_log').select('processed').eq('body_hash', bodyHash).single()
       if (existing?.processed) {
         console.log(`[DEDUP] Already processed: ${bodyHash.slice(0, 12)}`)
-        return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
+        return
       }
       await supabase.from('webhook_request_log').insert({ from_number: from, signature_valid: true, body_hash: bodyHash })
     } catch {}
@@ -838,7 +901,7 @@ Escribe el comando o dime que necesitas 👇`
         headers: { 'Authorization': auth, 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ From: `whatsapp:${TWILIO_FROM}`, To: `whatsapp:${cleanTo}`, Body: menu }).toString(),
       })
-      return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
+      return
     }
 
     // Handle slash commands (convert to natural language for the handler)
@@ -938,7 +1001,7 @@ Escribe el comando o dime que necesitas 👇`
         })
       }
 
-      return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
+      return
     }
 
     // ══════════════════════════════════════════════
@@ -949,7 +1012,7 @@ Escribe el comando o dime que necesitas 👇`
       const handled = await handleAgentOnboarding(from, body, mediaUrl || undefined, mediaType || undefined)
       if (handled) {
         console.log(`[ONBOARDING] Handled message from ${from}`)
-        return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
+        return
       }
     } catch (e: any) { console.error('[ONBOARDING] Error:', e.message) }
 
@@ -1483,7 +1546,7 @@ Escribe el comando o dime que necesitas 👇`
     // ══════════════════════════════════════════════
     if (lead.sophia_processing) {
       console.log(`[SOPHIA] Already processing for ${lead.name}, skip`)
-      return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
+      return
     }
 
     // Rate limit: max 1 response per 3 seconds per lead
@@ -1492,7 +1555,7 @@ Escribe el comando o dime que necesitas 👇`
       const secsSince = (Date.now() - new Date(lastOut[0].created_at).getTime()) / 1000
       if (secsSince < 3) {
         console.log(`[RATE LIMIT] ${lead.name}: ${secsSince.toFixed(1)}s since last msg, skip`)
-        return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
+        return
       }
     }
 
@@ -1572,7 +1635,7 @@ Escribe el comando o dime que necesitas 👇`
         if (!tokenCheck.allowed) {
           console.log(`[TOKENS] Exhausted for agent ${ownerAgentId}. Saving message, skipping Sophia.`)
           await supabase.from('conversations').insert({ lead_id: lead.id, lead_name: lead.name, lead_phone: from, agent_id: lead.agent_id, account_id: lead.account_id, channel: 'whatsapp', direction: 'inbound', message: body })
-          return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
+          return
         }
       }
     } catch (e: any) { console.error('[TOKENS]', e.message) }
@@ -1605,7 +1668,7 @@ Escribe el comando o dime que necesitas 👇`
           const delay = Math.floor(Math.random() * 2) + 2
           await new Promise(r => setTimeout(r, delay * 1000))
           await sendWhatsApp(from, postCitaResult.response)
-          return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
+          return
         }
       } catch (e: any) {
         console.error('[PostCita] Error:', e.message)
@@ -1651,7 +1714,7 @@ Escribe el comando o dime que necesitas 👇`
           const delay = Math.floor(Math.random() * 3) + 3
           await new Promise(r => setTimeout(r, delay * 1000))
           await sendWhatsApp(from, responseWithCrossSell)
-          return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
+          return
         }
       } catch (citaErr: any) {
         console.error('[SophiaCita] Error:', citaErr.message)
@@ -1667,7 +1730,7 @@ Escribe el comando o dime que necesitas 👇`
       console.error('[SOPHIA] getAIResponse ERROR:', e.message, e.stack)
       // Send error message
       await sendWhatsApp(from, `Hubo un error procesando tu mensaje. Intenta de nuevo en unos segundos. Error: ${e.message.substring(0, 50)}`)
-      return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, { status: 200, headers: { 'Content-Type': 'text/xml' } })
+      return
     }
 
     // ══════════════════════════════════════════════
@@ -2016,22 +2079,15 @@ ${bc.contraargumento}
     }
 
     const totalTime = Date.now() - webhookStartTime
-    console.log(`[WEBHOOK] ✅ COMPLETE - Lead: ${lead?.name || from} | Phone: ${from} | TotalTime: ${totalTime}ms`)
-    return new NextResponse(
-      `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
-      { status: 200, headers: { 'Content-Type': 'text/xml' } }
-    )
+    console.log(`[WEBHOOK] ✅ BACKGROUND_COMPLETE - Lead: ${lead?.name || from} | Phone: ${from} | TotalTime: ${totalTime}ms`)
 
   } catch (error: any) {
-    console.error('[WEBHOOK] ❌ FATAL ERROR:', error?.message || error)
+    console.error('[WEBHOOK] ❌ BACKGROUND_ERROR:', error?.message || error)
     console.error('[WEBHOOK] Stack:', error?.stack)
-    // Always release lock on error
-    // Release lock best-effort (from may not be in scope)
-    try { await supabase.from('leads').update({ sophia_processing: false }).eq('sophia_processing', true) } catch {}
-    return new NextResponse(
-      `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
-      { status: 200, headers: { 'Content-Type': 'text/xml' } }
-    )
+    // Always release lock on error (best-effort)
+    try {
+      await supabase.from('leads').update({ sophia_processing: false }).eq('sophia_processing', true)
+    } catch {}
   }
 }
 
