@@ -805,11 +805,13 @@ async function processIncomingMessage(params: {
   mediaType: string
   accountSid: string
 }) {
+  console.log('[BACKGROUND] 🔄 processIncomingMessage started')
   const { req, webhookStartTime, from: fromParam, to, body: bodyParam, profileName, mediaUrl, numMedia, mediaType, accountSid } = params
   let body = bodyParam
   const from = fromParam
 
   try {
+    console.log('[BACKGROUND] ✅ Inside try block - ready to process')
 
     // ══════════════════════════════════════════════
     // SECURITY: Validate Twilio + deduplicate
