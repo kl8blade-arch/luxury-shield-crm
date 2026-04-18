@@ -34,6 +34,8 @@ async function sendWhatsApp(to: string, body: string, fromNumber?: string) {
     // Truncate to WhatsApp limit (1500 chars)
     const msgBody = body.length > 1500 ? body.substring(0, 1497) + '...' : body
 
+    console.log(`[sendWhatsApp] SEND_REQUEST - From: ${fromFormatted} | To: ${toFormatted} | BodyLen: ${msgBody.length} | AccountSid: ${accountSid.slice(0, 8)}...`)
+
     const res = await fetch(url, {
       method: 'POST',
       headers: {
@@ -47,15 +49,17 @@ async function sendWhatsApp(to: string, body: string, fromNumber?: string) {
       }).toString(),
     })
 
+    console.log(`[sendWhatsApp] TWILIO_RESPONSE - Status: ${res.status}`)
+
     const data = await res.json()
     if (!res.ok) {
-      console.error(`[sendWhatsApp] Twilio error ${res.status}:`, data)
-      return { sid: null, error: data.message }
+      console.error(`[sendWhatsApp] ❌ TWILIO_ERROR ${res.status}: ${JSON.stringify(data).substring(0, 200)}`)
+      return { sid: null, error: data.message || `HTTP ${res.status}` }
     }
-    console.log(`[sendWhatsApp] ✅ Sent to ${to} | SID: ${data.sid}`)
+    console.log(`[sendWhatsApp] ✅ SUCCESS - SID: ${data.sid} | To: ${to}`)
     return { sid: data.sid }
   } catch (e: any) {
-    console.error('[sendWhatsApp] Fatal error:', e.message)
+    console.error('[sendWhatsApp] ❌ EXCEPTION:', e.message, e.code)
     return { sid: null, error: e.message }
   }
 }
@@ -729,6 +733,7 @@ Devuelve SOLO JSON: {"accion":"vendido"|"perdido"|"seguimiento"|"no_califica"|"d
 
 // ── POST: Twilio Webhook — incoming WhatsApp messages ──
 export async function POST(req: NextRequest) {
+  const webhookStartTime = Date.now()
   console.log(`[WEBHOOK] ⭐ POST /api/whatsapp called - ${new Date().toISOString()}`)
   try {
     const formData = await req.formData()
@@ -740,6 +745,7 @@ export async function POST(req: NextRequest) {
     const numMedia = parseInt(formData.get('NumMedia') as string || '0')
     const mediaType = formData.get('MediaContentType0') as string || ''
 
+    console.log(`[WEBHOOK] 📱 FROM: ${from} | TO: ${to} | BodyLen: ${body.length} | Media: ${numMedia > 0 ? mediaType : 'none'}`)
     console.log(`[WEBHOOK] Message from: ${from} | Body: "${body.substring(0, 50)}" | Media: ${numMedia > 0 ? mediaType : 'none'}`)
 
     // ══════════════════════════════════════════════
@@ -1999,15 +2005,18 @@ ${bc.contraargumento}
       // ALWAYS release processing lock, even if errors occurred
       if (lead?.id) {
         try {
-          await supabase.from('leads').update({ sophia_processing: false }).eq('id', lead.id)
-          console.log(`[LOCK] Released for ${lead.id}`)
+          const releaseStartTime = Date.now()
+          await supabase.from('leads').update({ sophia_processing: false, updated_at: new Date().toISOString() }).eq('id', lead.id)
+          const releaseTime = Date.now() - releaseStartTime
+          console.log(`[LOCK] ✅ RELEASED for ${lead.id} | name: ${lead.name} | took: ${releaseTime}ms`)
         } catch (lockErr: any) {
-          console.error(`[LOCK] Failed to release for ${lead.id}:`, lockErr.message)
+          console.error(`[LOCK] ❌ FAILED to release for ${lead.id}:`, lockErr.message)
         }
       }
     }
 
-    console.log(`[WEBHOOK] ✅ Completed successfully for ${lead?.name || from}`)
+    const totalTime = Date.now() - webhookStartTime
+    console.log(`[WEBHOOK] ✅ COMPLETE - Lead: ${lead?.name || from} | Phone: ${from} | TotalTime: ${totalTime}ms`)
     return new NextResponse(
       `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`,
       { status: 200, headers: { 'Content-Type': 'text/xml' } }
